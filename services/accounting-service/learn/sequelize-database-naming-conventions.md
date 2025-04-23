@@ -100,6 +100,95 @@ When working with Sequelize:
    - When debugging, check the actual column names in your database tables
    - Error messages like `column "X" referenced in foreign key constraint does not exist` are clues that your references don't match the actual column names
 
+## Where to Configure Sequelize Settings
+
+Understanding where to set Sequelize configuration is crucial for managing database behavior consistently across your application.
+
+### Main Configuration Location
+
+In our project, Sequelize is configured in the `src/config/sequelize.ts` file:
+
+```typescript
+// src/config/sequelize.ts
+import { Sequelize } from 'sequelize';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+// Create Sequelize instance with PostgreSQL
+const sequelize = new Sequelize({
+  dialect: 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  database: process.env.DB_NAME || 'accounting_db',
+  username: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
+  logging: process.env.NODE_ENV === 'development' ? console.log : false,
+  pool: {
+    max: 10,
+    min: 0,
+    acquire: 30000,
+    idle: 10000
+  },
+  define: {
+    timestamps: true,
+    underscored: true  // This is where we set column naming convention to snake_case
+  }
+});
+
+export default sequelize;
+```
+
+### Key Configuration Options
+
+1. **Global Model Settings**: The `define` object in the configuration applies settings to all models:
+   - `timestamps: true` - Automatically adds `created_at` and `updated_at` columns
+   - `underscored: true` - Converts camelCase attributes to snake_case in the database
+
+2. **Per-Model Configuration**: You can also override global settings in individual model definitions:
+
+```typescript
+YourModel.init({
+  // attribute definitions...
+}, {
+  sequelize,
+  tableName: 'your_table',
+  timestamps: false,  // Override global timestamp setting
+  underscored: false, // Override global underscored setting
+  // other model options...
+});
+```
+
+### Model-Level vs. Global Configuration
+
+When deciding where to set configuration options:
+
+- **Global Configuration** (in `sequelize.ts`):
+  - Use for consistent settings across all models
+  - Good for application-wide conventions like naming standards
+
+- **Model-Level Configuration** (in individual model files):
+  - Use for exceptions to global rules
+  - Specific behavior needed for particular tables
+
+### Important: Consistency is Key
+
+The most critical aspect is **consistency**. If you set `underscored: true` globally:
+
+1. All your model definitions should use camelCase for attribute names in TypeScript
+2. All foreign key references should use snake_case for the column names in the database
+3. All database operations should be aware of this transformation
+
+### Configuration Hierarchy
+
+Configuration is applied in this order:
+1. Sequelize default settings
+2. Global settings in your Sequelize instance
+3. Model-specific settings in `.init()` calls
+
+Later settings override earlier ones, so model-specific settings take precedence over global settings.
+
 ## Best Practices
 
 1. **Be explicit about naming conventions**: If you use `underscored: true`, be consistent across your entire application
@@ -110,4 +199,8 @@ When working with Sequelize:
 
 4. **Examine error messages carefully**: Database errors often contain valuable information about what went wrong, including the exact SQL that failed
 
-These issues are common when working with ORMs like Sequelize, especially in TypeScript projects running in Docker containers. Understanding these concepts will help you avoid similar problems in the future.
+5. **Keep configuration centralized**: Maintain your main Sequelize configuration in one location for easier maintenance
+
+6. **Document any exceptions**: If specific models don't follow your global configuration, document why they're different
+
+By understanding where and how to configure Sequelize, you can avoid inconsistencies that lead to database errors and make your codebase more maintainable.
