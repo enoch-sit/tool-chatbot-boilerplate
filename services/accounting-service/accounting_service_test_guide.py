@@ -628,7 +628,7 @@ def login_and_get_token():
         response = requests.post(
             f"http://localhost:{AUTH_PORT}/api/auth/login",
             json={
-                "email": "testuser@example.com",
+                "username": "testuser@example.com",  # Using username field but with email value
                 "password": "Password123!"
             },
             timeout=10
