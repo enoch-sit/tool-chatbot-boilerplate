@@ -28,6 +28,7 @@ graph TD
 
 - Docker Desktop installed and running
 - Node.js and npm installed
+- TypeScript installed globally (`npm install -g typescript`)
 - Postman or another API testing tool (optional but recommended)
 - Basic understanding of JWT authentication
 - Basic knowledge of terminal/command line operations
@@ -36,11 +37,19 @@ graph TD
 
 ### 1. Authentication Service Status
 
-The External Authentication Service is already running in Docker Desktop with the following containers:
+The External Authentication Service should be running in Docker Desktop with the following containers:
 
 - `auth-service-dev` - Authentication Service running on port 3000
 - `auth-mongodb` - MongoDB database for user accounts
 - `auth-mailhog` - Email testing service on ports 1025 (SMTP) and 8025 (Web UI)
+
+To check the status of these containers, run:
+
+```bash
+docker ps | grep auth
+```
+
+If the containers are not running, you can restart them or check with your administrator.
 
 The service is configured with the following JWT secrets:
 
@@ -332,16 +341,54 @@ Postman provides a more user-friendly interface for testing APIs:
 
 4. Run the requests in sequence to test the entire flow.
 
-## Common Issues and Troubleshooting
+## Troubleshooting Common Issues
 
-### 1. JWT Verification Fails
+### 1. TypeScript Compilation Error: Missing dist/server.js
+
+If you see errors like this in your Docker logs:
+```
+Error: Cannot find module '/usr/src/app/dist/server.js'
+```
+
+This means the TypeScript files aren't being compiled properly. To fix this:
+
+1. Stop the current containers:
+   ```bash
+   docker-compose down
+   ```
+
+2. Build the TypeScript files locally:
+   ```bash
+   npm install
+   npm run build
+   ```
+
+3. Check if the `dist` folder was created with compiled JavaScript files:
+   ```bash
+   ls -la dist
+   ```
+
+4. If the build succeeds locally but fails in Docker, update your docker-compose.yml to include the dist folder in volumes:
+   ```yaml
+   volumes:
+     - ./src:/usr/src/app/src
+     - ./dist:/usr/src/app/dist
+     - ./node_modules:/usr/src/app/node_modules
+   ```
+
+5. Restart the containers:
+   ```bash
+   docker-compose up -d
+   ```
+
+### 2. JWT Verification Fails
 
 If JWT verification fails, check:
 - Is the JWT_ACCESS_SECRET the same in both services?
 - Is the token expired? Access tokens usually expire in 15 minutes.
 - Is the Authorization header formatted correctly? It should be "Bearer [token]".
 
-### 2. User Not Found in Accounting Service
+### 3. User Not Found in Accounting Service
 
 If the user exists in the Authentication Service but not in the Accounting Service:
 - Check if user auto-creation is enabled in the Accounting Service
@@ -352,14 +399,14 @@ INSERT INTO user_accounts (user_id, email, username, role)
 VALUES ('user-id-from-jwt', 'user@example.com', 'username', 'user');
 ```
 
-### 3. Insufficient Credits
+### 4. Insufficient Credits
 
 If testing credit-dependent operations fails due to insufficient credits:
 - Allocate more credits using the admin account
 - Check if the credits have expired
 - Verify the user has an active credit allocation
 
-### 4. Service Connectivity Issues
+### 5. Service Connectivity Issues
 
 If services can't communicate:
 - Ensure both services are running (check with `docker ps`)
