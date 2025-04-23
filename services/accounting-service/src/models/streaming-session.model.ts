@@ -44,7 +44,7 @@ StreamingSession.init({
     allowNull: false,
     references: {
       model: 'user_accounts',
-      key: 'userId'
+      key: 'user_id'  // Changed from 'userId' to 'user_id' to match the actual DB column name
     }
   },
   modelId: {
@@ -93,7 +93,7 @@ StreamingSession.init({
   indexes: [
     {
       name: 'idx_streaming_user_status',
-      fields: ['userId', 'status']
+      fields: ['user_id', 'status']  // Changed from 'userId', 'status' to match DB column names
     }
   ]
 });

@@ -357,16 +357,33 @@ This means the TypeScript files aren't being compiled properly. To fix this:
    docker-compose down
    ```
 
+   For Windows PowerShell:
+   ```powershell
+   docker-compose down
+   ```
+
 2. Build the TypeScript files locally:
    ```bash
    npm install
    npm run build
    ```
 
+   These commands will work in both bash and PowerShell.
+
 3. Check if the `dist` folder was created with compiled JavaScript files:
    ```bash
    ls -la dist
    ```
+
+   For Windows PowerShell:
+   ```powershell
+   ls dist
+   ```
+
+   You should see the compiled JavaScript files in the dist directory, including:
+   - dist/src/ - Directory containing the compiled application code
+   - dist/tests/ - Directory containing the compiled test files
+   - dist/server.js - The main entry point for the application
 
 4. If the build succeeds locally but fails in Docker, update your docker-compose.yml to include the dist folder in volumes:
    ```yaml
@@ -380,6 +397,18 @@ This means the TypeScript files aren't being compiled properly. To fix this:
    ```bash
    docker-compose up -d
    ```
+
+   For Windows PowerShell:
+   ```powershell
+   docker-compose up -d
+   ```
+
+6. Check the container status to verify it's running correctly:
+   ```bash
+   docker-compose ps
+   ```
+
+   If the accounting service container shows a status of "Up" (instead of "Restarting"), the issue has been resolved.
 
 ### 2. JWT Verification Fails
 

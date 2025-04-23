@@ -23,6 +23,7 @@ services:
       - postgres
     volumes:
       - ./src:/usr/src/app/src
+      - ./dist:/usr/src/app/dist
       - ./node_modules:/usr/src/app/node_modules
     networks:
       - accounting-network

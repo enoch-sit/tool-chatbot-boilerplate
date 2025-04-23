@@ -35,7 +35,7 @@ CreditAllocation.init({
     allowNull: false,
     references: {
       model: 'user_accounts',
-      key: 'userId'
+      key: 'user_id'  // Changed from 'userId' to 'user_id' to match the actual DB column name
     }
   },
   totalCredits: {
@@ -75,7 +75,7 @@ CreditAllocation.init({
   indexes: [
     {
       name: 'idx_credit_user_expiry',
-      fields: ['userId', 'expiresAt']
+      fields: ['user_id', 'expires_at']  // Changed from 'userId', 'expiresAt' to match the DB column names
     }
   ]
 });

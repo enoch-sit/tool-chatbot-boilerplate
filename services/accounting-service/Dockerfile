@@ -20,5 +20,5 @@ EXPOSE 3001
 # Set environment variables
 ENV NODE_ENV=production
 
-# Start the service
-CMD ["node", "dist/server.js"]
+# Start the service with the correct path to the compiled server.js
+CMD ["node", "dist/src/server.js"]

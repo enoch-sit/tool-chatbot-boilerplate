@@ -33,7 +33,7 @@ UsageRecord.init({
     allowNull: false,
     references: {
       model: 'user_accounts',
-      key: 'userId'
+      key: 'user_id'  // Changed from 'userId' to 'user_id' to match the actual DB column name
     }
   },
   timestamp: {
@@ -66,7 +66,7 @@ UsageRecord.init({
   indexes: [
     {
       name: 'idx_usage_user_timestamp',
-      fields: ['userId', 'timestamp']
+      fields: ['user_id', 'timestamp']  // Changed from 'userId', 'timestamp' to match DB column names
     }
   ]
 });
