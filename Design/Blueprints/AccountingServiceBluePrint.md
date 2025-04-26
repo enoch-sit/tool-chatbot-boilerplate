@@ -1567,7 +1567,7 @@ export const getUserUsageStats = async (req: Request, res: Response) => {
 };
 
 /**
- * Get usage statistics for a specific user (admin or supervisor only)
+ * Get usage statistics for a specific user (admin and supervisor only)
  */
 export const getSpecificUserUsageStats = async (req: Request, res: Response) => {
   try {
@@ -1996,52 +1996,77 @@ export const validateApiKey = async (req: Request, res: Response) => {
 ## Route Definitions
 
 ```typescript
-// src/routes/accounting.routes.ts
+// src/routes/api.routes.ts
 import { Router } from 'express';
 import { authenticateJWT, requireAdmin, requireSupervisor } from '../middleware/jwt.middleware';
 
 // Import controllers
-import * as creditController from '../controllers/credit-management.controller';
-import * as usageController from '../controllers/usage.controller';
-import * as streamingController from '../controllers/streaming.controller';
-import * as apiKeyController from '../controllers/api-key.controller';
-import * as userAccountController from '../controllers/user-account.controller';
+import * as CreditController from '../controllers/credit.controller';
+import * as UsageController from '../controllers/usage.controller';
+import * as StreamingSessionController from '../controllers/streaming-session.controller';
 
 const router = Router();
 
-// User account routes
-router.post('/users/sync', userAccountController.syncUser);
-router.get('/users/me', authenticateJWT, userAccountController.getUserAccount);
-router.get('/users/:userId', authenticateJWT, userAccountController.getUserAccount);
-router.get('/users', authenticateJWT, requireAdmin, userAccountController.listUserAccounts);
+// Health check endpoint (public)
+router.get('/health', (_, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'accounting-service',
+    version: process.env.VERSION || '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
 
-// Credit management routes
-router.get('/credits', authenticateJWT, creditController.getCreditBalance);
-router.post('/credits/check', authenticateJWT, creditController.checkCredits);
-router.post('/credits/allocate', authenticateJWT, requireAdmin, creditController.allocateCredits);
-router.get('/credits/history', authenticateJWT, creditController.getAllocationHistory);
-router.get('/credits/history/:userId', authenticateJWT, creditController.getAllocationHistory);
+// ----- AUTHENTICATED ROUTES -----
+// All routes below require authentication
+router.use('/credits', authenticateJWT);
+router.use('/streaming-sessions', authenticateJWT);
+router.use('/usage', authenticateJWT);
 
-// Usage tracking routes
-router.post('/usage/track', authenticateJWT, usageController.trackUsage);
-router.get('/usage/stats', authenticateJWT, usageController.getUserUsageStats);
-router.get('/usage/stats/:userId', authenticateJWT, usageController.getSpecificUserUsageStats);
-router.get('/usage/system', authenticateJWT, requireAdmin, usageController.getSystemUsageStats);
+// ----- CREDIT MANAGEMENT ROUTES -----
+// Get current user's credit balance
+router.get('/credits/balance', CreditController.getUserBalance);
 
-// Streaming session routes
-router.post('/streaming/initialize', authenticateJWT, streamingController.initializeStreamingSession);
-router.post('/streaming/finalize', authenticateJWT, streamingController.finalizeStreamingSession);
-router.post('/streaming/abort', authenticateJWT, streamingController.abortStreamingSession);
-router.get('/streaming/active', authenticateJWT, streamingController.getActiveStreamingSessions);
-router.get('/streaming/active/:userId', authenticateJWT, streamingController.getUserActiveStreamingSessions);
-router.get('/streaming/active/all', authenticateJWT, requireAdmin, streamingController.getAllActiveStreamingSessions);
+// Check if user has sufficient credits
+router.post('/credits/check', CreditController.checkCredits);
 
-// API key management routes
-router.post('/apikeys', authenticateJWT, apiKeyController.createApiKey);
-router.get('/apikeys', authenticateJWT, apiKeyController.getApiKeys);
-router.put('/apikeys/:keyId', authenticateJWT, apiKeyController.updateApiKey);
-router.delete('/apikeys/:keyId', authenticateJWT, apiKeyController.deleteApiKey);
-router.post('/apikeys/validate', apiKeyController.validateApiKey);
+// Calculate credits for a specific operation
+router.post('/credits/calculate', CreditController.calculateCredits);
+
+// Get a user's credit balance (admin and supervisors only)
+router.get('/credits/balance/:userId', requireSupervisor, CreditController.getUserBalanceByAdmin);
+
+// Allocate credits to a user (admin and supervisors only)
+router.post('/credits/allocate', requireSupervisor, CreditController.allocateCredits);
+
+// ----- STREAMING SESSION ROUTES -----
+// Initialize a streaming session
+router.post('/streaming-sessions/initialize', StreamingSessionController.initializeSession);
+
+// Finalize a streaming session
+router.post('/streaming-sessions/finalize', StreamingSessionController.finalizeSession);
+
+// Abort a streaming session
+router.post('/streaming-sessions/abort', StreamingSessionController.abortSession);
+
+// Get active sessions for the current user
+router.get('/streaming-sessions/active', StreamingSessionController.getActiveSessions);
+
+// Get all active sessions (admin only)
+router.get('/streaming-sessions/active/all', requireAdmin, StreamingSessionController.getAllActiveSessions);
+
+// ----- USAGE TRACKING ROUTES -----
+// Record a usage event
+router.post('/usage/record', UsageController.recordUsage);
+
+// Get current user's usage statistics
+router.get('/usage/stats', UsageController.getUserStats);
+
+// Get usage statistics for a specific user (admin and supervisors only)
+router.get('/usage/stats/:userId', requireSupervisor, UsageController.getUserStatsByAdmin);
+
+// Get system-wide usage statistics (admin only)
+router.get('/usage/system', requireAdmin, UsageController.getSystemStats);
 
 export default router;
 ```
@@ -2055,7 +2080,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import accountingRoutes from './routes/accounting.routes';
+import apiRoutes from './routes/api.routes';
 
 const app = express();
 
@@ -2063,7 +2088,6 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
@@ -2076,15 +2100,15 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Routes
-app.use('/api/accounting', accountingRoutes);
+// Routes - Note API routes are mounted directly at /api, not at /api/accounting
+app.use('/api', apiRoutes);
 
 // Health check endpoint
 app.get('/health', (_, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'ok',
     service: 'accounting-service',
-    version: process.env.npm_package_version || '1.0.0',
+    version: process.env.VERSION || '1.0.0',
     timestamp: new Date().toISOString()
   });
 });

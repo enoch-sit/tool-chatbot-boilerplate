@@ -5,10 +5,8 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { rateLimit } from 'express-rate-limit';
 
-// Import routes
-import creditRoutes from './routes/credit.routes';
-import streamingSessionRoutes from './routes/streaming-session.routes';
-import usageRoutes from './routes/usage.routes';
+// Import consolidated API routes
+import apiRoutes from './routes/api.routes';
 
 // Import database connection
 import sequelize, { testConnection } from './config/sequelize';
@@ -36,15 +34,8 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'accounting-service' });
-});
-
-// Apply routes
-app.use('/api/credits', creditRoutes);
-app.use('/api/streaming-sessions', streamingSessionRoutes);
-app.use('/api/usage', usageRoutes);
+// Apply consolidated API routes
+app.use('/api', apiRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

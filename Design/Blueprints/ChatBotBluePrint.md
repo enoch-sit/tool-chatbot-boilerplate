@@ -151,228 +151,136 @@ export default StreamingSession;
 ### Streaming Credit Management Controller
 
 ```typescript
-// src/controllers/streaming.controller.ts
+// src/controllers/streaming-session.controller.ts
 import { Request, Response } from 'express';
-import { Op } from 'sequelize';
-import StreamingSession from '../models/streaming-session.model';
-import CreditAllocation from '../models/credit-allocation.model';
-import Usage from '../models/usage.model';
+import StreamingSessionService from '../services/streaming-session.service';
 
-// Initialize a streaming session and pre-allocate credits
-export const initializeStreamingSession = async (req: Request, res: Response) => {
+/**
+ * Initialize a streaming session and pre-allocate credits
+ */
+export const initializeSession = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const { sessionId, modelId, estimatedTokens } = req.body;
     
-    // Calculate estimated credits needed
-    const ratePerThousandTokens = {
-      'anthropic.claude-3-sonnet-20240229-v1:0': 3,
-      'anthropic.claude-3-haiku-20240307-v1:0': 0.25,
-      'anthropic.claude-instant-v1': 0.8,
-      'amazon.titan-text-express-v1': 0.3,
-    };
-    
-    const rate = ratePerThousandTokens[modelId] || 1;
-    const estimatedCredits = Math.ceil((estimatedTokens / 1000) * rate);
-    
-    // Check if user has sufficient credits (with buffer)
-    const creditBuffer = Math.ceil(estimatedCredits * 1.2); // 20% buffer
-    
-    const allocation = await CreditAllocation.findOne({ 
-      where: { 
-        userId, 
-        expiresAt: { [Op.gt]: new Date() },
-        remainingCredits: { [Op.gte]: creditBuffer }
-      },
-      order: [['expiresAt', 'ASC']]
-    });
-    
-    if (!allocation) {
-      return res.status(402).json({ 
-        message: 'Insufficient credits for streaming session',
-        estimatedCredits,
-        bufferRequired: creditBuffer
-      });
+    if (!sessionId || !modelId || !estimatedTokens) {
+      return res.status(400).json({ message: 'Missing required parameters' });
     }
     
-    // Create streaming session with pre-allocated credits
-    const streamingSession = await StreamingSession.create({
+    const session = await StreamingSessionService.initializeSession({
       sessionId,
       userId: userId!,
       modelId,
-      estimatedCredits,
-      allocatedCredits: creditBuffer, // Pre-allocate with buffer
-      usedCredits: 0,
-      status: 'active',
-      startedAt: new Date()
+      estimatedTokens
     });
     
-    // Reserve the credits (without deducting them yet)
-    allocation.remainingCredits -= creditBuffer;
-    await allocation.save();
-    
     return res.status(201).json({
-      sessionId: streamingSession.sessionId,
-      allocatedCredits: creditBuffer,
-      estimatedCredits,
+      sessionId: session.sessionId,
+      allocatedCredits: session.allocatedCredits,
+      estimatedCredits: session.estimatedCredits,
       message: 'Streaming session initialized'
     });
   } catch (error) {
     console.error('Error initializing streaming session:', error);
+    
+    if (error.message === 'Insufficient credits for streaming session') {
+      return res.status(402).json({ 
+        message: 'Insufficient credits for streaming session' 
+      });
+    }
+    
     return res.status(500).json({ message: 'Error initializing streaming session', error });
   }
 };
 
-// Update streaming session with actual usage
-export const finalizeStreamingSession = async (req: Request, res: Response) => {
+/**
+ * Finalize a streaming session with actual usage
+ */
+export const finalizeSession = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const { sessionId, actualTokens, success = true } = req.body;
     
-    // Find the streaming session
-    const streamingSession = await StreamingSession.findOne({
-      where: { sessionId, userId, status: 'active' }
+    if (!sessionId || !actualTokens) {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+    
+    const result = await StreamingSessionService.finalizeSession({
+      sessionId,
+      userId: userId!,
+      actualTokens,
+      success
     });
     
-    if (!streamingSession) {
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Error finalizing streaming session:', error);
+    
+    if (error.message === 'Active streaming session not found') {
       return res.status(404).json({ message: 'Active streaming session not found' });
     }
     
-    // Calculate actual credits used
-    const ratePerThousandTokens = {
-      'anthropic.claude-3-sonnet-20240229-v1:0': 3,
-      'anthropic.claude-3-haiku-20240307-v1:0': 0.25,
-      'anthropic.claude-instant-v1': 0.8,
-      'amazon.titan-text-express-v1': 0.3,
-    };
-    
-    const rate = ratePerThousandTokens[streamingSession.modelId] || 1;
-    const actualCredits = Math.ceil((actualTokens / 1000) * rate);
-    
-    // Update streaming session
-    streamingSession.usedCredits = actualCredits;
-    streamingSession.status = success ? 'completed' : 'failed';
-    streamingSession.completedAt = new Date();
-    await streamingSession.save();
-    
-    // Find the allocation to refund unused credits
-    const allocation = await CreditAllocation.findOne({ 
-      where: { 
-        userId,
-        expiresAt: { [Op.gt]: new Date() }
-      },
-      order: [['expiresAt', 'ASC']]
-    });
-    
-    if (allocation) {
-      // Refund unused credits
-      const refundAmount = streamingSession.allocatedCredits - actualCredits;
-      if (refundAmount > 0) {
-        allocation.remainingCredits += refundAmount;
-        await allocation.save();
-      }
-    }
-    
-    // Record usage
-    await Usage.create({
-      userId: userId!,
-      timestamp: new Date(),
-      service: 'chat-streaming',
-      operation: streamingSession.modelId,
-      credits: actualCredits,
-      metadata: {
-        sessionId,
-        tokens: actualTokens,
-        streamingDuration: (streamingSession.completedAt!.getTime() - streamingSession.startedAt.getTime()) / 1000
-      }
-    });
-    
-    return res.status(200).json({
-      sessionId,
-      status: streamingSession.status,
-      estimatedCredits: streamingSession.estimatedCredits,
-      actualCredits,
-      refund: streamingSession.allocatedCredits - actualCredits
-    });
-  } catch (error) {
-    console.error('Error finalizing streaming session:', error);
     return res.status(500).json({ message: 'Error finalizing streaming session', error });
   }
 };
 
-// Handle streaming session aborts/errors
-export const abortStreamingSession = async (req: Request, res: Response) => {
+/**
+ * Abort a streaming session
+ */
+export const abortSession = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const { sessionId, tokensGenerated = 0 } = req.body;
     
-    // Find the streaming session
-    const streamingSession = await StreamingSession.findOne({
-      where: { sessionId, userId, status: 'active' }
+    if (!sessionId) {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+    
+    const result = await StreamingSessionService.abortSession({
+      sessionId,
+      userId: userId!,
+      tokensGenerated
     });
     
-    if (!streamingSession) {
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Error aborting streaming session:', error);
+    
+    if (error.message === 'Active streaming session not found') {
       return res.status(404).json({ message: 'Active streaming session not found' });
     }
     
-    // Calculate partial credits used
-    const ratePerThousandTokens = {
-      'anthropic.claude-3-sonnet-20240229-v1:0': 3,
-      'anthropic.claude-3-haiku-20240307-v1:0': 0.25,
-      'anthropic.claude-instant-v1': 0.8,
-      'amazon.titan-text-express-v1': 0.3,
-    };
-    
-    const rate = ratePerThousandTokens[streamingSession.modelId] || 1;
-    const partialCredits = Math.ceil((tokensGenerated / 1000) * rate);
-    
-    // Update streaming session
-    streamingSession.usedCredits = partialCredits;
-    streamingSession.status = 'failed';
-    streamingSession.completedAt = new Date();
-    await streamingSession.save();
-    
-    // Find the allocation to refund unused credits
-    const allocation = await CreditAllocation.findOne({ 
-      where: { 
-        userId,
-        expiresAt: { [Op.gt]: new Date() }
-      },
-      order: [['expiresAt', 'ASC']]
-    });
-    
-    if (allocation) {
-      // Refund unused credits
-      const refundAmount = streamingSession.allocatedCredits - partialCredits;
-      if (refundAmount > 0) {
-        allocation.remainingCredits += refundAmount;
-        await allocation.save();
-      }
-    }
-    
-    // Record partial usage
-    await Usage.create({
-      userId: userId!,
-      timestamp: new Date(),
-      service: 'chat-streaming-aborted',
-      operation: streamingSession.modelId,
-      credits: partialCredits,
-      metadata: {
-        sessionId,
-        partialTokens: tokensGenerated,
-        streamingDuration: (streamingSession.completedAt!.getTime() - streamingSession.startedAt.getTime()) / 1000
-      }
-    });
-    
-    return res.status(200).json({
-      sessionId,
-      status: 'aborted',
-      partialCredits,
-      refund: streamingSession.allocatedCredits - partialCredits
-    });
-  } catch (error) {
-    console.error('Error aborting streaming session:', error);
     return res.status(500).json({ message: 'Error aborting streaming session', error });
+  }
+};
+
+/**
+ * Get active streaming sessions for the authenticated user
+ */
+export const getActiveSessions = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    
+    const sessions = await StreamingSessionService.getActiveSessions(userId!);
+    
+    return res.status(200).json(sessions);
+  } catch (error) {
+    console.error('Error fetching active streaming sessions:', error);
+    return res.status(500).json({ message: 'Error fetching active streaming sessions', error });
+  }
+};
+
+/**
+ * Get all active streaming sessions (admin only)
+ */
+export const getAllActiveSessions = async (req: Request, res: Response) => {
+  try {
+    const sessions = await StreamingSessionService.getAllActiveSessions();
+    
+    return res.status(200).json(sessions);
+  } catch (error) {
+    console.error('Error fetching all active streaming sessions:', error);
+    return res.status(500).json({ message: 'Error fetching all active streaming sessions', error });
   }
 };
 ```
@@ -380,51 +288,84 @@ export const abortStreamingSession = async (req: Request, res: Response) => {
 ### Updated Accounting Routes
 
 ```typescript
-// src/routes/accounting.routes.ts
+// src/routes/api.routes.ts
 import { Router } from 'express';
-import { 
-  getCreditBalance, 
-  allocateCredits, 
-  trackUsage,
-  checkCredits
-} from '../controllers/accounting.controller';
-import {
-  initializeStreamingSession,
-  finalizeStreamingSession,
-  abortStreamingSession
-} from '../controllers/streaming.controller';
-import { authenticateJWT, requireAdmin } from '../middleware/jwt.middleware';
+import { authenticateJWT, requireAdmin, requireSupervisor } from '../middleware/jwt.middleware';
+
+// Import controllers
+import CreditController from '../controllers/credit.controller';
+import StreamingSessionController from '../controllers/streaming-session.controller';
+import UsageController from '../controllers/usage.controller';
 
 const router = Router();
 
-// Credit management routes
-router.get('/credits', authenticateJWT, getCreditBalance);
-router.post('/credits/check', authenticateJWT, checkCredits);
-router.post('/credits/allocate', authenticateJWT, requireAdmin, allocateCredits);
-router.post('/usage/track', authenticateJWT, trackUsage);
+// Health check endpoint (public)
+router.get('/health', (_, res) => {
+  res.status(200).json({ 
+    status: 'ok',
+    service: 'accounting-service',
+    version: process.env.npm_package_version || '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
 
-// Streaming session management
-router.post('/streaming/initialize', authenticateJWT, initializeStreamingSession);
-router.post('/streaming/finalize', authenticateJWT, finalizeStreamingSession);
-router.post('/streaming/abort', authenticateJWT, abortStreamingSession);
+// ----- AUTHENTICATED ROUTES -----
+// All routes below require authentication
+router.use('/credits', authenticateJWT);
+router.use('/streaming-sessions', authenticateJWT);
+router.use('/usage', authenticateJWT);
 
-// Existing API key routes
-// ...
+// ----- CREDIT MANAGEMENT ROUTES -----
+// Get current user's credit balance
+router.get('/credits/balance', CreditController.getUserBalance);
+
+// Check if user has sufficient credits
+router.post('/credits/check', CreditController.checkCredits);
+
+// Calculate credits for a specific operation
+router.post('/credits/calculate', CreditController.calculateCredits);
+
+// Get a user's credit balance (admin and supervisors only)
+router.get('/credits/balance/:userId', requireSupervisor, CreditController.getUserBalanceByAdmin);
+
+// Allocate credits to a user (admin and supervisors only)
+router.post('/credits/allocate', requireSupervisor, CreditController.allocateCredits);
+
+// ----- STREAMING SESSION ROUTES -----
+// Initialize a streaming session
+router.post('/streaming-sessions/initialize', StreamingSessionController.initializeSession);
+
+// Finalize a streaming session
+router.post('/streaming-sessions/finalize', StreamingSessionController.finalizeSession);
+
+// Abort a streaming session
+router.post('/streaming-sessions/abort', StreamingSessionController.abortSession);
+
+// Get active sessions for the current user
+router.get('/streaming-sessions/active', StreamingSessionController.getActiveSessions);
+
+// Get all active sessions (admin only)
+router.get('/streaming-sessions/active/all', requireAdmin, StreamingSessionController.getAllActiveSessions);
+
+// ----- USAGE TRACKING ROUTES -----
+// Record a usage event
+router.post('/usage/record', UsageController.recordUsage);
+
+// Get current user's usage statistics
+router.get('/usage/stats', UsageController.getUserStats);
+
+// Get usage statistics for a specific user (admin and supervisors only)
+router.get('/usage/stats/:userId', requireSupervisor, UsageController.getUserStatsByAdmin);
+
+// Get system-wide usage statistics (admin only)
+router.get('/usage/system-stats', requireAdmin, UsageController.getSystemStats);
 
 export default router;
 ```
 
 ## 3. Chat Service with Streaming Support
 
-The Chat Service now implements WebSocket or Server-Sent Events (SSE) for streaming responses.
-
-### WebSocket vs. SSE for Streaming Chat
-
-For this implementation, we'll use Server-Sent Events (SSE) because:
-1. It's simpler to implement than WebSockets
-2. Works well for one-way server-to-client streaming (which is what we need)
-3. Has automatic reconnection built-in
-4. Works through proxies and firewalls more reliably
+The Chat Service now implements Server-Sent Events (SSE) for streaming responses.
 
 ### Streaming Chat Implementation
 
@@ -441,7 +382,7 @@ import axios from 'axios';
 const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION });
 
 // Constants
-const ACCOUNTING_API_URL = process.env.ACCOUNTING_API_URL || 'http://localhost:3001/api/accounting';
+const ACCOUNTING_API_URL = process.env.ACCOUNTING_API_URL || 'http://localhost:3001/api';
 
 // Initialize a streaming session
 export const initializeStreamingSession = async (
@@ -457,17 +398,16 @@ export const initializeStreamingSession = async (
     
     // Initialize session with accounting service
     const response = await axios.post(
-      `${ACCOUNTING_API_URL}/streaming/initialize`,
+      `${ACCOUNTING_API_URL}/streaming-sessions/initialize`,
       {
-        sessionId: `stream-${Date.now()}-${userId.slice(0, 6)}`,
+        sessionId: `stream-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         modelId,
         estimatedTokens
       },
-      { 
-        headers: { 
-          'Authorization': authHeader,
-          'Content-Type': 'application/json'
-        } 
+      {
+        headers: {
+          Authorization: authHeader
+        }
       }
     );
     
@@ -502,15 +442,12 @@ export const streamResponse = async (
     // Format messages for Bedrock
     const promptBody = {
       anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 2000,
       messages: messages
     };
     
     // Create the streaming command
     const command = new InvokeModelWithResponseStreamCommand({
       modelId: modelId || 'anthropic.claude-3-sonnet-20240229-v1:0',
-      contentType: 'application/json',
-      accept: 'application/json',
       body: JSON.stringify(promptBody)
     });
     
@@ -519,43 +456,53 @@ export const streamResponse = async (
     
     // Process the chunks as they arrive
     if (response.body) {
-      // Write stream header for SSE
-      stream.write('event: start\ndata: {"status":"started"}\n\n');
-      
-      // Process each chunk
       for await (const chunk of response.body) {
         if (chunk.chunk?.bytes) {
-          // Parse the response chunk
-          const decodedChunk = JSON.parse(new TextDecoder().decode(chunk.chunk.bytes));
+          // Parse the chunk
+          const parsed = JSON.parse(Buffer.from(chunk.chunk.bytes).toString('utf-8'));
           
-          if (decodedChunk.message?.content) {
-            const content = decodedChunk.message.content;
-            stream.write(`event: chunk\ndata: ${JSON.stringify({ content })}\n\n`);
+          if (parsed.type === 'content_block_delta') {
+            // Extract the content
+            const text = parsed.delta?.text || '';
             
-            // Update token count (rough estimation)
-            totalTokensGenerated += Math.ceil(content.length / 4);
+            // Estimate token count for this chunk
+            const chunkTokens = Math.ceil(text.length / 4);
+            totalTokensGenerated += chunkTokens;
+            
+            // Format for SSE
+            stream.write(`event: chunk\ndata: ${JSON.stringify({
+              text,
+              tokens: chunkTokens,
+              totalTokens: totalTokensGenerated
+            })}\n\n`);
+          } else if (parsed.type === 'message_stop') {
+            // Send completion event when the message is done
+            stream.write(`event: complete\ndata: ${JSON.stringify({
+              status: "complete",
+              tokens: totalTokensGenerated
+            })}\n\n`);
           }
         }
       }
       
-      // Finalize streaming session with accounting
-      await axios.post(
-        `${ACCOUNTING_API_URL}/streaming/finalize`,
-        {
-          sessionId,
-          actualTokens: totalTokensGenerated + (messages.reduce((acc, m) => acc + m.content.length, 0) / 4),
-          success: true
-        },
-        {
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json'
+      // Finalize the streaming session
+      try {
+        await axios.post(
+          `${ACCOUNTING_API_URL}/streaming-sessions/finalize`,
+          {
+            sessionId,
+            actualTokens: totalTokensGenerated,
+            success: true
+          },
+          {
+            headers: {
+              Authorization: authHeader
+            }
           }
-        }
-      );
-      
-      // Send completion event
-      stream.write(`event: complete\ndata: {"status":"complete","tokens":${totalTokensGenerated}}\n\n`);
+        );
+      } catch (finalizationError) {
+        console.error('Error finalizing streaming session:', finalizationError);
+      }
     }
     
     // End the stream
@@ -567,15 +514,14 @@ export const streamResponse = async (
     // Attempt to abort/finalize the streaming session
     try {
       await axios.post(
-        `${ACCOUNTING_API_URL}/streaming/abort`,
+        `${ACCOUNTING_API_URL}/streaming-sessions/abort`,
         {
           sessionId,
           tokensGenerated: totalTokensGenerated
         },
         {
           headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json'
+            Authorization: authHeader
           }
         }
       );
@@ -631,7 +577,7 @@ export const streamChatResponse = async (req: Request, res: Response) => {
     const authHeader = req.headers.authorization || '';
     const streamSession = await initializeStreamingSession(
       userId, 
-      messageHistory, 
+      messageHistory,
       modelId,
       authHeader
     );
@@ -657,12 +603,13 @@ export const streamChatResponse = async (req: Request, res: Response) => {
     // Create a placeholder for the assistant's response
     const assistantMessage = {
       role: 'assistant',
-      content: '', // Will be collected client-side from the stream
+      content: '',
       timestamp: new Date()
     };
     session.messages.push(assistantMessage);
     
     // Update session metadata
+    session.metadata = session.metadata || {};
     session.metadata.streamingSessionId = streamSession.sessionId;
     session.updatedAt = new Date();
     await session.save();
@@ -682,8 +629,7 @@ export const streamChatResponse = async (req: Request, res: Response) => {
       res.end();
     } else {
       // Otherwise send a normal error response
-      return res.status(error.message === 'Insufficient credits for streaming' ? 402 : 500)
-        .json({ message: error.message });
+      res.status(500).json({ message: 'Error streaming chat response', error: error.message });
     }
   }
 };
@@ -700,25 +646,30 @@ export const updateChatWithStreamResponse = async (req: Request, res: Response) 
       return res.status(404).json({ message: 'Chat session not found' });
     }
     
-    // Find and update the assistant message
-    const lastMessageIndex = session.messages.length - 1;
-    if (lastMessageIndex >= 0 && session.messages[lastMessageIndex].role === 'assistant') {
-      session.messages[lastMessageIndex].content = completeResponse;
+    // Find the last message (which should be the assistant's response)
+    const lastMessage = session.messages[session.messages.length - 1];
+    if (lastMessage.role !== 'assistant') {
+      return res.status(400).json({ message: 'Last message in session is not from assistant' });
     }
     
+    // Update the message content
+    lastMessage.content = completeResponse;
+    
     // Update metadata
-    session.metadata.totalTokens = (session.metadata.totalTokens || 0) + tokensUsed;
-    session.metadata.lastStreamingSessionId = streamingSessionId;
+    session.metadata = session.metadata || {};
+    session.metadata.lastTokensUsed = tokensUsed;
+    session.metadata.totalTokensUsed = (session.metadata.totalTokensUsed || 0) + tokensUsed;
     
     await session.save();
     
-    return res.status(200).json({ 
-      success: true,
-      messageIndex: lastMessageIndex
+    return res.status(200).json({
+      message: 'Chat session updated successfully',
+      sessionId,
+      tokensUsed
     });
   } catch (error) {
     console.error('Error updating chat with stream response:', error);
-    return res.status(500).json({ message: 'Error updating chat session', error });
+    return res.status(500).json({ message: 'Error updating chat session', error: error.message });
   }
 };
 ```
@@ -734,7 +685,7 @@ import {
   streamChatResponse,
   updateChatWithStreamResponse
 } from '../controllers/chat.controller';
-import { authenticate } from '../auth/auth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -755,64 +706,77 @@ The frontend needs to handle Server-Sent Events for streaming responses.
 ```typescript
 // client/src/services/ChatService.ts
 class ChatService {
+  private apiUrl = import.meta.env.VITE_API_URL || '/api';
+  private authToken: string | null = null;
+  
+  constructor() {
+    this.authToken = localStorage.getItem('accessToken');
+  }
+  
   // Regular chat methods...
   
   // Stream a chat response
   async streamChatResponse(sessionId: string, message: string, modelId?: string): Promise<EventSource> {
     try {
-      // First, create a POST request to initiate the stream
-      const response = await fetch(`${API_URL}/api/chat/sessions/${sessionId}/stream`, {
+      // First create the streaming session
+      const response = await fetch(`${this.apiUrl}/chat/sessions/${sessionId}/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAccessToken()}`
+          'Authorization': `Bearer ${this.authToken}`
         },
         body: JSON.stringify({ message, modelId })
       });
       
-      // If response is not ok, it's an error (like insufficient credits)
-      if (!response.ok) {
+      if (!response.ok && response.status !== 200) {
+        // Handle error responses (e.g., 402 for insufficient credits)
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to initiate streaming chat');
+        throw new Error(errorData.message || 'Failed to create streaming session');
       }
       
-      // Create event source for SSE on the same URL
-      const eventSource = new EventSource(
-        `${API_URL}/api/chat/sessions/${sessionId}/stream?token=${encodeURIComponent(this.getAccessToken())}`
-      );
+      // Create an SSE event source
+      const eventSource = new EventSource(`${this.apiUrl}/chat/sessions/${sessionId}/stream`);
       
       return eventSource;
     } catch (error) {
-      console.error('Error streaming chat response:', error);
+      console.error('Error creating streaming session:', error);
       throw error;
     }
   }
   
   // Update chat with complete streamed response
   async updateChatWithStreamResponse(
-    sessionId: string, 
-    completeResponse: string, 
+    sessionId: string,
+    completeResponse: string,
     streamingSessionId: string,
     tokensUsed: number
   ): Promise<void> {
     try {
-      await fetch(`${API_URL}/api/chat/sessions/${sessionId}/update-stream`, {
+      const response = await fetch(`${this.apiUrl}/chat/sessions/${sessionId}/update-stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAccessToken()}`
+          'Authorization': `Bearer ${this.authToken}`
         },
-        body: JSON.stringify({ 
-          completeResponse, 
-          streamingSessionId, 
-          tokensUsed 
+        body: JSON.stringify({
+          completeResponse,
+          streamingSessionId,
+          tokensUsed
         })
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update chat with stream response');
+      }
     } catch (error) {
       console.error('Error updating chat with stream response:', error);
+      throw error;
     }
   }
 }
+
+export default ChatService;
 ```
 
 ### React Component for Streaming Chat
@@ -821,13 +785,17 @@ class ChatService {
 // client/src/components/StreamingChat.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import ChatService from '../services/ChatService';
+import Markdown from './Markdown';
 
 const StreamingChat: React.FC<{ sessionId: string }> = ({ sessionId }) => {
   const [message, setMessage] = useState('');
   const [responseText, setResponseText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tokenCount, setTokenCount] = useState(0);
+  
   const eventSourceRef = useRef<EventSource | null>(null);
+  const responseRef = useRef('');
   const chatService = new ChatService();
   
   // Clean up event source on unmount
@@ -844,72 +812,68 @@ const StreamingChat: React.FC<{ sessionId: string }> = ({ sessionId }) => {
     
     try {
       setIsStreaming(true);
-      setResponseText('');
       setError(null);
+      setResponseText('');
+      responseRef.current = '';
       
-      // Store the complete response as we receive chunks
-      let completeResponse = '';
-      let streamingSessionId = '';
-      let tokensUsed = 0;
-      
-      // Create event source for streaming
-      const eventSource = await chatService.streamChatResponse(sessionId, message);
+      const eventSource = await chatService.streamChatResponse(sessionId, message, 'anthropic.claude-3-sonnet-20240229-v1:0');
       eventSourceRef.current = eventSource;
       
-      // Listen for stream events
-      eventSource.addEventListener('start', (event) => {
-        const data = JSON.parse(event.data);
-        console.log('Stream started:', data);
-      });
-      
+      // Handle incoming chunks
       eventSource.addEventListener('chunk', (event) => {
-        const data = JSON.parse(event.data);
-        completeResponse += data.content;
-        setResponseText(prevText => prevText + data.content);
+        try {
+          const data = JSON.parse(event.data);
+          responseRef.current += data.text;
+          setResponseText(responseRef.current);
+          setTokenCount(data.totalTokens);
+        } catch (error) {
+          console.error('Error parsing chunk data:', error);
+        }
       });
       
-      eventSource.addEventListener('complete', (event) => {
-        const data = JSON.parse(event.data);
-        console.log('Stream completed:', data);
-        tokensUsed = data.tokens;
-        
-        // Clean up
-        eventSource.close();
-        eventSourceRef.current = null;
-        setIsStreaming(false);
-        
-        // Update the chat session with complete response
-        chatService.updateChatWithStreamResponse(
-          sessionId,
-          completeResponse,
-          streamingSessionId,
-          tokensUsed
-        );
+      // Handle completion
+      eventSource.addEventListener('complete', async (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Update the chat session with the complete response
+          await chatService.updateChatWithStreamResponse(
+            sessionId,
+            responseRef.current,
+            data.sessionId,
+            data.tokens
+          );
+          
+          // Clean up
+          eventSource.close();
+          eventSourceRef.current = null;
+          setIsStreaming(false);
+          setMessage('');
+        } catch (error) {
+          console.error('Error handling complete event:', error);
+          setError('Error updating chat with complete response');
+          setIsStreaming(false);
+        }
       });
       
+      // Handle errors
       eventSource.addEventListener('error', (event) => {
-        const data = JSON.parse(event.data);
-        setError(data.error || 'An error occurred during streaming');
+        console.error('SSE Error:', event);
+        try {
+          const data = JSON.parse(event.data);
+          setError(data.error || 'Error in streaming response');
+        } catch {
+          setError('Error in streaming response');
+        }
         
-        // Clean up
         eventSource.close();
         eventSourceRef.current = null;
         setIsStreaming(false);
       });
-      
-      // Also handle general errors
-      eventSource.onerror = () => {
-        setError('Connection error');
-        eventSource.close();
-        eventSourceRef.current = null;
-        setIsStreaming(false);
-      };
-      
-      // Clear the input
-      setMessage('');
       
     } catch (error) {
-      setError(error.message || 'Failed to stream response');
+      console.error('Error starting stream:', error);
+      setError(error.message || 'Failed to start streaming chat');
       setIsStreaming(false);
     }
   };
@@ -925,36 +889,58 @@ const StreamingChat: React.FC<{ sessionId: string }> = ({ sessionId }) => {
   return (
     <div className="streaming-chat">
       <div className="chat-messages">
-        {/* Display existing chat messages */}
+        {/* User message would be displayed here */}
         
-        {/* Display streaming response */}
-        {responseText && (
+        {isStreaming && (
+          <div className="assistant-message streaming">
+            <div className="message-header">
+              <span className="role">Assistant</span>
+              <span className="status">Streaming...</span>
+              <span className="tokens">{tokenCount} tokens</span>
+            </div>
+            <div className="message-content">
+              <Markdown content={responseText || 'Thinking...'} />
+            </div>
+          </div>
+        )}
+        
+        {!isStreaming && responseText && (
           <div className="assistant-message">
-            <p>{responseText}</p>
+            <div className="message-header">
+              <span className="role">Assistant</span>
+              <span className="tokens">{tokenCount} tokens</span>
+            </div>
+            <div className="message-content">
+              <Markdown content={responseText} />
+            </div>
           </div>
         )}
         
         {error && (
           <div className="error-message">
-            <p>{error}</p>
+            Error: {error}
           </div>
         )}
       </div>
       
       <div className="chat-input">
-        <input
-          type="text"
+        <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          disabled={isStreaming}
           placeholder="Type your message..."
+          disabled={isStreaming}
         />
-        
-        {isStreaming ? (
-          <button onClick={handleStopStreaming}>Stop</button>
-        ) : (
-          <button onClick={handleSendMessage}>Send</button>
-        )}
+        <div className="chat-actions">
+          {isStreaming ? (
+            <button onClick={handleStopStreaming} className="stop-button">
+              Stop Generating
+            </button>
+          ) : (
+            <button onClick={handleSendMessage} disabled={!message.trim()}>
+              Send
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1188,7 +1174,8 @@ gantt
 
 **Challenge**: Streaming to multiple clients could impact performance.
 
-**Solution**: 
+**Solution**:
+
 - Implement connection limits per server
 - Consider using Redis for pub/sub to distribute stream chunks across instances
 - Use load balancing for the streaming endpoints
@@ -1198,7 +1185,7 @@ gantt
 This comprehensive blueprint provides a robust architecture for an agentic chatbot platform with streaming chat capabilities, while maintaining separate authentication and accounting databases. The key components of this architecture include:
 
 1. **JWT-based Authentication**: Shared JWT secret allowing secure cross-service communication
-2. **Separate Accounting Database**: PostgreSQL for tracking credits and API usage 
+2. **Separate Accounting Database**: PostgreSQL for tracking credits and API usage
 3. **Streaming Chat Implementation**: Using Server-Sent Events for real-time responses
 4. **Pre-allocation Credit Model**: Ensuring proper credit management for streaming sessions
 5. **Supervisor Monitoring**: Allowing teachers to observe and provide feedback on student interactions
