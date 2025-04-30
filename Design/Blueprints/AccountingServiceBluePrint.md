@@ -1542,7 +1542,7 @@ export const trackUsage = async (req: Request, res: Response) => {
 };
 
 /**
- * Get usage statistics for the authenticated user
+ * Get current user's usage statistics
  */
 export const getUserUsageStats = async (req: Request, res: Response) => {
   try {
@@ -2066,7 +2066,7 @@ router.get('/usage/stats', UsageController.getUserStats);
 router.get('/usage/stats/:userId', requireSupervisor, UsageController.getUserStatsByAdmin);
 
 // Get system-wide usage statistics (admin only)
-router.get('/usage/system', requireAdmin, UsageController.getSystemStats);
+router.get('/usage/system-stats', requireAdmin, UsageController.getSystemStats);
 
 export default router;
 ```

@@ -28,19 +28,22 @@ CreditAllocation.init({
   id: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
-    primaryKey: true
+    primaryKey: true,
+    field: 'id'
   },
   userId: {
     type: DataTypes.STRING(50),
     allowNull: false,
+    field: 'user_id',  // Explicitly map userId to user_id column
     references: {
       model: 'user_accounts',
-      key: 'user_id'  // Changed from 'userId' to 'user_id' to match the actual DB column name
+      key: 'user_id'
     }
   },
   totalCredits: {
     type: DataTypes.INTEGER,
     allowNull: false,
+    field: 'total_credits',  // Explicitly map totalCredits to total_credits column
     validate: {
       min: 0
     }
@@ -48,34 +51,40 @@ CreditAllocation.init({
   remainingCredits: {
     type: DataTypes.INTEGER,
     allowNull: false,
+    field: 'remaining_credits',  // Explicitly map remainingCredits to remaining_credits column
     validate: {
       min: 0
     }
   },
   allocatedBy: {
     type: DataTypes.STRING(50),
-    allowNull: false
+    allowNull: false,
+    field: 'allocated_by'  // Explicitly map allocatedBy to allocated_by column
   },
   allocatedAt: {
     type: DataTypes.DATE,
     allowNull: false,
+    field: 'allocated_at',  // Explicitly map allocatedAt to allocated_at column
     defaultValue: DataTypes.NOW
   },
   expiresAt: {
     type: DataTypes.DATE,
-    allowNull: false
+    allowNull: false,
+    field: 'expires_at'  // Explicitly map expiresAt to expires_at column
   },
   notes: {
-    type: DataTypes.TEXT
+    type: DataTypes.TEXT,
+    field: 'notes'
   }
 }, {
   sequelize,
   tableName: 'credit_allocations',
   timestamps: false,
+  underscored: true,  // This tells Sequelize that the DB uses snake_case column names
   indexes: [
     {
       name: 'idx_credit_user_expiry',
-      fields: ['user_id', 'expires_at']  // Changed from 'userId', 'expiresAt' to match the DB column names
+      fields: ['user_id', 'expires_at']
     }
   ]
 });

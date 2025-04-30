@@ -24,36 +24,43 @@ UserAccount.init({
   userId: {
     type: DataTypes.STRING(50),
     allowNull: false,
-    primaryKey: true
+    primaryKey: true,
+    field: 'user_id'  // Explicitly map userId to user_id column
   },
   email: {
     type: DataTypes.STRING(255),
     allowNull: false,
-    unique: true
+    unique: true,
+    field: 'email'
   },
   username: {
     type: DataTypes.STRING(100),
-    allowNull: false
+    allowNull: false,
+    field: 'username'
   },
   role: {
     type: DataTypes.STRING(50),
     allowNull: false,
-    defaultValue: 'user'
+    defaultValue: 'user',
+    field: 'role'
   },
   createdAt: {
     type: DataTypes.DATE,
     allowNull: false,
-    defaultValue: DataTypes.NOW
+    defaultValue: DataTypes.NOW,
+    field: 'created_at'
   },
   updatedAt: {
     type: DataTypes.DATE,
     allowNull: false,
-    defaultValue: DataTypes.NOW
+    defaultValue: DataTypes.NOW,
+    field: 'updated_at'
   }
 }, {
   sequelize,
   tableName: 'user_accounts',
-  timestamps: true
+  timestamps: true,
+  underscored: true  // This tells Sequelize that the DB uses snake_case column names
 });
 
 export default UserAccount;

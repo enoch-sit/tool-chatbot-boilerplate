@@ -1,6 +1,8 @@
 // src/controllers/credit.controller.ts
 import { Request, Response } from 'express';
 import CreditService from '../services/credit.service';
+import UserAccountService from '../services/user-account.service';
+import UserAccount from '../models/user-account.model';
 
 export class CreditController {
   /**
@@ -30,6 +32,8 @@ export class CreditController {
     try {
       const { userId, credits, expiryDays, notes } = req.body;
       
+      console.log(`Credit allocation request received - userId: ${userId}, credits: ${credits}, expiryDays: ${expiryDays}`);
+      
       if (!userId || !credits || credits <= 0) {
         return res.status(400).json({ message: 'Missing or invalid required fields' });
       }
@@ -42,21 +46,62 @@ export class CreditController {
         return res.status(403).json({ message: 'Insufficient permissions' });
       }
       
-      const allocation = await CreditService.allocateCredits({
-        userId,
-        credits,
-        allocatedBy: req.user.userId,
-        expiryDays,
-        notes
-      });
+      console.log(`Processing credit allocation by admin ${req.user.userId} to user ${userId}`);
       
-      return res.status(201).json({
-        id: allocation.id,
-        userId: allocation.userId,
-        totalCredits: allocation.totalCredits,
-        remainingCredits: allocation.remainingCredits,
-        expiresAt: allocation.expiresAt
-      });
+      // CRITICAL FIX: Create the user account FIRST before attempting to allocate credits
+      try {
+        // Check if the user already exists in the database
+        const existingUser = await UserAccount.findByPk(userId);
+        
+        if (!existingUser) {
+          // Create a new user account if not found
+          console.log(`Creating new user account for userId: ${userId}`);
+          await UserAccount.create({
+            userId: userId,
+            email: `temp_${userId}@example.com`,
+            username: `temp_user_${userId.substring(0, 8)}`,
+            role: 'enduser',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          console.log(`User account created successfully for userId: ${userId}`);
+        } else {
+          console.log(`User account already exists for userId: ${userId}`);
+        }
+      } catch (userError) {
+        console.error('Failed to create user account:', userError);
+        return res.status(500).json({ 
+          message: 'Failed to allocate credits: User account creation failed',
+          error: userError instanceof Error ? userError.message : 'Unknown error'
+        });
+      }
+      
+      // Now that we've ensured the user exists, proceed with credit allocation
+      try {
+        const allocation = await CreditService.allocateCredits({
+          userId,
+          credits,
+          allocatedBy: req.user.userId,
+          expiryDays,
+          notes
+        });
+        
+        console.log(`Credit allocation successful: ${JSON.stringify(allocation)}`);
+        
+        return res.status(201).json({
+          id: allocation.id,
+          userId: allocation.userId,
+          totalCredits: allocation.totalCredits,
+          remainingCredits: allocation.remainingCredits,
+          expiresAt: allocation.expiresAt
+        });
+      } catch (creditError) {
+        console.error(`Credit allocation service error:`, creditError);
+        return res.status(500).json({ 
+          message: 'Failed to allocate credits',
+          error: creditError instanceof Error ? creditError.message : 'Unknown error'
+        });
+      }
     } catch (error) {
       console.error('Error allocating credits:', error);
       return res.status(500).json({ message: 'Failed to allocate credits' });

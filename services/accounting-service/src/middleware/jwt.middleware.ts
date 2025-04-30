@@ -2,6 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import UserAccount from '../models/user-account.model';
+import UserAccountService from '../services/user-account.service';
 
 // Extend the Request type to include user property
 declare global {
@@ -44,30 +45,28 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
       return res.status(401).json({ message: 'Invalid token type' });
     }
     
-    // Find or create user account in accounting database
-    let userAccount = await UserAccount.findOne({ where: { userId: decoded.sub } });
-    
-    if (!userAccount) {
-      // Create a new user account record if not found
-      userAccount = await UserAccount.create({
+    // Find or create user account in accounting database using our service
+    try {
+      await UserAccountService.findOrCreateUser({
         userId: decoded.sub,
         email: decoded.email,
         username: decoded.username,
         role: decoded.role
       });
       
-      console.log(`Created new user account for ${decoded.username} (${decoded.sub})`);
+      // Attach user info to request object
+      req.user = {
+        userId: decoded.sub,
+        username: decoded.username,
+        email: decoded.email,
+        role: decoded.role
+      };
+      
+      next();
+    } catch (userError) {
+      console.error('Error processing user account:', userError);
+      return res.status(500).json({ message: 'Failed to process user account' });
     }
-    
-    // Attach user info to request object
-    req.user = {
-      userId: decoded.sub,
-      username: decoded.username,
-      email: decoded.email,
-      role: decoded.role
-    };
-    
-    next();
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.name === 'TokenExpiredError') {

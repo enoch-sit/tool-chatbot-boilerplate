@@ -320,32 +320,76 @@ sequenceDiagram
 
 ## JWT Token Contents and Sharing
 
-To clarify how JWT works across services:
+To clarify how JWT works across services via four separate Mermaid diagrams:
+
+1. JWT Token Structure
+2. Environment Variables
+3. Token Verification
+4. JWT Token example (with highlighting)
+
 
 ```mermaid
 graph TD
-    subgraph JWT Token Structure
-        header[Header:<br>alg: HS256<br>typ: JWT]
+    subgraph JWT_Token_Structure
+        header["Header:
+        alg: HS256
+        typ: JWT"]
         
-        payload[Payload:<br>sub: user_id<br>username: string<br>email: string<br>role: string<br>type: access|refresh<br>iat: timestamp<br>exp: timestamp]
+        payload["Payload:
+        sub: user_id
+        username: string
+        email: string
+        role: string
+        type: access/refresh
+        iat: timestamp
+        exp: timestamp"]
         
-        sig[Signature:<br>HMACSHA256(<br>base64UrlEncode(header) + "." +<br>base64UrlEncode(payload),<br>JWT_SECRET<br>)]
+        sig["Signature:
+        HMACSHA256(
+        base64UrlEncode(header) + '.' +
+        base64UrlEncode(payload),
+        JWT_SECRET
+        )"]
     end
-    
-    subgraph Environment Variables
-        authEnv[Authentication Service:<br>JWT_ACCESS_SECRET=shared_secret<br>JWT_REFRESH_SECRET=shared_secret]
+```
+
+```mermaid
+graph TD
+    subgraph Environment_Variables
+        authEnv["Authentication Service:
+        JWT_ACCESS_SECRET=shared_secret
+        JWT_REFRESH_SECRET=shared_secret"]
         
-        acctEnv[Accounting Service:<br>JWT_ACCESS_SECRET=shared_secret<br>JWT_REFRESH_SECRET=shared_secret]
+        acctEnv["Accounting Service:
+        JWT_ACCESS_SECRET=shared_secret
+        JWT_REFRESH_SECRET=shared_secret"]
         
-        chatEnv[Chat Service:<br>JWT_ACCESS_SECRET=shared_secret<br>JWT_REFRESH_SECRET=shared_secret]
+        chatEnv["Chat Service:
+        JWT_ACCESS_SECRET=shared_secret
+        JWT_REFRESH_SECRET=shared_secret"]
     end
-    
-    subgraph Token Verification
-        verify[Each service:<br>1. Extracts token from Authorization header<br>2. Verifies signature using shared JWT_SECRET<br>3. Checks token type (access vs refresh)<br>4. Verifies expiration time<br>5. Extracts user data (id, role, etc.)]
+```
+
+```mermaid
+graph TD
+    subgraph Token_Verification
+        verify["Each service:
+        1. Extracts token from Authorization header
+        2. Verifies signature using shared JWT_SECRET
+        3. Checks token type (access vs refresh)
+        4. Verifies expiration time
+        5. Extracts user data (id, role, etc.)"]
     end
+```
+
+```mermaid
+graph TD
+    jwt["JWT Token:
+    eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
+    eyJzdWIiOiIxMjM0NTY3ODkwIiwidXNlcm5hbWUiOiJqb2huX2RvZSIsImVtYWlsIjoiam9obkBleGFtcGxlLmNvbSIsInJvbGUiOiJ1c2VyIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTUxNjIzOTAyMiwiZXhwIjoxNTE2MjM5NjIyfQ.
+    SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"]
     
-    jwt[JWT Token:<br>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.<br>eyJzdWIiOiIxMjM0NTY3ODkwIiwidXNlcm5hbWUiOiJqb2huX2RvZSIsImVtYWlsIjoiam9obkBleGFtcGxlLmNvbSIsInJvbGUiOiJ1c2VyIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTUxNjIzOTAyMiwiZXhwIjoxNTE2MjM5NjIyfQ.<br>SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c]
-    
+    classDef highlight fill:#f9f,stroke:#333,stroke-width:2px
     class jwt highlight
 ```
 

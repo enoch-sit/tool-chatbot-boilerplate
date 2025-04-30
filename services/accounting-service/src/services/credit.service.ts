@@ -2,12 +2,25 @@
 import { Op } from 'sequelize';
 import CreditAllocation from '../models/credit-allocation.model';
 import PricingRule from '../models/credit-allocation.model'; // Will create this later
+import UserAccountService from './user-account.service';
 
 export class CreditService {
   /**
    * Get active credit balance for a user
    */
   async getUserBalance(userId: string): Promise<{ totalCredits: number, activeAllocations: any[] }> {
+    // First ensure the user exists in our system
+    try {
+      await UserAccountService.findOrCreateUser({ userId });
+    } catch (error) {
+      console.error('Failed to find or create user account when getting balance:', error);
+      // Return zero balance rather than failing when user doesn't exist
+      return {
+        totalCredits: 0,
+        activeAllocations: []
+      };
+    }
+    
     const now = new Date();
     
     const allocations = await CreditAllocation.findAll({
@@ -61,18 +74,50 @@ export class CreditService {
   }) {
     const { userId, credits, allocatedBy, expiryDays = 30, notes } = params;
     
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + expiryDays);
+    console.log(`[CreditService] Starting credit allocation process for user ${userId}`);
     
-    return CreditAllocation.create({
-      userId,
-      totalCredits: credits,
-      remainingCredits: credits,
-      allocatedBy,
-      allocatedAt: new Date(),
-      expiresAt,
-      notes: notes || ''
-    });
+    // First ensure the user exists in our system
+    try {
+      console.log(`[CreditService] Checking if user account exists for userId: ${userId}`);
+      const userAccount = await UserAccountService.findOrCreateUser({ userId });
+      console.log(`[CreditService] User account found/created: ${userAccount.userId}`);
+    } catch (error) {
+      console.error('[CreditService] Failed to find or create user account:', error);
+      throw new Error('Failed to allocate credits: User account creation failed');
+    }
+    
+    try {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + expiryDays);
+      
+      console.log(`[CreditService] Creating credit allocation record with data:`, {
+        userId,
+        totalCredits: credits,
+        remainingCredits: credits,
+        allocatedBy,
+        expiresAt: expiresAt.toISOString(),
+      });
+      
+      const allocation = await CreditAllocation.create({
+        userId,
+        totalCredits: credits,
+        remainingCredits: credits,
+        allocatedBy,
+        allocatedAt: new Date(),
+        expiresAt,
+        notes: notes || ''
+      });
+      
+      console.log(`[CreditService] Credit allocation created successfully with ID: ${allocation.id}`);
+      return allocation;
+    } catch (error) {
+      console.error('[CreditService] Error creating credit allocation:', error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to allocate credits: ${error.message}`);
+      } else {
+        throw new Error('Failed to allocate credits: Unknown error');
+      }
+    }
   }
   
   /**
