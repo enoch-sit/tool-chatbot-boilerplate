@@ -271,6 +271,26 @@ export const getActiveSessions = async (req: Request, res: Response) => {
 };
 
 /**
+ * Get active streaming sessions for a specific user (admin/supervisor only)
+ */
+export const getUserActiveSessions = async (req: Request, res: Response) => {
+  try {
+    const targetUserId = req.params.userId;
+    
+    if (!targetUserId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    const sessions = await StreamingSessionService.getActiveSessions(targetUserId);
+    
+    return res.status(200).json(sessions);
+  } catch (error) {
+    console.error('Error fetching user active streaming sessions:', error);
+    return res.status(500).json({ message: 'Error fetching active streaming sessions', error });
+  }
+};
+
+/**
  * Get all active streaming sessions (admin only)
  */
 export const getAllActiveSessions = async (req: Request, res: Response) => {
@@ -343,6 +363,9 @@ router.post('/streaming-sessions/abort', StreamingSessionController.abortSession
 
 // Get active sessions for the current user
 router.get('/streaming-sessions/active', StreamingSessionController.getActiveSessions);
+
+// Get active sessions for a specific user (admin/supervisor only)
+router.get('/streaming-sessions/active/:userId', requireSupervisor, StreamingSessionController.getUserActiveSessions);
 
 // Get all active sessions (admin only)
 router.get('/streaming-sessions/active/all', requireAdmin, StreamingSessionController.getAllActiveSessions);
@@ -548,8 +571,9 @@ import { initializeStreamingSession, streamResponse } from '../services/streamin
 
 // Stream chat response
 export const streamChatResponse = async (req: Request, res: Response) => {
-  const userId = req.user?.sub;
-  const { sessionId, message, modelId = 'anthropic.claude-3-sonnet-20240229-v1:0' } = req.body;
+  const userId = req.user?.userId;
+  const sessionId = req.params.sessionId;
+  const { message, modelId = 'anthropic.claude-3-sonnet-20240229-v1:0' } = req.body;
   
   try {
     // Find chat session
@@ -637,8 +661,9 @@ export const streamChatResponse = async (req: Request, res: Response) => {
 // Update chat session with complete response
 export const updateChatWithStreamResponse = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.sub;
-    const { sessionId, completeResponse, streamingSessionId, tokensUsed } = req.body;
+    const userId = req.user?.userId;
+    const sessionId = req.params.sessionId;
+    const { completeResponse, streamingSessionId, tokensUsed } = req.body;
     
     // Find chat session
     const session = await ChatSession.findOne({ _id: sessionId, userId });
@@ -718,7 +743,7 @@ class ChatService {
   // Stream a chat response
   async streamChatResponse(sessionId: string, message: string, modelId?: string): Promise<EventSource> {
     try {
-      // First create the streaming session
+      // Send the streaming request
       const response = await fetch(`${this.apiUrl}/chat/sessions/${sessionId}/stream`, {
         method: 'POST',
         headers: {
@@ -734,7 +759,7 @@ class ChatService {
         throw new Error(errorData.message || 'Failed to create streaming session');
       }
       
-      // Create an SSE event source
+      // Create an SSE event source - the response itself is the stream
       const eventSource = new EventSource(`${this.apiUrl}/chat/sessions/${sessionId}/stream`);
       
       return eventSource;
@@ -961,12 +986,12 @@ import SupervisorStudent from '../models/relationship.model';
 
 // Constants
 const CHAT_API_URL = process.env.CHAT_API_URL || 'http://localhost:3002/api/chat';
-const ACCOUNTING_API_URL = process.env.ACCOUNTING_API_URL || 'http://localhost:3001/api/accounting';
+const ACCOUNTING_API_URL = process.env.ACCOUNTING_API_URL || 'http://localhost:3001/api';
 
 // Get active streaming sessions for a student
 export const getActiveStreamingSessions = async (req: Request, res: Response) => {
   try {
-    const supervisorId = req.user?.sub;
+    const supervisorId = req.user?.userId;
     const { studentId } = req.params;
     
     // Verify supervisor-student relationship
@@ -982,7 +1007,7 @@ export const getActiveStreamingSessions = async (req: Request, res: Response) =>
     
     // Get active streaming sessions from accounting service
     const response = await axios.get(
-      `${ACCOUNTING_API_URL}/streaming/active/${studentId}`,
+      `${ACCOUNTING_API_URL}/streaming-sessions/active/${studentId}`,
       { 
         headers: { 
           'Authorization': req.headers.authorization 
@@ -992,6 +1017,7 @@ export const getActiveStreamingSessions = async (req: Request, res: Response) =>
     
     return res.status(200).json(response.data);
   } catch (error) {
+    console.error('Error fetching active streaming sessions:', error);
     return res.status(500).json({ message: 'Error fetching active streaming sessions', error });
   }
 };
@@ -999,7 +1025,7 @@ export const getActiveStreamingSessions = async (req: Request, res: Response) =>
 // Join an active streaming session as an observer
 export const joinStreamingSession = async (req: Request, res: Response) => {
   try {
-    const supervisorId = req.user?.sub;
+    const supervisorId = req.user?.userId;
     const { studentId, sessionId } = req.params;
     
     // Verify supervisor-student relationship
@@ -1021,7 +1047,7 @@ export const joinStreamingSession = async (req: Request, res: Response) => {
     
     // Forward streaming response from chat service
     const response = await axios.get(
-      `${CHAT_API_URL}/sessions/${sessionId}/stream/observe`,
+      `${CHAT_API_URL}/sessions/${sessionId}/observe`,
       { 
         headers: { 
           'Authorization': req.headers.authorization 
@@ -1048,7 +1074,7 @@ export const joinStreamingSession = async (req: Request, res: Response) => {
       res.end();
     } else {
       // Otherwise send a normal error response
-      return res.status(500).json({ message: 'Error joining streaming session', error });
+      res.status(500).json({ message: 'Error joining streaming session', error });
     }
   }
 };
@@ -1104,7 +1130,7 @@ Update the Docker Compose configuration to include environment variables for str
       - MONGO_URI=mongodb://chat-db:27017/chat_db
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - ACCOUNTING_API_URL=http://accounting-service:3001/api/accounting
+      - ACCOUNTING_API_URL=http://accounting-service:3001/api
       - AWS_REGION=${AWS_REGION}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
