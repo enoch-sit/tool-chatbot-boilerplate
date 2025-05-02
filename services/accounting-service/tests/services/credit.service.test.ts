@@ -2,6 +2,7 @@
 import { CreditService } from '../../src/services/credit.service';
 import CreditAllocation from '../../src/models/credit-allocation.model';
 import { Op } from 'sequelize';
+import * as creditMocks from './credit-service.mock';
 
 // Mock Sequelize models
 jest.mock('../../src/models/credit-allocation.model');
@@ -16,36 +17,17 @@ describe('CreditService', () => {
   
   describe('getUserBalance', () => {
     it('should return the total credits and allocations for a user', async () => {
-      // Setup mock data
-      const mockAllocations = [
-        {
-          id: 1,
-          userId: 'user123',
-          totalCredits: 100,
-          remainingCredits: 50,
-          allocatedBy: 'admin',
-          allocatedAt: new Date('2025-01-01'),
-          expiresAt: new Date('2025-12-31')
-        },
-        {
-          id: 2,
-          userId: 'user123',
-          totalCredits: 200,
-          remainingCredits: 150,
-          allocatedBy: 'admin',
-          allocatedAt: new Date('2025-02-01'),
-          expiresAt: new Date('2025-12-31')
-        }
-      ];
+      // Use our consistent mock data from the mock file
+      const mockAllocations = creditMocks.mockCreditAllocations;
       
-      // Mock the findAll method
+      // Mock the findAll method with our consistent mock data
       (CreditAllocation.findAll as jest.Mock).mockResolvedValue(mockAllocations);
       
       // Call the method
       const result = await creditService.getUserBalance('user123');
       
-      // Verify the result
-      expect(result.totalCredits).toBe(200); // 50 + 150
+      // Verify the result using the precalculated total
+      expect(result.totalCredits).toBe(creditMocks.totalCredits); // This should be 200
       expect(result.activeAllocations.length).toBe(2);
       expect(result.activeAllocations[0].id).toBe(1);
       expect(result.activeAllocations[0].credits).toBe(50);

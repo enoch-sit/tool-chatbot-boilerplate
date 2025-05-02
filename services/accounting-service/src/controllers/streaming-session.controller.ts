@@ -121,6 +121,36 @@ export class StreamingSessionController {
   }
   
   /**
+   * Get active sessions for a specific user (supervisor/admin only)
+   * GET /api/streaming-sessions/active/:userId
+   */
+  async getUserActiveSessions(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      // Check if user is admin or supervisor
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const targetUserId = req.params.userId;
+      
+      if (!targetUserId) {
+        return res.status(400).json({ message: 'User ID is required' });
+      }
+      
+      const sessions = await StreamingSessionService.getActiveSessions(targetUserId);
+      
+      return res.status(200).json(sessions);
+    } catch (error: unknown) {
+      console.error('Error fetching user active sessions:', error);
+      return res.status(500).json({ message: 'Failed to fetch user active sessions' });
+    }
+  }
+  
+  /**
    * Get all active sessions in the system (admin only)
    * GET /api/streaming-sessions/active/all
    */

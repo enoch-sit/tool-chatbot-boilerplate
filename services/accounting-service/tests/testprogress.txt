@@ -1,0 +1,517 @@
+npm run test
+
+> accounting-service@1.0.0 test
+> jest
+
+  console.log                                                                                    
+    Jest test environment setup complete
+
+      at Object.<anonymous> (jest.setup.js:8:9)
+
+  console.log
+    Jest test environment setup complete                                                         
+                                                                                                 
+      at Object.<anonymous> (jest.setup.js:8:9)                                                  
+                                                                                                 
+  console.log                                                                                    
+    Jest test environment setup complete                                                         
+                                                                                                 
+      at Object.<anonymous> (jest.setup.js:8:9)                                                  
+                                                                                                 
+  console.log                                                                                    
+    Using database: localhost:5432/accounting_db                                                 
+                                                                                                 
+      at Object.<anonymous> (jest.setup.js:9:9)                                                  
+                                                                                                 
+  console.log                                                                                    
+    Jest test environment setup complete                                                         
+                                                                                                 
+      at Object.<anonymous> (jest.setup.js:8:9)                                                  
+                                                                                                 
+  console.log                                                                                    
+    Using database: localhost:5432/accounting_db                                                 
+                                                                                                 
+      at Object.<anonymous> (jest.setup.js:9:9)                                                  
+                                                                                                 
+  console.log                                                                                    
+    Using database: localhost:5432/accounting_db                                                 
+                                                                                                 
+      at Object.<anonymous> (jest.setup.js:9:9)                                                  
+                                                                                                 
+  console.log                                                                                    
+    Using database: localhost:5432/accounting_db                                                 
+                                                                                                 
+      at Object.<anonymous> (jest.setup.js:9:9)                                                  
+                                                                                                 
+ FAIL  tests/controllers/streaming-session.controller.test.ts                                    
+  StreamingSessionController
+    initializeSession                                                                            
+      × should initialize a streaming session (3 ms)                                             
+    getUserActiveSessions                                                                        
+      √ should return 401 if user is not authenticated (2 ms)                                    
+      √ should return 403 if user is not admin or supervisor (2 ms)                              
+      √ should return 400 if userId param is missing                                             
+      × should return active sessions for a specific user when requested by a supervisor (1 ms)  
+      × should return active sessions for a specific user when requested by an admin             
+      × should return 500 if service throws an error                                             
+                                                                                                 
+  ● StreamingSessionController › initializeSession › should initialize a streaming session       
+                                                                                                 
+    TypeError: Cannot read properties of undefined (reading 'mockResolvedValue')                 
+                                                                                                 
+      44 |         startedAt: new Date()                                                         
+      45 |       };                                                                              
+    > 46 |       (streamingSessionService.initializeSession as jest.Mock).mockResolvedValue(mockSession);                                                                                         
+         |                                                                ^                      
+      47 |       
+      48 |       // Make request
+      49 |       const response = await request(app)
+
+      at Object.<anonymous> (tests/controllers/streaming-session.controller.test.ts:46:64)       
+
+  ● StreamingSessionController › getUserActiveSessions › should return active sessions for a specific user when requested by a supervisor
+
+    TypeError: Cannot read properties of undefined (reading 'mockResolvedValue')
+
+      179 |
+      180 |       // Mock service response
+    > 181 |       (streamingSessionService.getActiveSessions as jest.Mock).mockResolvedValue(mockSessions);
+          |                                                                ^
+      182 |       
+      183 |       // Execute
+      184 |       await streamingSessionController.getUserActiveSessions(req as Request, res as Response);
+
+      at Object.<anonymous> (tests/controllers/streaming-session.controller.test.ts:181:64)      
+
+  ● StreamingSessionController › getUserActiveSessions › should return active sessions for a specific user when requested by an admin
+
+    TypeError: Cannot read properties of undefined (reading 'mockResolvedValue')
+
+      216 |
+      217 |       // Mock service response
+    > 218 |       (streamingSessionService.getActiveSessions as jest.Mock).mockResolvedValue(mockSessions);
+          |                                                                ^
+      219 |       
+      220 |       // Execute
+      221 |       await streamingSessionController.getUserActiveSessions(req as Request, res as Response);
+
+      at Object.<anonymous> (tests/controllers/streaming-session.controller.test.ts:218:64)      
+
+  ● StreamingSessionController › getUserActiveSessions › should return 500 if service throws an error
+
+    TypeError: Cannot read properties of undefined (reading 'mockRejectedValue')
+
+      244 |
+      245 |       // Mock service error
+    > 246 |       (streamingSessionService.getActiveSessions as jest.Mock).mockRejectedValue(new Error('Database error'));
+          |                                                                ^
+      247 |       
+      248 |       // Execute
+      249 |       await streamingSessionController.getUserActiveSessions(req as Request, res as Response);
+
+      at Object.<anonymous> (tests/controllers/streaming-session.controller.test.ts:246:64)      
+
+  console.log
+    [CreditService] Starting credit allocation process for user user123
+
+      at CreditService.log [as allocateCredits] (src/services/credit.service.ts:77:13)
+
+  console.log
+    [CreditService] Checking if user account exists for userId: user123                          
+                                                                                                 
+      at CreditService.log [as allocateCredits] (src/services/credit.service.ts:81:15)           
+                                                                                                 
+  console.log                                                                                    
+    [CreditService] User account found/created: test-user-id                                     
+                                                                                                 
+      at CreditService.log [as allocateCredits] (src/services/credit.service.ts:83:15)           
+                                                                                                 
+  console.log                                                                                    
+    [CreditService] Creating credit allocation record with data: {                               
+      userId: 'user123',                                                                         
+      totalCredits: 100,                                                                         
+      remainingCredits: 100,                                                                     
+      allocatedBy: 'admin',                                                                      
+      expiresAt: '2025-07-31T07:21:07.270Z'                                                      
+    }                                                                                            
+                                                                                                 
+      at CreditService.log [as allocateCredits] (src/services/credit.service.ts:93:15)
+
+  console.log
+    [CreditService] Credit allocation created successfully with ID: 3                            
+                                                                                                 
+      at CreditService.log [as allocateCredits] (src/services/credit.service.ts:111:15)          
+                                                                                                 
+ PASS  tests/services/credit.service.test.ts                                                     
+  CreditService                                                                                  
+    getUserBalance                                                                               
+      √ should return the total credits and allocations for a user (6 ms)                        
+      √ should return zero credits when user has no allocations                                  
+    checkUserCredits                                                                             
+      √ should return true when user has sufficient credits (1 ms)                               
+      √ should return false when user has insufficient credits                                   
+    allocateCredits                                                                              
+      √ should create a new credit allocation (9 ms)                                             
+    deductCredits                                                                                
+      √ should deduct credits from user allocations in order of expiration                       
+      √ should return false when there are not enough credits (1 ms)                             
+    calculateCreditsForTokens                                                                    
+      √ should calculate credits correctly based on the model and token count                    
+      √ should round up credits to ensure sufficient allocation                                  
+                                                                                                 
+ FAIL  tests/services/streaming-session.service.test.ts                                          
+  StreamingSessionService
+    initializeSession
+      × should initialize a streaming session and pre-allocate credits (4 ms)
+      × should throw an error when user has insufficient credits                                 
+    finalizeSession                                                                              
+      × should finalize a session and refund unused credits (1 ms)                               
+      × should handle failed sessions correctly                                                  
+      × should throw an error when session is not found (1 ms)                                   
+    abortSession                                                                                 
+      × should abort a session, calculate partial credits, and refund the rest                   
+      × should throw an error when session to abort is not found                                 
+    getActiveSessions                                                                            
+      × should return all active sessions for a user (1 ms)                                      
+    getAllActiveSessions                                                                         
+      × should return all active sessions in the system (4 ms)                                   
+                                                                                                 
+  ● StreamingSessionService › initializeSession › should initialize a streaming session and pre-allocate credits                                                                                  
+                                                                                                 
+    TypeError: streamingSessionService.initializeSession is not a function                       
+                                                                                                 
+      94 |       });                                                                             
+      95 |                                                                                       
+    > 96 |       const result = await streamingSessionService.initializeSession(sessionParams);  
+         |                                                    ^
+      97 |
+      98 |       expect(result).toEqual(mockCreatedSession);
+      99 |
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:96:52)
+
+  ● StreamingSessionService › initializeSession › should throw an error when user has insufficient credits
+
+    TypeError: streamingSessionService.initializeSession is not a function
+
+      130 |       (CreditService.checkUserCredits as jest.Mock).mockResolvedValue(false);        
+      131 |
+    > 132 |       await expect(streamingSessionService.initializeSession(sessionParams))
+          |                                            ^
+      133 |         .rejects
+      134 |         .toThrow('Insufficient credits for streaming session');
+      135 |
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:132:44)
+
+  ● StreamingSessionService › finalizeSession › should finalize a session and refund unused credits
+
+    TypeError: streamingSessionService.finalizeSession is not a function
+
+      171 |       (CreditService.allocateCredits as jest.Mock).mockResolvedValue({});
+      172 |
+    > 173 |       const result = await streamingSessionService.finalizeSession(finalizeParams);  
+          |                                                    ^
+      174 |
+      175 |       expect(result).toEqual({
+      176 |         sessionId: 'session123',
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:173:52)
+
+  ● StreamingSessionService › finalizeSession › should handle failed sessions correctly
+
+    TypeError: streamingSessionService.finalizeSession is not a function
+
+      230 |       (CreditService.allocateCredits as jest.Mock).mockResolvedValue({});
+      231 |
+    > 232 |       const result = await streamingSessionService.finalizeSession(finalizeParams);  
+          |                                                    ^
+      233 |
+      234 |       expect(result).toEqual({
+      235 |         sessionId: 'session123',
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:232:52)
+
+  ● StreamingSessionService › finalizeSession › should throw an error when session is not found  
+
+    TypeError: streamingSessionService.finalizeSession is not a function
+
+      253 |       (StreamingSession.findOne as jest.Mock).mockResolvedValue(null);
+      254 |
+    > 255 |       await expect(streamingSessionService.finalizeSession(finalizeParams))
+          |                                            ^
+      256 |         .rejects
+      257 |         .toThrow('Active streaming session not found');
+      258 |     });
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:255:44)
+
+  ● StreamingSessionService › abortSession › should abort a session, calculate partial credits, and refund the rest
+
+    TypeError: streamingSessionService.abortSession is not a function
+
+      285 |       (CreditService.allocateCredits as jest.Mock).mockResolvedValue({});
+      286 |
+    > 287 |       const result = await streamingSessionService.abortSession(abortParams);        
+          |                                                    ^
+      288 |
+      289 |       expect(result).toEqual({
+      290 |         sessionId: 'session123',
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:287:52)
+
+  ● StreamingSessionService › abortSession › should throw an error when session to abort is not found
+
+    TypeError: streamingSessionService.abortSession is not a function
+
+      326 |       (StreamingSession.findOne as jest.Mock).mockResolvedValue(null);
+      327 |
+    > 328 |       await expect(streamingSessionService.abortSession(abortParams))
+          |                                            ^
+      329 |         .rejects
+      330 |         .toThrow('Active streaming session not found');
+      331 |     });
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:328:44)
+
+  ● StreamingSessionService › getActiveSessions › should return all active sessions for a user   
+
+    TypeError: streamingSessionService.getActiveSessions is not a function
+
+      351 |       (StreamingSession.findAll as jest.Mock).mockResolvedValue(mockSessions);       
+      352 |
+    > 353 |       const result = await streamingSessionService.getActiveSessions('user123');     
+          |                                                    ^
+      354 |
+      355 |       expect(result).toEqual(mockSessions);
+      356 |
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:353:52)
+
+  ● StreamingSessionService › getAllActiveSessions › should return all active sessions in the system
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 9
+    + Received  + 7
+
+      Array [
+        Object {
+    -     "modelId": "model1",
+    -     "sessionId": "session123",
+    +     "creditCost": 0,
+    +     "endedAt": null,
+    +     "id": "session-123",
+    +     "modelId": "anthropic.claude-3-sonnet-20240229-v1:0",
+    +     "startedAt": 2025-05-02T07:21:07.015Z,
+          "status": "active",
+    -     "userId": "user1",
+    -   },
+    -   Object {
+    -     "modelId": "model2",
+    -     "sessionId": "session456",
+    -     "status": "active",
+    -     "userId": "user2",
+    +     "tokenCount": 0,
+    +     "userId": "test-user-id",
+        },
+      ]
+
+      385 |       const result = await streamingSessionService.getAllActiveSessions();
+      386 |
+    > 387 |       expect(result).toEqual(mockSessions);
+          |                      ^
+      388 |
+      389 |       expect(StreamingSession.findAll).toHaveBeenCalledWith({
+      390 |         where: {
+
+      at Object.<anonymous> (tests/services/streaming-session.service.test.ts:387:22)
+
+ FAIL  tests/services/usage.service.test.ts
+  UsageService
+    recordUsage
+      × should create a new usage record (6 ms)                                                  
+      × should handle optional metadata field (1 ms)                                             
+    getUserStats                                                                                 
+      × should return usage statistics for a user                                                
+      × should handle missing date parameters                                                    
+      × should handle empty results (1 ms)                                                       
+    getSystemStats                                                                               
+      × should return system-wide usage statistics                                               
+      × should handle missing date parameters                                                    
+      × should handle empty results                                                              
+                                                                                                 
+  ● UsageService › recordUsage › should create a new usage record                                
+                                                                                                 
+    expect(received).toEqual(expected) // deep equality                                          
+                                                                                                 
+    - Expected  - 6                                                                              
+    + Received  + 6                                                                              
+
+      Object {
+    -   "completionTokens": 1440,
+    -   "creditCost": 5,
+    +   "completionTokens": 400,
+    +   "creditCost": 3,
+        "id": "usage-123",
+        "modelId": "anthropic.claude-3-sonnet-20240229-v1:0",
+    -   "promptTokens": 360,
+    -   "sessionId": "session123",
+    +   "promptTokens": 100,
+    +   "sessionId": "session-123",
+        "timestamp": Any<Date>,
+    -   "totalTokens": 1800,
+    -   "userId": "user123",
+    +   "totalTokens": 500,
+    +   "userId": "test-user-id",
+      }
+
+      62 |       const result = await usageService.recordUsage(usageParams);
+      63 |
+    > 64 |       expect(result).toEqual(mockRecord);
+         |                      ^
+      65 |
+      66 |       expect(UsageRecord.create).toHaveBeenCalledWith(expect.objectContaining({       
+      67 |         userId: 'user123',
+
+      at Object.<anonymous> (tests/services/usage.service.test.ts:64:22)
+
+  ● UsageService › recordUsage › should handle optional metadata field
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+        "completionTokens": 400,
+    -   "creditCost": 5,
+    +   "creditCost": 3,
+        "id": "usage-123",
+        "modelId": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "promptTokens": 100,
+        "sessionId": "session-123",
+        "timestamp": Any<Date>,
+        "totalTokens": 500,
+    -   "userId": "user123",
+    +   "userId": "test-user-id",
+      }
+
+       96 |       const result = await usageService.recordUsage(usageParams);
+       97 |
+    >  98 |       expect(result).toEqual(mockRecord);
+          |                      ^
+       99 |
+      100 |       expect(UsageRecord.create).toHaveBeenCalledWith(expect.objectContaining({      
+      101 |         userId: 'user123',
+
+      at Object.<anonymous> (tests/services/usage.service.test.ts:98:22)
+
+  ● UsageService › getUserStats › should return usage statistics for a user
+
+    TypeError: usageService.getUserStats is not a function
+
+      142 |       (UsageRecord.findAll as jest.Mock).mockResolvedValue(mockRecords);
+      143 |
+    > 144 |       const result = await usageService.getUserStats({
+          |                                         ^
+      145 |         userId: 'user123',
+      146 |         startDate: new Date('2025-04-01T00:00:00Z'),
+      147 |         endDate: new Date('2025-04-30T23:59:59Z')
+
+      at Object.<anonymous> (tests/services/usage.service.test.ts:144:41)
+
+  ● UsageService › getUserStats › should handle missing date parameters
+
+    TypeError: usageService.getUserStats is not a function
+
+      183 |       (UsageRecord.findAll as jest.Mock).mockResolvedValue(mockRecords);
+      184 |
+    > 185 |       const result = await usageService.getUserStats({ userId: 'user123' });
+          |                                         ^
+      186 |
+      187 |       expect(result.totalRecords).toBe(1);
+      188 |       expect(result.totalCredits).toBe(5);
+
+      at Object.<anonymous> (tests/services/usage.service.test.ts:185:41)
+
+  ● UsageService › getUserStats › should handle empty results
+
+    TypeError: usageService.getUserStats is not a function
+
+      193 |       (UsageRecord.findAll as jest.Mock).mockResolvedValue([]);
+      194 |
+    > 195 |       const result = await usageService.getUserStats({ userId: 'user123' });
+          |                                         ^
+      196 |
+      197 |       expect(result.totalRecords).toBe(0);
+      198 |       expect(result.totalCredits).toBe(0);
+
+      at Object.<anonymous> (tests/services/usage.service.test.ts:195:41)
+
+  ● UsageService › getSystemStats › should return system-wide usage statistics
+
+    TypeError: usageService.getSystemStats is not a function
+
+      237 |       (UsageRecord.findAll as jest.Mock).mockResolvedValue(mockRecords);
+      238 |
+    > 239 |       const result = await usageService.getSystemStats({
+          |                                         ^
+      240 |         startDate: new Date('2025-04-01T00:00:00Z'),
+      241 |         endDate: new Date('2025-04-30T23:59:59Z')
+      242 |       });
+
+      at Object.<anonymous> (tests/services/usage.service.test.ts:239:41)
+
+  ● UsageService › getSystemStats › should handle missing date parameters
+
+    TypeError: usageService.getSystemStats is not a function
+
+      277 |       (UsageRecord.findAll as jest.Mock).mockResolvedValue(mockRecords);
+      278 |
+    > 279 |       const result = await usageService.getSystemStats({});
+          |                                         ^
+      280 |
+      281 |       expect(result.totalRecords).toBe(1);
+      282 |       expect(result.totalCredits).toBe(5);
+
+      at Object.<anonymous> (tests/services/usage.service.test.ts:279:41)
+
+  ● UsageService › getSystemStats › should handle empty results
+
+    TypeError: usageService.getSystemStats is not a function
+
+      287 |       (UsageRecord.findAll as jest.Mock).mockResolvedValue([]);
+      288 |
+    > 289 |       const result = await usageService.getSystemStats({});
+          |                                         ^
+      290 |
+      291 |       expect(result.totalRecords).toBe(0);
+      292 |       expect(result.totalCredits).toBe(0);
+
+      at Object.<anonymous> (tests/services/usage.service.test.ts:289:41)
+
+----------------------------------|---------|----------|---------|---------|---------------------
+File                              | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s   
+----------------------------------|---------|----------|---------|---------|---------------------
+All files                         |   52.59 |    26.08 |   57.14 |   52.63 |                     
+ config                           |   58.33 |       50 |       0 |   58.33 |                     
+  sequelize.ts                    |   58.33 |       50 |       0 |   58.33 | 31-36               
+ controllers                      |   18.03 |    18.36 |   16.66 |   18.03 |                     
+  streaming-session.controller.ts |   18.03 |    18.36 |   16.66 |   18.03 | 11-119,144-168      
+ models                           |     100 |      100 |     100 |     100 |                     
+  credit-allocation.model.ts      |     100 |      100 |     100 |     100 |                     
+  streaming-session.model.ts      |     100 |      100 |     100 |     100 |                     
+  usage-record.model.ts           |     100 |      100 |     100 |     100 |                     
+ services                         |      82 |     37.5 |     100 |   83.33 |                     
+  credit.service.ts               |      82 |     37.5 |     100 |   83.33 | 16-18,85-86,114-118 
+----------------------------------|---------|----------|---------|---------|---------------------
+Jest: "global" coverage threshold for statements (70%) not met: 52.59%
+Jest: "global" coverage threshold for branches (70%) not met: 26.08%
+Jest: "global" coverage threshold for lines (70%) not met: 52.63%
+Jest: "global" coverage threshold for functions (70%) not met: 57.14%
+Test Suites: 3 failed, 1 passed, 4 total
+Tests:       21 failed, 12 passed, 33 total
+Snapshots:   0 total
+Time:        2.265 s
+Ran all test suites.

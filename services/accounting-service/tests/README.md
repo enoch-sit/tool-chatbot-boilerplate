@@ -133,3 +133,80 @@ If tests fail, check the following:
 ## Sequence Diagrams
 
 For detailed sequence diagrams of each tested workflow, refer to the FlowSequence.md file in the Design/Blueprints directory.
+
+# Accounting Service Tests
+
+## Test Setup
+
+This directory contains tests for the Accounting Service. The tests use Jest as the testing framework and are configured to mock database connections to avoid requiring a real database during test execution.
+
+## Configuration
+
+- **Jest Configuration**: The main Jest configuration is in `jest.config.js` in the project root.
+- **Test Environment**: Tests use a custom setup file `jest.setup.js` which:
+  - Loads environment variables from `.env.test`
+  - Mocks all services that interact with the database
+  - Sets up a consistent timezone (UTC) for date handling
+
+## Mocked Services
+
+To prevent actual database connections during tests, the following services are mocked:
+
+1. **UserAccountService**: Provides fake implementations for `findOrCreateUser` and `userExists` methods
+2. **StreamingSessionService**: Mocks session creation, retrieval, and management
+3. **UsageService**: Mocks usage recording and retrieval
+
+## Running Tests
+
+To run the tests, use:
+
+```bash
+npm test
+```
+
+For more verbose output:
+
+```bash
+npx jest --verbose
+```
+
+To run a specific test file:
+
+```bash
+npx jest path/to/test/file.test.ts
+```
+
+## Troubleshooting
+
+### Database Connection Issues
+
+If you see database connection errors during tests:
+
+1. **Check the mocks**: Ensure all services that connect to the database are properly mocked in `jest.setup.js`
+2. **Service dependencies**: If a new service was added that connects to the database, it needs to be mocked
+3. **Direct model usage**: Ensure tests are using mocked models instead of directly accessing the database
+
+### Expected vs Actual Results Mismatch
+
+If tests fail with "Expected X but received Y":
+
+1. **Mock implementation**: Check if the mocked services are returning the expected data structure
+2. **Test expectations**: Verify that test expectations align with the mocked data
+
+## Adding New Tests
+
+When adding new tests:
+
+1. **Mock dependencies**: Use `jest.mock()` to mock any dependencies that would hit the database
+2. **Consistent data**: Use the mock data patterns established in existing tests
+3. **Isolation**: Ensure tests are isolated and don't depend on execution order
+
+## Database Strategy
+
+These tests use complete mocking of database interactions rather than using a test database. This approach:
+
+- Makes tests faster and more reliable
+- Avoids needing a running database for CI/CD
+- Isolates tests from database schema changes
+
+For integration tests that verify actual database interactions, see the integration test guide.

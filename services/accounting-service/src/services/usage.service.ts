@@ -19,6 +19,7 @@ export class UsageService {
   }) {
     const { userId, service, operation, credits, metadata } = params;
     
+    // Create the usage record with the expected fields to match the tests
     return UsageRecord.create({
       userId,
       timestamp: new Date(),

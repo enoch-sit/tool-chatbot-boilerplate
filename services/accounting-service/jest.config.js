@@ -22,5 +22,6 @@ module.exports = {
       statements: 70
     }
   },
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   verbose: true
 };
