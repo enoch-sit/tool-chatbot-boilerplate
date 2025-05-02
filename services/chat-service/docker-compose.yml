@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  chat-service:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - mongo
+      - redis
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - MONGO_URI=mongodb://mongo:27017/chat-service
+      - REDIS_URL=redis://redis:6379
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - DEFAULT_MODEL_ID=${DEFAULT_MODEL_ID:-anthropic.claude-3-sonnet-20240229-v1:0}
+      - AUTH_API_URL=${AUTH_API_URL:-http://auth-service:3000/api}
+      - ACCOUNTING_API_URL=${ACCOUNTING_API_URL:-http://accounting-service:3001/api}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-default-secret-key-for-dev}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - chatbot-network
+
+  mongo:
+    image: mongo:6
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - chatbot-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - chatbot-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - chatbot-network
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3003:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - chatbot-network
+
+volumes:
+  mongo-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  chatbot-network:
+    driver: bridge
