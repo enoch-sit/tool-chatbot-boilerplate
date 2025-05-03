@@ -150,7 +150,7 @@ export const sendMessage = async (req: Request, res: Response) => {
     
     // Add user message
     const userMessage = {
-      role: 'user',
+      role: 'user' as const,
       content: message,
       timestamp: new Date()
     };
@@ -208,9 +208,12 @@ export const streamChatResponse = async (req: Request, res: Response) => {
   // Observation manager to handle supervisor observers
   const observationManager = ObservationManager.getInstance();
   
+  // Declare session variable at function scope level
+  let session;
+  
   try {
     // Find chat session
-    const session = await ChatSession.findOne({ _id: sessionId, userId });
+    session = await ChatSession.findOne({ _id: sessionId, userId });
     if (!session) {
       return res.status(404).json({ message: 'Chat session not found' });
     }
@@ -222,7 +225,7 @@ export const streamChatResponse = async (req: Request, res: Response) => {
     
     // Add user message to session
     const userMessage = {
-      role: 'user',
+      role: 'user' as const,
       content: message,
       timestamp: new Date()
     };
@@ -277,7 +280,7 @@ export const streamChatResponse = async (req: Request, res: Response) => {
     
     // Create and register a placeholder for the assistant's response
     const assistantMessage = {
-      role: 'assistant',
+      role: 'assistant' as const,
       content: '',
       timestamp: new Date()
     };
