@@ -130,6 +130,23 @@ export const streamResponse = async (
           topP: 0.9
         }
       };
+    } else if (modelId.includes('amazon.nova')) {
+      // Format for Amazon's Nova models
+      const formattedMessages = messages.map(m => ({
+        role: m.role,
+        content: [{
+          text: typeof m.content === 'string' ? m.content : m.content.text || m.content
+        }]
+      }));
+      
+      promptBody = {
+        inferenceConfig: {
+          max_new_tokens: 2000,
+          temperature: 0.7,
+          top_p: 0.9
+        },
+        messages: formattedMessages
+      };
     } else if (modelId.includes('meta.llama')) {
       // Format for Meta's Llama models
       promptBody = {
@@ -183,6 +200,8 @@ export const streamResponse = async (
               chunkText = chunkData.delta?.text || '';
             } else if (modelId.includes('amazon.titan')) {
               chunkText = chunkData.outputText || '';
+            } else if (modelId.includes('amazon.nova')) {
+              chunkText = chunkData.generatedText || '';
             } else if (modelId.includes('meta.llama')) {
               chunkText = chunkData.generation || '';
             }
@@ -243,7 +262,7 @@ export const streamResponse = async (
     clearTimeout(timeout);
     stream.end();
     
-  } catch (error) {
+  } catch (error:any) {
     logger.error('Error in stream processing:', error);
     
     // Clean up timeout

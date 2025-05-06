@@ -8,11 +8,13 @@
     "dev": "ts-node-dev --respawn src/server.ts",
     "build": "tsc",
     "test": "jest",
+    "test:aws": "tsc && node dist/tests/aws_credentials_test.js",
     "lint": "eslint 'src/**/*.ts'",
     "format": "prettier --write 'src/**/*.ts'"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.523.0",
+    "@aws-sdk/client-bedrock": "^3.803.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.803.0",
     "axios": "^1.6.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -30,22 +32,22 @@
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.11.24",
-    "@types/uuid": "^9.0.8",
-    "jest": "^29.7.0",
-    "@types/jest": "^29.5.12",
-    "supertest": "^6.3.4",
     "@types/supertest": "^6.0.2",
+    "@types/uuid": "^9.0.8",
+    "@typescript-eslint/eslint-plugin": "^7.1.1",
+    "@typescript-eslint/parser": "^7.1.1",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.5",
+    "supertest": "^6.3.4",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3",
-    "prettier": "^3.2.5",
-    "eslint": "^8.57.0",
-    "@typescript-eslint/eslint-plugin": "^7.1.1",
-    "@typescript-eslint/parser": "^7.1.1"
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"

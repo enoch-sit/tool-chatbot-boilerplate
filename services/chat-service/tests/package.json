@@ -1,0 +1,18 @@
+{
+  "name": "bedrock-test-ts",
+  "version": "1.0.0",
+  "main": "dist/aws_credentials_test.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/aws_credentials_test.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock": "^3.799.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.799.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

@@ -14,30 +14,21 @@ export interface Model {
 // Available models with their capabilities and characteristics
 const AVAILABLE_MODELS: Model[] = [
   {
-    id: 'anthropic.claude-3-opus-20240229-v1:0',
-    name: 'Claude 3 Opus',
-    description: 'Most powerful model for complex tasks requiring deep understanding',
-    capabilities: ['reasoning', 'creativity', 'knowledge', 'code', 'long-context'],
-    creditCost: 5.0,
-    maxTokens: 200000,
+    id: 'amazon.nova-micro-v1:0',
+    name: 'Amazon Nova Micro',
+    description: 'Fast and efficient model for general purpose AI tasks',
+    capabilities: ['reasoning', 'basic-knowledge', 'simple-code', 'creative'],
+    creditCost: 0.8,
+    maxTokens: 25000,
     available: true
   },
   {
-    id: 'anthropic.claude-3-sonnet-20240229-v1:0',
-    name: 'Claude 3 Sonnet',
-    description: 'Balanced model offering strong capabilities at reasonable speed and cost',
-    capabilities: ['reasoning', 'creativity', 'knowledge', 'code'],
-    creditCost: 2.5,
-    maxTokens: 100000,
-    available: true
-  },
-  {
-    id: 'anthropic.claude-3-haiku-20240307-v1:0',
-    name: 'Claude 3 Haiku',
-    description: 'Fast and efficient model for simpler tasks and quick responses',
-    capabilities: ['reasoning', 'basic-knowledge', 'simple-code'],
-    creditCost: 1.0,
-    maxTokens: 50000,
+    id: 'amazon.nova-lite-v1:0',
+    name: 'Amazon Nova Lite',
+    description: 'Balanced model for more complex reasoning and knowledge tasks',
+    capabilities: ['reasoning', 'knowledge', 'code', 'creative'],
+    creditCost: 1.2,
+    maxTokens: 32000,
     available: true
   },
   {
@@ -97,42 +88,42 @@ export function recommendModel(
   // Simple recommendation logic based on task and priority
   if (priority === 'speed') {
     if (task === 'code') {
-      recommendedModelId = 'anthropic.claude-3-haiku-20240307-v1:0';
-      reason = 'For coding tasks with priority on speed, Claude 3 Haiku offers quick responses with good code understanding';
+      recommendedModelId = 'amazon.nova-micro-v1:0';
+      reason = 'For coding tasks with priority on speed, Amazon Nova Micro offers quick responses with good code understanding';
     } else if (task === 'creative') {
-      recommendedModelId = 'anthropic.claude-3-haiku-20240307-v1:0';
-      reason = 'For creative tasks with speed priority, Claude 3 Haiku provides fast creative outputs';
+      recommendedModelId = 'amazon.nova-micro-v1:0';
+      reason = 'For creative tasks with speed priority, Amazon Nova Micro provides fast creative outputs';
     } else if (task === 'long-document') {
-      recommendedModelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
-      reason = 'For long documents with speed priority, Claude 3 Sonnet balances processing capacity with good performance';
+      recommendedModelId = 'amazon.nova-micro-v1:0';
+      reason = 'For long documents with speed priority, Amazon Nova Micro balances processing capacity with good performance';
     } else {
-      recommendedModelId = 'anthropic.claude-3-haiku-20240307-v1:0';
-      reason = 'For general tasks with speed priority, Claude 3 Haiku offers the quickest responses';
+      recommendedModelId = 'amazon.nova-micro-v1:0';
+      reason = 'For general tasks with speed priority, Amazon Nova Micro offers quick responses';
     }
   } else if (priority === 'quality') {
     if (task === 'code') {
-      recommendedModelId = 'anthropic.claude-3-opus-20240229-v1:0';
-      reason = 'For coding tasks with quality priority, Claude 3 Opus provides the most accurate and sophisticated code understanding';
+      recommendedModelId = 'amazon.nova-lite-v1:0';
+      reason = 'For coding tasks with quality priority, Amazon Nova Lite provides accurate code understanding and generation';
     } else if (task === 'creative') {
-      recommendedModelId = 'anthropic.claude-3-opus-20240229-v1:0';
-      reason = 'For creative tasks with quality priority, Claude 3 Opus offers the most nuanced and original outputs';
+      recommendedModelId = 'amazon.nova-lite-v1:0';
+      reason = 'For creative tasks with quality priority, Amazon Nova Lite offers nuanced and original outputs';
     } else if (task === 'long-document') {
-      recommendedModelId = 'anthropic.claude-3-opus-20240229-v1:0';
-      reason = 'For long documents with quality priority, Claude 3 Opus can process and understand extensive contexts';
+      recommendedModelId = 'amazon.nova-lite-v1:0';
+      reason = 'For long documents with quality priority, Amazon Nova Lite can process and understand extensive contexts';
     } else {
-      recommendedModelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
-      reason = 'For general tasks with quality priority, Claude 3 Sonnet offers excellent results at a moderate cost';
+      recommendedModelId = 'amazon.nova-lite-v1:0';
+      reason = 'For general tasks with quality priority, Amazon Nova Lite offers excellent results at a reasonable cost';
     }
   } else if (priority === 'cost') {
     if (task === 'code') {
-      recommendedModelId = 'anthropic.claude-3-haiku-20240307-v1:0';
-      reason = 'For coding tasks with cost priority, Claude 3 Haiku provides good code capabilities at the lowest cost';
+      recommendedModelId = 'amazon.nova-micro-v1:0';
+      reason = 'For coding tasks with cost priority, Amazon Nova Micro provides good code capabilities at an economical cost';
     } else if (task === 'creative') {
-      recommendedModelId = 'anthropic.claude-3-haiku-20240307-v1:0';
-      reason = 'For creative tasks with cost priority, Claude 3 Haiku offers creative capabilities at minimal expense';
+      recommendedModelId = 'amazon.nova-micro-v1:0';
+      reason = 'For creative tasks with cost priority, Amazon Nova Micro offers creative capabilities at a reasonable price';
     } else if (task === 'long-document') {
-      recommendedModelId = 'anthropic.claude-3-haiku-20240307-v1:0';
-      reason = 'For long documents with cost priority, Claude 3 Haiku, though limited in context length, is most economical';
+      recommendedModelId = 'amazon.nova-micro-v1:0';
+      reason = 'For long documents with cost priority, Amazon Nova Micro balances context length with economical pricing';
     } else {
       recommendedModelId = 'amazon.titan-text-express-v1';
       reason = 'For general tasks with cost priority, Amazon Titan offers the most economical solution';
@@ -151,28 +142,22 @@ export function recommendModel(
 export function getModelFallbackChain(primaryModelId: string): string[] {
   // Define model fallback chains
   const fallbackMap: Record<string, string[]> = {
-    'anthropic.claude-3-opus-20240229-v1:0': [
-      'anthropic.claude-3-opus-20240229-v1:0',
-      'anthropic.claude-3-sonnet-20240229-v1:0',
-      'anthropic.claude-3-haiku-20240307-v1:0'
-    ],
-    'anthropic.claude-3-sonnet-20240229-v1:0': [
-      'anthropic.claude-3-sonnet-20240229-v1:0',
-      'anthropic.claude-3-haiku-20240307-v1:0',
+    'amazon.nova-micro-v1:0': [
+      'amazon.nova-micro-v1:0',
       'amazon.titan-text-express-v1'
     ],
-    'anthropic.claude-3-haiku-20240307-v1:0': [
-      'anthropic.claude-3-haiku-20240307-v1:0',
-      'amazon.titan-text-express-v1',
-      'meta.llama3-70b-instruct-v1:0'
+    'amazon.nova-lite-v1:0': [
+      'amazon.nova-lite-v1:0',
+      'amazon.nova-micro-v1:0',
+      'amazon.titan-text-express-v1'
     ],
     'amazon.titan-text-express-v1': [
       'amazon.titan-text-express-v1',
-      'anthropic.claude-3-haiku-20240307-v1:0'
+      'amazon.nova-micro-v1:0'
     ],
     'meta.llama3-70b-instruct-v1:0': [
       'meta.llama3-70b-instruct-v1:0',
-      'anthropic.claude-3-haiku-20240307-v1:0'
+      'amazon.nova-micro-v1:0'
     ]
   };
   

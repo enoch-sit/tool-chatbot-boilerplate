@@ -22,7 +22,7 @@ export default {
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   
   // Default model configuration
-  defaultModelId: process.env.DEFAULT_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0',
+  defaultModelId: process.env.DEFAULT_MODEL_ID || 'amazon.nova-micro-v1:0',
   
   // External services URLs
   accountingApiUrl: process.env.ACCOUNTING_API_URL || 'http://localhost:3001/api',

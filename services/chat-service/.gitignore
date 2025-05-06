@@ -53,3 +53,5 @@ postgres-data/
 
 # Optional eslint cache
 .eslintcache
+
+venv/

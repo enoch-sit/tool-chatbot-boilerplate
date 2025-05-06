@@ -19,11 +19,11 @@ export const getModels = async (req: Request, res: Response) => {
     return res.status(200).json({
       models
     });
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error fetching available models:', error);
     return res.status(500).json({ 
       message: 'Failed to retrieve available models', 
-      error: error.message 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     });
   }
 };
@@ -63,11 +63,11 @@ export const getModelRecommendation = async (req: Request, res: Response) => {
       ...recommendation,
       modelDetails
     });
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Error generating model recommendation:', error);
     return res.status(500).json({ 
       message: 'Failed to generate model recommendation', 
-      error: error.message 
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 };
