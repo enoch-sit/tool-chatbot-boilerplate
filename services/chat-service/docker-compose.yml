@@ -26,12 +26,13 @@ services:
       - ./logs:/app/logs
     networks:
       - chatbot-network
+      - chatbot-shared-network
 
   mongo:
     image: mongo:6
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "27018:27017"  # Changed from 27017:27017 to avoid port conflicts
     volumes:
       - mongo-data:/data/db
     networks:
@@ -41,7 +42,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"  # Changed from 6379:6379 to avoid port conflicts
     volumes:
       - redis-data:/data
     networks:
@@ -51,7 +52,7 @@ services:
     image: prom/prometheus:latest
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "9091:9090"  # Changed from 9090:9090 to avoid port conflicts
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
@@ -81,4 +82,7 @@ volumes:
 
 networks:
   chatbot-network:
+    driver: bridge
+  chatbot-shared-network:
+    name: chatbot-shared-network
     driver: bridge

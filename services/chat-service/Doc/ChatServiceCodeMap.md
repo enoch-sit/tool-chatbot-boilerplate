@@ -1,212 +1,285 @@
 # Chat Service Code Map
 
 ## Overview
-This document provides an overview of the Chat Service codebase, detailing the purpose of each file in the `src` directory and illustrating the interactions between components using Mermaid diagrams.
 
-## File Descriptions
+The Chat Service is a microservice that provides real-time AI chat capabilities using AWS Bedrock models. The service handles user chat sessions, streams model responses, and integrates with external authentication and accounting services.
 
-### `src/server.ts`
-- **Purpose**: Entry point of the Chat Service application. Sets up the Express server, middleware, and routes.
+## Architecture Components
 
-### `src/config/config.ts`
-- **Purpose**: Centralized configuration file for environment variables and application settings.
-
-### `src/config/db.ts`
-- **Purpose**: Handles MongoDB connection setup, events, and graceful shutdown procedures.
-
-### `src/controllers/chat.controller.ts`
-- **Purpose**: Contains route handlers for chat-related operations, such as creating sessions, sending messages, and streaming responses.
-
-### `src/controllers/model.controller.ts`
-- **Purpose**: Handles requests related to model operations, such as fetching available models and recommending models based on user input.
-
-### `src/services/streaming.service.ts`
-- **Purpose**: Handles interactions with AWS Bedrock for streaming responses and manages streaming sessions with the accounting service.
-
-### `src/services/observation.service.ts`
-- **Purpose**: Manages stream observers for supervisors to monitor student conversations using a Singleton pattern.
-
-### `src/services/model-recommendation.service.ts`
-- **Purpose**: Provides functions for recommending LLM models based on tasks and priorities, and defines available models.
-
-### `src/services/metrics.service.ts`
-- **Purpose**: Sets up Prometheus metrics for monitoring service performance and usage.
-
-### `src/models/chat-session.model.ts`
-- **Purpose**: Defines the Mongoose schema and model for storing chat session data in MongoDB.
-
-### `src/routes/chat.routes.ts`
-- **Purpose**: Defines the API endpoints for chat-related operations and maps them to controller functions.
-
-### `src/routes/model.routes.ts`
-- **Purpose**: Defines the API endpoints for model-related operations and maps them to controller functions.
-
-### `src/middleware/auth.middleware.ts`
-- **Purpose**: Middleware for authenticating and authorizing API requests using JWT tokens.
-
-### `src/middleware/validation.middleware.ts`
-- **Purpose**: Provides validation chains for request parameters using express-validator.
-
-### `src/middleware/rate-limit.middleware.ts`
-- **Purpose**: Implements rate limiting functionality to prevent API abuse.
-
-### `src/middleware/metrics.middleware.ts`
-- **Purpose**: Middleware to track HTTP request durations and responses for Prometheus metrics.
-
-### `src/utils/logger.ts`
-- **Purpose**: Provides a centralized logging utility for the application using Winston.
-
-## Component Interactions
-
-### 1. System Overview
-The following diagram provides a high-level overview of the Chat Service architecture:
+### Core Components
 
 ```mermaid
 graph TD
-    User((User)) -->|Requests| Server[server.ts]
-    Server -->|Routes to| ChatRoutes[chat.routes.ts]
-    Server -->|Routes to| ModelRoutes[model.routes.ts]
-    Server -->|Connects to| MongoDB[(MongoDB)]
-    Server -->|Logs with| Logger[logger.ts]
-    Server -->|Monitors with| Metrics[metrics.service.ts]
+    subgraph "Server Entry Point"
+        server[server.ts]
+    end
+    
+    subgraph "Configuration"
+        config[config.ts]
+        db[db.ts]
+    end
+    
+    subgraph "Routes"
+        chatRoutes[chat.routes.ts]
+        modelRoutes[model.routes.ts]
+    end
+    
+    subgraph "Controllers"
+        chatController[chat.controller.ts]
+        modelController[model.controller.ts]
+    end
+    
+    subgraph "Middleware"
+        auth[auth.middleware.ts]
+        validation[validation.middleware.ts]
+        rateLimiter[rate-limit.middleware.ts]
+        metrics[metrics.middleware.ts]
+    end
+    
+    subgraph "Models"
+        chatSession[chat-session.model.ts]
+    end
+    
+    subgraph "Services"
+        streaming[streaming.service.ts]
+        observation[observation.service.ts]
+        modelRecommendation[model-recommendation.service.ts]
+        metricsService[metrics.service.ts]
+    end
+    
+    subgraph "Utilities"
+        logger[logger.ts]
+    end
+    
+    server --> config
+    server --> db
+    server --> chatRoutes
+    server --> modelRoutes
+    server --> logger
+    server --> observation
+    
+    chatRoutes --> chatController
+    chatRoutes --> auth
+    chatRoutes --> validation
+    
+    modelRoutes --> modelController
+    modelRoutes --> auth
+    modelRoutes --> validation
+    
+    chatController --> chatSession
+    chatController --> streaming
+    chatController --> observation
+    chatController --> logger
+    
+    streaming --> config
+    streaming --> logger
+    
+    modelController --> modelRecommendation
+    modelController --> logger
+    
+    observation --> logger
+    
+    metricsService --> logger
+    metrics --> metricsService
+    
+    chatController --> metricsService
 ```
 
-### 2. Request Flow
-This diagram illustrates the typical flow of a request through the system:
+### File Functions
+
+| File | Description |
+|------|-------------|
+| **server.ts** | Entry point that initializes Express app, middleware, routes, and database connection |
+| **config.ts** | Configuration settings loaded from environment variables |
+| **db.ts** | MongoDB database connection management |
+| **chat.routes.ts** | API routes for chat functionality (sessions, messages, streaming) |
+| **model.routes.ts** | API routes for model selection and recommendations |
+| **chat.controller.ts** | Chat business logic (session creation, message handling, streaming) |
+| **model.controller.ts** | Model recommendation logic and available models |
+| **auth.middleware.ts** | JWT authentication and role-based access control |
+| **validation.middleware.ts** | Request validation using express-validator |
+| **rate-limit.middleware.ts** | Rate limiting to prevent API abuse |
+| **metrics.middleware.ts** | Request metrics collection middleware |
+| **chat-session.model.ts** | MongoDB schema for chat sessions |
+| **streaming.service.ts** | AWS Bedrock integration for AI model streaming |
+| **observation.service.ts** | Allows supervisors to monitor active chat sessions |
+| **model-recommendation.service.ts** | Provides model recommendations based on task & priority |
+| **metrics.service.ts** | Prometheus metrics collection |
+| **logger.ts** | Winston-based logging utility |
+
+## Sequence Diagrams
+
+### 1. Creating a Chat Session
 
 ```mermaid
 sequenceDiagram
-    participant Client as Client
-    participant Server as server.ts
-    participant Auth as auth.middleware.ts
-    participant Validation as validation.middleware.ts
-    participant RateLimit as rate-limit.middleware.ts
-    participant Controller as Controller
-    participant Service as Service
-    participant DB as Database
+    participant Client
+    participant Routes as chat.routes
+    participant Controller as chat.controller
+    participant Auth as auth.middleware
+    participant Validation as validation.middleware
+    participant Model as chat-session.model
+    participant MongoDB
     
-    Client->>Server: Request
-    Server->>Auth: Pass request
-    Auth->>Validation: Validate request
-    Validation->>RateLimit: Check rate limits
-    RateLimit->>Controller: Route to controller
-    Controller->>Service: Process request
-    Service->>DB: Query/update data
-    DB-->>Service: Return data
-    Service-->>Controller: Return result
-    Controller-->>Client: Send response
+    Client->>Routes: POST /api/chat/sessions
+    Routes->>Auth: authenticateJWT()
+    Auth->>Auth: Verify JWT token
+    Auth-->>Routes: User authenticated
+    
+    Routes->>Validation: validateCreateSession()
+    Validation->>Validation: Validate request body
+    Validation-->>Routes: Request validated
+    
+    Routes->>Controller: createChatSession()
+    Controller->>Model: new ChatSession()
+    Controller->>MongoDB: session.save()
+    MongoDB-->>Controller: Session saved
+    Controller-->>Client: 201 Created (sessionId)
 ```
 
-### 3. Chat Session Management
-This diagram shows how chat sessions are created, managed, and streamed:
+### 2. Streaming Chat Response
 
 ```mermaid
 sequenceDiagram
-    participant Client as Client
-    participant ChatController as chat.controller.ts
-    participant ChatSession as chat-session.model.ts
-    participant StreamingService as streaming.service.ts
-    participant ObservationManager as observation.service.ts
-    participant Bedrock as AWS Bedrock
-    participant Accounting as Accounting Service
-    participant MongoDB as MongoDB
+    participant Client
+    participant Routes as chat.routes
+    participant Controller as chat.controller
+    participant MongoDB
+    participant StreamingService as streaming.service
+    participant AccountingAPI
+    participant BedrockAPI as AWS Bedrock
+    participant ObservationManager as observation.service
     
-    Client->>ChatController: Create session/Send message
-    ChatController->>ChatSession: Create/Update session
-    ChatSession->>MongoDB: Save session data
-    Client->>ChatController: Request stream
-    ChatController->>StreamingService: Initialize stream
-    StreamingService->>Accounting: Register streaming session
-    Accounting-->>StreamingService: Session approved
-    StreamingService->>Bedrock: Request completion
-    StreamingService->>ObservationManager: Register stream
-    Bedrock-->>StreamingService: Stream chunks
-    StreamingService-->>Client: Forward chunks
-    StreamingService-->>ObservationManager: Forward chunks
-    StreamingService-->>ChatController: Complete response
-    ChatController->>ChatSession: Update with response
-    ChatSession->>MongoDB: Save complete response
+    Client->>Routes: POST /api/chat/sessions/:sessionId/stream
+    Routes->>Controller: streamChatResponse()
+    Controller->>MongoDB: Find chat session
+    MongoDB-->>Controller: Session data
+    
+    Controller->>StreamingService: initializeStreamingSession()
+    StreamingService->>AccountingAPI: Initialize streaming session
+    AccountingAPI-->>StreamingService: Session approved
+    StreamingService-->>Controller: Stream session ID
+    
+    Controller->>MongoDB: Update session with user message
+    MongoDB-->>Controller: Session updated
+    
+    Controller->>StreamingService: streamResponse()
+    StreamingService->>BedrockAPI: InvokeModelWithResponseStream
+    Controller->>ObservationManager: registerStream()
+    
+    loop For each chunk
+        BedrockAPI-->>StreamingService: Chunk data
+        StreamingService-->>Client: Server-Sent Event
+        ObservationManager-->>Observers: Broadcast chunk to observers
+    end
+    
+    StreamingService->>AccountingAPI: Finalize streaming session
+    StreamingService-->>Controller: Stream complete
+    Controller->>MongoDB: Update session with complete response
+    MongoDB-->>Controller: Session updated
 ```
 
-### 4. Model Management Flow
-This diagram shows the model recommendation and selection flow:
+### 3. Model Recommendation Flow
 
 ```mermaid
 sequenceDiagram
-    participant Client as Client
-    participant ModelController as model.controller.ts
-    participant RecommendationService as model-recommendation.service.ts
-    participant ChatController as chat.controller.ts
+    participant Client
+    participant Routes as model.routes
+    participant Controller as model.controller
+    participant Auth as auth.middleware
+    participant RecommendationService as model-recommendation.service
     
-    Client->>ModelController: Get available models
-    ModelController->>RecommendationService: Request models
-    RecommendationService-->>ModelController: Return model list
-    ModelController-->>Client: Return available models
+    Client->>Routes: POST /api/models/recommend
+    Routes->>Auth: authenticateJWT()
+    Auth-->>Routes: User authenticated
     
-    Client->>ModelController: Request recommendation
-    Note over Client,ModelController: Provides task & priority
-    ModelController->>RecommendationService: Get recommendation
-    RecommendationService-->>ModelController: Return recommended model
-    ModelController-->>Client: Return recommendation
+    Routes->>Controller: getModelRecommendation()
+    Controller->>RecommendationService: recommendModel(task, priority)
+    RecommendationService->>RecommendationService: Select model based on criteria
+    RecommendationService-->>Controller: Recommendation with reason
     
-    Client->>ChatController: Select model for chat
-    ChatController->>RecommendationService: Validate model selection
-    ChatController->>ChatController: Apply selected model
+    Controller->>RecommendationService: getAvailableModels(userRole)
+    RecommendationService-->>Controller: Available models for user
+    
+    Controller-->>Client: 200 OK (recommendation)
 ```
 
-### 5. Streaming and Observation
-This diagram illustrates the streaming and observation mechanism:
+### 4. Supervisor Observation Flow
 
 ```mermaid
 sequenceDiagram
-    participant Client as Client
-    participant Supervisor as Supervisor
-    participant ChatController as chat.controller.ts
-    participant StreamingService as streaming.service.ts
-    participant ObservationManager as observation.service.ts
-    participant Bedrock as AWS Bedrock
+    participant Supervisor
+    participant Routes as chat.routes
+    participant Controller as chat.controller
+    participant Auth as auth.middleware
+    participant RoleCheck as auth.middleware
+    participant ObservationManager as observation.service
+    participant ActiveStream
     
-    Client->>ChatController: Request stream
-    ChatController->>StreamingService: Initialize stream
-    StreamingService->>Bedrock: Request completion
-    StreamingService->>ObservationManager: Register stream
+    Supervisor->>Routes: GET /api/chat/sessions/:sessionId/observe
+    Routes->>Auth: authenticateJWT()
+    Auth-->>Routes: User authenticated
     
-    Bedrock-->>StreamingService: Stream text chunks
-    StreamingService-->>Client: Forward chunks (SSE)
-    StreamingService-->>ObservationManager: Forward chunks
+    Routes->>RoleCheck: checkRole(['admin', 'supervisor'])
+    RoleCheck-->>Routes: Role verified
     
-    Supervisor->>ChatController: Observe session
-    ChatController->>ObservationManager: Add observer
-    ObservationManager-->>Supervisor: Stream chunks (SSE)
+    Routes->>Controller: observeSession()
+    Controller->>ObservationManager: isStreamActive(sessionId)
+    ObservationManager-->>Controller: Stream status
     
-    Note over StreamingService,ObservationManager: Real-time monitoring
+    Controller->>ObservationManager: addObserver(sessionId, callback)
+    ObservationManager->>ObservationManager: Register observer
     
-    Bedrock-->>StreamingService: Stream complete
-    StreamingService-->>Client: Send completion event
-    StreamingService-->>ObservationManager: End stream
-    ObservationManager-->>Supervisor: End stream
+    loop Until disconnect
+        ActiveStream->>ObservationManager: Stream data
+        ObservationManager->>Supervisor: Forward SSE events
+    end
+    
+    Supervisor->>Controller: Client disconnect
+    Controller->>ObservationManager: Unsubscribe observer
 ```
 
-### 6. Metrics and Logging
-This diagram shows the metrics collection and logging system:
+## Data Flow
 
 ```mermaid
-sequenceDiagram
-    participant Server as server.ts
-    participant MetricsMiddleware as metrics.middleware.ts
-    participant MetricsService as metrics.service.ts
-    participant Components as Controllers/Services
-    participant Logger as logger.ts
-    participant Prometheus as Prometheus
+graph LR
+    Client[Client] --> |Requests| API[API Routes]
+    API --> |Authentication| Auth[Auth Middleware]
+    API --> |Validation| Validation[Validation Middleware]
+    API --> |Rate Limiting| RateLimiter[Rate Limiter]
+    API --> |Controllers| BusinessLogic[Business Logic]
     
-    Server->>MetricsMiddleware: Request passes through
-    MetricsMiddleware->>MetricsService: Record request start
-    Components->>Logger: Log operations
-    MetricsMiddleware->>MetricsService: Record request end
-    MetricsService->>MetricsService: Update metrics
-    Prometheus->>MetricsService: Scrape /metrics endpoint
-    MetricsService-->>Prometheus: Return metrics data
+    BusinessLogic --> |Query/Update| Database[(MongoDB)]
+    BusinessLogic --> |Streaming| BedrockAPI[AWS Bedrock]
+    BusinessLogic --> |Credit Check| AccountingAPI[Accounting Service]
+    
+    BedrockAPI --> |Stream Response| Client
+    BusinessLogic --> |Metrics| Prometheus[Prometheus Metrics]
+    Client --> |Monitoring| Supervisors[Supervisors]
 ```
 
-## Summary
-This document provides a high-level overview of the Chat Service codebase, detailing the purpose of each file and illustrating the flow of interactions between components. The Mermaid diagrams help visualize the relationships and dependencies within the system from different perspectives.
+## External Service Integration
+
+```mermaid
+graph TB
+    subgraph "Chat Service"
+        API[API Layer]
+        Business[Business Logic]
+        Auth[Auth Middleware]
+    end
+    
+    subgraph "External Services"
+        AccountingService[Accounting Service]
+        AuthService[Auth Service]
+        AWS[AWS Bedrock]
+    end
+    
+    API --> Business
+    Business --> AWS
+    Auth --> AuthService
+    Business --> AccountingService
+    
+    AccountingService -->|Credit Management| Business
+    AuthService -->|User Verification| Auth
+    AWS -->|AI Model Responses| Business
+```
