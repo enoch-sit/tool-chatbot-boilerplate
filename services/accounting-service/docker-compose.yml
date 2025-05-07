@@ -27,6 +27,7 @@ services:
       - ./node_modules:/usr/src/app/node_modules
     networks:
       - accounting-network
+      - chatbot-shared-network
     restart: always
 
   postgres:
@@ -46,6 +47,8 @@ services:
 networks:
   accounting-network:
     driver: bridge
+  chatbot-shared-network:
+    external: true
 
 volumes:
   postgres-data:
