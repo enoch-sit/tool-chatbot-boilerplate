@@ -30,7 +30,7 @@ Access tokens are validated against the Authentication Service's JWT secret.
 ### Get Service Health
 
 ```
-GET /api/health
+GET /health
 ```
 
 **Description**: Returns the current health status of the accounting service.

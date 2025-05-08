@@ -16,26 +16,29 @@
 
 ## Introduction
 
-This document provides a comprehensive testing guide for the Chat Service, covering all major flows and endpoints. It leverages the existing user accounts from the authentication service and tests integrations with accounting service.
+This document provides a comprehensive testing guide for the Chat Service, covering all major flows and endpoints. It leverages the existing user accounts from the authentication service and tests integrations with the accounting service.
 
 ## Prerequisites
 
 Before testing, ensure the following services are running:
 
-- Authentication Service (`auth-service-dev` container on port 3000)
-- Accounting Service (`accounting-service` container on port 3001)
-- Chat Service (`chat-service` container on port 3002)
-- MongoDB (`auth-mongodb` and `mongo` containers)
-- Redis (`redis` container)
+- Authentication Service (`auth-service` container on port 3000 or `http://localhost:3000`)
+- Accounting Service (`accounting-service` container on port 3001 or `http://localhost:3001`)
+- Chat Service (`chat-service` container on port 3002 or `http://localhost:3002`)
+- MongoDB for Chat Service (`mongo` container on port 27018 or `http://localhost:27018`)
+- Redis for Chat Service (`redis` container on port 6380 or `http://localhost:6380`)
+- Prometheus (`prometheus` container on port 9091 or `http://localhost:9091`)
+- Grafana (`grafana` container on port 3003 or `http://localhost:3003`)
 
 ## Test Environment
 
 The test environment is set up with the following containers:
 
-- MongoDB for Authentication Service: `auth-mongodb` (27017)
-- MongoDB for Chat Service: `mongo` (27017)
-- Redis for Chat Service: `redis` (6379)
-- MailHog for email testing: `auth-mailhog` (1025, 8025)
+- MongoDB for Chat Service: `mongo` (27018)
+- Redis for Chat Service: `redis` (6380)
+- PostgreSQL for Accounting Service: `postgres` (5432)
+- Prometheus for monitoring: `prometheus` (9091)
+- Grafana for visualization: `grafana` (3003)
 
 ## Available Test Users
 
@@ -73,6 +76,25 @@ Regular Users:
 - Postman or cURL for API requests
 - Web browser for SSE (Server-Sent Events) testing
 - WebSocket client for real-time observation testing
+
+## Network Configuration
+
+The services communicate using a shared Docker network. Use service names (e.g., `auth-service`, `accounting-service`, `chat-service`) when running tests inside the Docker network. Alternatively, use `localhost` with the appropriate port mappings when running tests from the host machine. For example:
+
+- Authentication Service: `http://auth-service:3000` or `http://localhost:3000`
+- Accounting Service: `http://accounting-service:3001` or `http://localhost:3001`
+- Chat Service: `http://chat-service:3002` or `http://localhost:3002`
+
+Ensure the shared network is properly configured in the `docker-compose.yml` files.
+
+## JWT Secret Configuration
+
+Ensure that the JWT secrets match across all services. For example:
+
+- `JWT_ACCESS_SECRET=dev_access_secret_key_change_this_in_production`
+- `JWT_REFRESH_SECRET=dev_refresh_secret_key_change_this_in_production`
+
+These secrets must be consistent to allow proper token validation.
 
 ## Flow Diagrams
 

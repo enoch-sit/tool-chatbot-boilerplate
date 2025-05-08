@@ -1,8 +1,8 @@
 # simple-start-docker.ps1
-# A simplified script to start the authentication service Docker containers
+# A simplified script to start the chat service Docker containers
 
 Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "Authentication Service Simple Docker Start Script" -ForegroundColor Cyan
+Write-Host "Chat Service Simple Docker Start Script" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 
 # Check if Docker is running
@@ -16,18 +16,18 @@ try {
     exit 1
 }
 
-# Get service directory
+# Get current directory
 $scriptDir = $PSScriptRoot
-$authServiceDir = $scriptDir
 
-# Start Authentication Service
-Write-Host "`nStarting Authentication Service..." -ForegroundColor Yellow
-Set-Location $authServiceDir
+# Start Chat Service
+Write-Host "`nStarting Chat Service..." -ForegroundColor Yellow
+Set-Location $scriptDir
 docker-compose up -d
 
-Write-Host "`nAuthentication service has been started!" -ForegroundColor Green
-Write-Host "Authentication service should be available at http://localhost:3000" -ForegroundColor Cyan
+Write-Host "`nChat service has been started!" -ForegroundColor Green
+Write-Host "Chat service should be available at http://localhost:3002" -ForegroundColor Cyan
+Write-Host "Grafana dashboard available at http://localhost:3003" -ForegroundColor Cyan
 Write-Host "To view logs, use: docker-compose logs -f" -ForegroundColor Cyan
 
-# Return to script directory
+# Return to scripts directory
 Set-Location $scriptDir
