@@ -68,6 +68,7 @@ export const getChatSession = async (req: Request, res: Response) => {
     
     return res.status(200).json({
       sessionId: session._id,
+      userId: session.userId, // Added this line
       title: session.title,
       messages: session.messages,
       modelId: session.modelId,
