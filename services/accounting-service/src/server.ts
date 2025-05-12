@@ -37,6 +37,16 @@ app.use(limiter);
 // Apply consolidated API routes
 app.use('/api', apiRoutes);
 
+// Health check endpoint at root path
+app.get('/health', (_, res) => {
+  res.status(200).json({ 
+    status: 'ok',
+    service: 'accounting-service',
+    version: process.env.npm_package_version || '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled error:', err);

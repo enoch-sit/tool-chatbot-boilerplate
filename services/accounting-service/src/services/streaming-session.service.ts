@@ -143,6 +143,58 @@ export class StreamingSessionService {
   }
   
   /**
+   * Get recent streaming sessions (including recently completed)
+   * This helps supervisors to catch sessions that completed very recently
+   */
+  async getRecentSessions(minutesAgo = 5) {
+    const cutoffTime = new Date();
+    cutoffTime.setMinutes(cutoffTime.getMinutes() - minutesAgo);
+    
+    return StreamingSession.findAll({
+      where: {
+        [Op.or]: [
+          { status: 'active' },
+          {
+            status: { [Op.in]: ['completed', 'failed'] },
+            completedAt: { [Op.gt]: cutoffTime }
+          }
+        ]
+      },
+      order: [
+        ['status', 'ASC'],  // Active sessions first
+        ['completedAt', 'DESC']  // Most recently completed next
+      ],
+      limit: 50  // Limit to a reasonable number
+    });
+  }
+  
+  /**
+   * Get recent sessions for a specific user
+   */
+  async getUserRecentSessions(userId: string, minutesAgo = 5) {
+    const cutoffTime = new Date();
+    cutoffTime.setMinutes(cutoffTime.getMinutes() - minutesAgo);
+    
+    return StreamingSession.findAll({
+      where: {
+        userId,
+        [Op.or]: [
+          { status: 'active' },
+          {
+            status: { [Op.in]: ['completed', 'failed'] },
+            completedAt: { [Op.gt]: cutoffTime }
+          }
+        ]
+      },
+      order: [
+        ['status', 'ASC'],
+        ['completedAt', 'DESC']
+      ],
+      limit: 20
+    });
+  }
+  
+  /**
    * Abort a streaming session (for errors or timeouts)
    */
   async abortSession(params: {

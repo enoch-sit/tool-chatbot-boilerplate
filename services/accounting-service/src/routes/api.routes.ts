@@ -89,10 +89,28 @@ router.post('/streaming-sessions/abort', StreamingSessionController.abortSession
 router.get('/streaming-sessions/active', StreamingSessionController.getActiveSessions);
 
 /**
+ * Get active sessions for a specific user (admin and supervisors only)
+ * GET /api/streaming-sessions/active/:userId
+ */
+router.get('/streaming-sessions/active/:userId', requireSupervisor, StreamingSessionController.getUserActiveSessions);
+
+/**
  * Get all active sessions (admin only)
  * GET /api/streaming-sessions/active/all
  */
 router.get('/streaming-sessions/active/all', requireAdmin, StreamingSessionController.getAllActiveSessions);
+
+/**
+ * Get recent sessions (active + recently completed) (admin and supervisors only)
+ * GET /api/streaming-sessions/recent
+ */
+router.get('/streaming-sessions/recent', requireSupervisor, StreamingSessionController.getRecentSessions);
+
+/**
+ * Get recent sessions for a specific user (admin and supervisors only)
+ * GET /api/streaming-sessions/recent/:userId
+ */
+router.get('/streaming-sessions/recent/:userId', requireSupervisor, StreamingSessionController.getUserRecentSessions);
 
 // ===== USAGE TRACKING ENDPOINTS =====
 

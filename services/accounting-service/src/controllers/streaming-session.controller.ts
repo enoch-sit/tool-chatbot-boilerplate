@@ -168,6 +168,79 @@ export class StreamingSessionController {
       return res.status(500).json({ message: 'Failed to fetch all active sessions' });
     }
   }
+  
+  /**
+   * Get recent streaming sessions (active + recently completed)
+   * GET /api/streaming-sessions/recent
+   */
+  async getRecentSessions(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      // Admin or supervisor role required
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      // Parse minutes parameter
+      const minutesAgo = req.query.minutes ? parseInt(req.query.minutes as string) : 5;
+      
+      const sessions = await StreamingSessionService.getRecentSessions(minutesAgo);
+      
+      return res.status(200).json({
+        sessions,
+        timestamp: new Date().toISOString(),
+        filter: {
+          minutes: minutesAgo,
+        }
+      });
+    } catch (error: unknown) {
+      console.error('Error fetching recent sessions:', error);
+      return res.status(500).json({ message: 'Failed to fetch recent sessions' });
+    }
+  }
+  
+  /**
+   * Get recent streaming sessions for a specific user
+   * GET /api/streaming-sessions/recent/:userId
+   */
+  async getUserRecentSessions(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      // Admin or supervisor role required
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const targetUserId = req.params.userId;
+      
+      if (!targetUserId) {
+        return res.status(400).json({ message: 'User ID is required' });
+      }
+      
+      // Parse minutes parameter
+      const minutesAgo = req.query.minutes ? parseInt(req.query.minutes as string) : 5;
+      
+      const sessions = await StreamingSessionService.getUserRecentSessions(targetUserId, minutesAgo);
+      
+      return res.status(200).json({
+        sessions,
+        timestamp: new Date().toISOString(),
+        filter: {
+          userId: targetUserId,
+          minutes: minutesAgo,
+        }
+      });
+    } catch (error: unknown) {
+      console.error('Error fetching user recent sessions:', error);
+      return res.status(500).json({ message: 'Failed to fetch user recent sessions' });
+    }
+  }
 }
 
 export default new StreamingSessionController();
