@@ -29,7 +29,7 @@ export const authenticateJWT = (req: Request, res: Response, next: NextFunction)
   try {
     const decoded = jwt.verify(token, config.jwtAccessSecret) as any;
     req.user = {
-      userId: decoded.userId,
+      userId: decoded.sub, // Changed from decoded.username to decoded.sub
       username: decoded.username,
       email: decoded.email,
       role: decoded.role

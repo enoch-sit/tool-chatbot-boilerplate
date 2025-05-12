@@ -466,8 +466,18 @@ export const observeSession = async (req: Request, res: Response) => {
     const isStreamActive = observationManager.isStreamActive(sessionId);
     
     if (!isStreamActive) {
-      return res.status(404).json({ message: 'No active streaming session found for observation' });
+      logger.info(`Supervisor ${supervisorId} attempted to observe inactive session ${sessionId}`);
+      return res.status(404).json({ 
+        message: 'No active streaming session found for observation',
+        errorCode: 'SESSION_NOT_ACTIVE',
+        availableSessions: observationManager.getActiveSessionIds().length > 0 
+          ? observationManager.getActiveSessionIds() 
+          : undefined
+      });
     }
+    
+    // Log the observation start
+    logger.info(`Supervisor ${supervisorId} started observing session ${sessionId}`);
     
     // Set up SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
@@ -477,7 +487,10 @@ export const observeSession = async (req: Request, res: Response) => {
     
     // Send initial observer connected message
     res.write(`event: observer\ndata: ${JSON.stringify({ 
-      message: 'Observer connected' 
+      message: 'Observer connected',
+      sessionId: sessionId,
+      observerId: supervisorId,
+      timestamp: new Date().toISOString()
     })}\n\n`);
     
     // Register this observer to receive stream events
@@ -496,11 +509,155 @@ export const observeSession = async (req: Request, res: Response) => {
     
     if (res.headersSent) {
       res.write(`event: error\ndata: ${JSON.stringify({ 
-        error: 'Error setting up observation'
+        error: 'Error setting up observation',
+        message: error.message
       })}\n\n`);
       res.end();
     } else {
-      res.status(500).json({ message: 'Error setting up observation', error: error.message });
+      res.status(500).json({ 
+        message: 'Error setting up observation', 
+        error: error.message 
+      });
     }
+  }
+};
+
+// Get chat session as supervisor
+export const supervisorGetChatSession = async (req: Request, res: Response) => {
+  try {
+    const role = req.user?.role;
+    const targetUserId = req.params.userId;
+    const sessionId = req.params.sessionId;
+    
+    // Check if user has permission to access other users' sessions
+    if (role !== 'admin' && role !== 'supervisor') {
+      return res.status(403).json({ message: 'Insufficient permissions to view user sessions' });
+    }
+    
+    // Find the session without userId restriction
+    const session = await ChatSession.findOne({ _id: sessionId, userId: targetUserId });
+    
+    if (!session) {
+      return res.status(404).json({ message: 'Chat session not found' });
+    }
+    
+    logger.info(`Supervisor ${req.user?.userId} accessed session ${sessionId} of user ${targetUserId}`);
+    
+    return res.status(200).json({
+      sessionId: session._id,
+      userId: session.userId,
+      title: session.title,
+      messages: session.messages,
+      modelId: session.modelId,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      metadata: session.metadata
+    });
+  } catch (error:any) {
+    logger.error('Error retrieving chat session as supervisor:', error);
+    return res.status(500).json({ message: 'Failed to retrieve chat session', error: error.message });
+  }
+};
+
+// List chat sessions for any user (supervisor/admin)
+export const supervisorListChatSessions = async (req: Request, res: Response) => {
+  try {
+    const role = req.user?.role;
+    const targetUserId = req.params.userId;
+    const page = parseInt(req.query.page as string || '1');
+    const limit = parseInt(req.query.limit as string || '20');
+    const skip = (page - 1) * limit;
+    
+    // Check if user has permission to list other users' sessions
+    if (role !== 'admin' && role !== 'supervisor') {
+      return res.status(403).json({ message: 'Insufficient permissions to list user sessions' });
+    }
+    
+    // Get sessions for the target user
+    const sessions = await ChatSession.find({ userId: targetUserId })
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('_id userId title createdAt updatedAt modelId metadata');
+    
+    const total = await ChatSession.countDocuments({ userId: targetUserId });
+    
+    logger.info(`Supervisor ${req.user?.userId} listed chat sessions for user ${targetUserId}`);
+    
+    return res.status(200).json({
+      userId: targetUserId,
+      sessions,
+      pagination: {
+        total,
+        pages: Math.ceil(total / limit),
+        currentPage: page,
+        perPage: limit
+      }
+    });
+  } catch (error:any) {
+    logger.error('Error listing user chat sessions as supervisor:', error);
+    return res.status(500).json({ message: 'Failed to list user sessions', error: error.message });
+  }
+};
+
+// Search for users and their chat sessions (admin/supervisor)
+export const searchUsers = async (req: Request, res: Response) => {
+  try {
+    const role = req.user?.role;
+    const { query } = req.query;
+    const page = parseInt(req.query.page as string || '1');
+    const limit = parseInt(req.query.limit as string || '20');
+    const skip = (page - 1) * limit;
+    
+    // Check if user has permission
+    if (role !== 'admin' && role !== 'supervisor') {
+      return res.status(403).json({ message: 'Insufficient permissions to search users' });
+    }
+    
+    if (!query) {
+      return res.status(400).json({ message: 'Search query is required' });
+    }
+    
+    // First, find users with matching IDs (exact match)
+    const exactMatches = await ChatSession.aggregate([
+      { $match: { userId: query.toString() } },
+      { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
+    ]);
+    
+    // Then find users with partial matches in sessions or metadata
+    const partialMatches = await ChatSession.aggregate([
+      {
+        $match: {
+          $or: [
+            { title: { $regex: query, $options: 'i' } },
+            { 'metadata.source': { $regex: query, $options: 'i' } }
+          ]
+        }
+      },
+      { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
+    ]);
+    
+    // Combine and remove duplicates
+    const allUsers = [...exactMatches, ...partialMatches.filter(pm => 
+      !exactMatches.some(em => em._id === pm._id)
+    )];
+    
+    // Paginate results
+    const paginatedUsers = allUsers.slice(skip, skip + limit);
+    
+    logger.info(`Supervisor ${req.user?.userId} searched for users with query: ${query}`);
+    
+    return res.status(200).json({
+      users: paginatedUsers,
+      pagination: {
+        total: allUsers.length,
+        pages: Math.ceil(allUsers.length / limit),
+        currentPage: page,
+        perPage: limit
+      }
+    });
+  } catch (error:any) {
+    logger.error('Error searching users:', error);
+    return res.status(500).json({ message: 'Failed to search users', error: error.message });
   }
 };

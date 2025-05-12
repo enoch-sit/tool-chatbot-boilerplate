@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 import requests
 import json
 import time
@@ -99,7 +99,7 @@ class ChatServiceTester:
         services = [ 
             {"name": "Auth Service", "url": f"{AUTH_SERVICE_URL.replace('/api', '')}/health"},
             {"name": "Accounting Service", "url": f"{ACCOUNTING_SERVICE_URL.replace('/api', '')}/health"},
-            {"name": "Chat Service", "url": f"{CHAT_SERVICE_URL.replace('/api', '')}/health"}
+            {"name": "Chat Service", "url": f"{CHAT_SERVICE_URL}/health"}  # Changed to use /api/health
         ]
         
         all_healthy = True
@@ -137,7 +137,11 @@ class ChatServiceTester:
             if response.status_code == 200:
                 data = response.json()
                 self.user_token = data.get("accessToken")
-                self.headers = {"Authorization": f"Bearer {self.user_token}"}
+                # Include the userId in the headers - this is needed for the chat service
+                self.headers = {
+                    "Authorization": f"Bearer {self.user_token}",
+                    "X-User-ID": TEST_USER["username"]  # Add the userId to the headers
+                }
                 Logger.success(f"Authentication successful for {TEST_USER['username']}")
                 return True
             else:
@@ -201,7 +205,7 @@ class ChatServiceTester:
             Logger.error(f"Supervisor authentication error: {str(e)}")
             return False
 
-    def allocate_credits(self, amount=1000):
+    def allocate_credits(self, amount=5000):
         """Allocate credits to the test user"""
         Logger.header("ALLOCATING CREDITS")
         
@@ -215,7 +219,7 @@ class ChatServiceTester:
                 f"{ACCOUNTING_SERVICE_URL}/credits/allocate",
                 headers=admin_headers,
                 json={
-                    "targetUserId": TEST_USER["username"],
+                    "userId": TEST_USER["username"],  # The controller expects 'userId', not 'targetUserId'
                     "credits": amount,
                     "expiryDays": 30,
                     "notes": "Test credit allocation"
@@ -514,7 +518,10 @@ class ChatServiceTester:
                 async with session.post(
                     stream_url, 
                     headers=self.headers,
-                    json={"message": "Tell me about microservices architecture"}
+                    json={
+                        "message": "Tell me about microservices architecture",
+                        "userId": TEST_USER["username"]  # Adding userId here as well
+                    }
                 ) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()

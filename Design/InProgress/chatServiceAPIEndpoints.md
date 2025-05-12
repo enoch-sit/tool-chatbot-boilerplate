@@ -13,7 +13,7 @@
 | POST | `/api/chat/sessions/:sessionId/stream` | Stream chat response | Authenticated | `{ message: string, modelId?: string }` | SSE Stream |
 | POST | `/api/chat/sessions/:sessionId/update-stream` | Update chat with stream response | Authenticated | `{ completeResponse: string, streamingSessionId: string, tokensUsed: number }` | `{ message: string, sessionId: string, tokensUsed: number }` |
 | GET | `/api/chat/sessions/:sessionId/observe` | Observe an active session | Admin/Supervisor | - | SSE Stream |
-| GET | `/health` | Health check endpoint | Public | - | `{ status: string, service: string, version: string, timestamp: string }` |
+| GET | `/api/health` | Health check endpoint | Public | - | `{ status: string, service: string, version: string, timestamp: string }` |
 | GET | `/api/models` | Get available models | Authenticated | - | `{ models: array }` |
 | POST | `/api/models/recommend` | Get model recommendation | Authenticated | `{ task: string, priority: string }` | `{ recommendedModel: string, reason: string }` |
 | GET | `/metrics` | Prometheus metrics endpoint | Internal | - | Metrics in Prometheus format |

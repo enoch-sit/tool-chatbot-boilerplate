@@ -36,7 +36,7 @@ export const initializeStreamingSession = async (
     
     logger.info(`Initializing streaming session for user ${userId} with model ${modelId}`);
     
-    // Initialize session with accounting service
+    // Initialize session with accounting service - fix the endpoint path to match accounting service API
     const response = await axios.post(
       `${config.accountingApiUrl}/streaming-sessions/initialize`,
       {

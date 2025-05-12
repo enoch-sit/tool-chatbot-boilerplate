@@ -25,8 +25,8 @@ export default {
   defaultModelId: process.env.DEFAULT_MODEL_ID || 'amazon.nova-micro-v1:0',
   
   // External services URLs
-  accountingApiUrl: process.env.ACCOUNTING_API_URL || 'http://localhost:3001/api',
-  authApiUrl: process.env.AUTH_API_URL || 'http://localhost:3000/api',
+  accountingApiUrl: process.env.ACCOUNTING_API_URL || 'http://accounting-service-accounting-service-1:3001/api',
+  authApiUrl: process.env.AUTH_API_URL || 'http://auth-service-dev:3000/api',
   
   // Streaming configuration
   maxStreamingDuration: parseInt(process.env.MAX_STREAMING_DURATION || '120000', 10),
@@ -35,5 +35,8 @@ export default {
   corsOrigin: process.env.CORS_ORIGIN || '*',
   
   // Redis configuration (for rate limiting and caching)
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379'
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  
+  // Logging configuration
+  logLevel: process.env.LOG_LEVEL || 'info'
 };

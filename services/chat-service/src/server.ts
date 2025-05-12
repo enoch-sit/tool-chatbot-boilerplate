@@ -3,8 +3,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import { connectToDatabase } from './config/db';
-import chatRoutes from './routes/chat.routes';
-import modelRoutes from './routes/model.routes';
+import apiRoutes from './routes/api.routes';
 import logger from './utils/logger';
 import config from './config/config';
 import { ObservationManager } from './services/observation.service';
@@ -35,22 +34,11 @@ app.use(metricsMiddleware);
 // Apply rate limiting to all routes
 app.use(rateLimiter());
 
-// API Routes
-app.use('/api/chat', chatRoutes);
-app.use('/api/models', modelRoutes);
+// API Routes - using the consolidated router
+app.use('/api', apiRoutes);
 
 // Metrics endpoint (internal access only)
 app.get('/metrics', metricsEndpoint);
-
-// Health check endpoint
-app.get('/api/health', (req: Request, res: Response) => {
-  res.status(200).json({
-    status: 'ok',
-    service: 'chat-service',
-    version: process.env.npm_package_version || '1.0.0',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // Default route
 app.get('/', (req: Request, res: Response) => {

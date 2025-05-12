@@ -1,6 +1,6 @@
 @echo off
 echo =========================================
-echo Chat Service Docker Start Script
+echo Chat Service Docker Rebuild Script
 echo =========================================
 
 set AUTH_URL=http://localhost:3000
@@ -50,7 +50,7 @@ if %ERRORLEVEL% equ 0 (
 echo 3. Checking Chat service...
 curl -s %CHAT_URL%/api/health >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-    echo    Chat service is already running.
+    echo    Chat service is running.
     set chat_running=1
 ) else (
     echo    Chat service is NOT running.
@@ -91,30 +91,30 @@ if %accounting_running% equ 0 (
     )
 )
 
-if %chat_running% equ 1 (
-    echo.
-    set /p restart_chat="Chat service is already running. Do you want to restart it? (y/n): "
-    if /i "%restart_chat%"=="y" (
-        echo Stopping chat service containers...
-        docker-compose down
-        set chat_running=0
-    ) else (
-        echo Keeping current chat service running.
-        goto :check_status
+echo.
+echo Stopping existing chat service containers...
+docker-compose down
+
+echo.
+set /p remove_volumes="Do you want to remove database volumes? This will delete all data (y/n): "
+if /i "%remove_volumes%"=="y" (
+    echo Removing Docker volumes...
+    for /f "tokens=*" %%i in ('docker volume ls -q --filter "name=chat-service_mongo-data"') do (
+        docker volume rm %%i 2>nul
+    )
+    for /f "tokens=*" %%i in ('docker volume ls -q --filter "name=chat-service_redis-data"') do (
+        docker volume rm %%i 2>nul
     )
 )
 
-if %chat_running% equ 0 (
-    echo.
-    echo Starting chat service containers...
-    docker-compose up -d
-    
-    echo.
-    echo Waiting for services to start...
-    timeout /t 10 /nobreak >nul
-)
+echo.
+echo Rebuilding and starting chat service containers...
+docker-compose up -d --build
 
-:check_status
+echo.
+echo Waiting for services to start...
+timeout /t 10 /nobreak >nul
+
 echo.
 echo Checking final status:
 echo 1. Checking Authentication service...
@@ -138,11 +138,11 @@ curl -s %CHAT_URL%/api/health >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo    Chat service is running.
     echo.
-    echo Chat service started successfully at %CHAT_URL%
+    echo Chat service was rebuilt and started successfully at %CHAT_URL%
 ) else (
     echo    Chat service is NOT running.
     echo.
-    echo Failed to start Chat service. Please check logs for errors.
+    echo Failed to rebuild Chat service. Please check logs for errors.
 )
 
 echo.
