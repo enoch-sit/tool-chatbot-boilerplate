@@ -1,17 +1,44 @@
+/**
+ * Model Recommendation Service
+ * 
+ * This module provides intelligent model selection capabilities for the chat service.
+ * It maintains a catalog of available AI models, recommends appropriate models based 
+ * on user tasks and priorities, and provides fallback mechanisms when models are 
+ * unavailable.
+ * 
+ * Key features:
+ * - Comprehensive model catalog with capabilities and pricing
+ * - Task-based and priority-based recommendation engine
+ * - Role-based model access control
+ * - Fallback chains for reliability
+ * - Model availability error detection
+ */
 import logger from '../utils/logger';
 import config from '../config/config';
 
+/**
+ * AI Model Interface
+ * 
+ * Defines the structure of model metadata including capabilities,
+ * pricing, and technical specifications.
+ */
 export interface Model {
-  id: string;
-  name: string;
-  description: string;
-  capabilities: string[];
-  creditCost: number;
-  maxTokens: number;
-  available: boolean;
+  id: string;             // Unique identifier for the model in AWS Bedrock format
+  name: string;           // Human-friendly name of the model
+  description: string;    // Brief description of the model's capabilities
+  capabilities: string[]; // Array of capability tags (e.g., 'reasoning', 'code')
+  creditCost: number;     // Cost in platform credits per 1K tokens
+  maxTokens: number;      // Maximum context window size in tokens
+  available: boolean;     // Whether the model is currently available for use
 }
 
-// Available models with their capabilities and characteristics
+/**
+ * Available Models Catalog
+ * 
+ * Comprehensive list of AI models available through the service.
+ * Each model includes detailed information about its capabilities,
+ * pricing, and specifications to support the recommendation engine.
+ */
 const AVAILABLE_MODELS: Model[] = [
   {
     id: 'amazon.nova-micro-v1:0',
@@ -52,30 +79,53 @@ const AVAILABLE_MODELS: Model[] = [
 ];
 
 /**
- * Filter models based on user role/permissions
- * @param userRole The role of the user requesting the models
- * @returns Array of models available to the user
+ * Get Available Models By User Role
+ * 
+ * Filters the model catalog based on user permissions to return
+ * only the models that the user is authorized to access. This
+ * supports role-based access control for premium or restricted models.
+ * 
+ * @param userRole - Role of the requesting user (admin, supervisor, user)
+ * @returns Array of models available to the specified user role
  */
 export function getAvailableModels(userRole: string = 'user'): Model[] {
-  // If user is admin or supervisor, return all models
+  // Admins and supervisors have access to all models, including testing/preview models
   if (userRole === 'admin' || userRole === 'supervisor') {
     return AVAILABLE_MODELS;
   }
   
-  // For regular users, filter out any potentially restricted models
-  // For example, could filter based on cost, or specific models reserved for admins
+  // Regular users have access to models based on business rules
+  // This could be expanded with more sophisticated filtering logic
   return AVAILABLE_MODELS.filter(model => {
-    // Example: Only allow basic users to use models with cost <= 2.5
-    // Could be expanded based on business rules
+    // Only return models that are:
+    // 1. Marked as available
+    // 2. Below the credit cost threshold for regular users
     return model.available && model.creditCost <= 2.5;
   });
 }
 
 /**
- * Recommend a model based on user's task and priorities
- * @param task The type of task the user is trying to perform
- * @param priority The user's priority (speed, quality, cost)
- * @returns Recommended model ID and reason
+ * Recommend AI Model
+ * 
+ * Suggests the most appropriate model for a user based on their
+ * specific task requirements and priorities. This helps users
+ * select models without needing to understand the technical
+ * details of each model.
+ * 
+ * Tasks:
+ * - general: Everyday conversation and information requests
+ * - code: Programming assistance and code generation
+ * - creative: Creative writing, brainstorming, and content creation
+ * - long-document: Processing and analyzing lengthy documents
+ * 
+ * Priorities:
+ * - quality: Best possible results, regardless of speed or cost
+ * - speed: Quick responses, optimizing for low latency
+ * - cost: Most economical option, minimizing credit usage
+ * 
+ * @param task - The type of task the user wants to perform
+ * @param priority - The user's priority between quality, speed, and cost
+ * @returns Object containing the recommended model ID and explanation
  */
 export function recommendModel(
   task: 'general' | 'code' | 'creative' | 'long-document', 
@@ -85,8 +135,15 @@ export function recommendModel(
   let recommendedModelId = config.defaultModelId;
   let reason = 'Default model recommendation';
   
-  // Simple recommendation logic based on task and priority
+  /**
+   * Model Recommendation Logic
+   * 
+   * This decision matrix selects models based on the combination
+   * of task type and user priority. The recommendations balance
+   * model capabilities, performance characteristics, and cost.
+   */
   if (priority === 'speed') {
+    // Speed-prioritized recommendations
     if (task === 'code') {
       recommendedModelId = 'amazon.nova-micro-v1:0';
       reason = 'For coding tasks with priority on speed, Amazon Nova Micro offers quick responses with good code understanding';
@@ -101,6 +158,7 @@ export function recommendModel(
       reason = 'For general tasks with speed priority, Amazon Nova Micro offers quick responses';
     }
   } else if (priority === 'quality') {
+    // Quality-prioritized recommendations
     if (task === 'code') {
       recommendedModelId = 'amazon.nova-lite-v1:0';
       reason = 'For coding tasks with quality priority, Amazon Nova Lite provides accurate code understanding and generation';
@@ -115,6 +173,7 @@ export function recommendModel(
       reason = 'For general tasks with quality priority, Amazon Nova Lite offers excellent results at a reasonable cost';
     }
   } else if (priority === 'cost') {
+    // Cost-prioritized recommendations
     if (task === 'code') {
       recommendedModelId = 'amazon.nova-micro-v1:0';
       reason = 'For coding tasks with cost priority, Amazon Nova Micro provides good code capabilities at an economical cost';
@@ -135,39 +194,62 @@ export function recommendModel(
 }
 
 /**
- * Get a fallback chain for a given model
- * @param primaryModelId The primary model ID
- * @returns Array of model IDs in fallback order
+ * Get Model Fallback Chain
+ * 
+ * Provides an ordered list of fallback models to try if the primary model
+ * is unavailable or fails. This enhances system reliability by gracefully
+ * handling model unavailability without disrupting the user experience.
+ * 
+ * The fallback chain is designed to maintain similar capabilities while
+ * potentially trading off some aspect of performance or cost.
+ * 
+ * @param primaryModelId - The ID of the first-choice model
+ * @returns Array of model IDs in fallback priority order
  */
 export function getModelFallbackChain(primaryModelId: string): string[] {
-  // Define model fallback chains
+  // Define model fallback chains with carefully ordered alternatives
   const fallbackMap: Record<string, string[]> = {
+    // Nova Micro falls back to Titan as a cost-effective alternative
     'amazon.nova-micro-v1:0': [
       'amazon.nova-micro-v1:0',
       'amazon.titan-text-express-v1'
     ],
+    // Nova Lite falls back to Nova Micro (less powerful but similar family)
+    // then to Titan as a last resort
     'amazon.nova-lite-v1:0': [
       'amazon.nova-lite-v1:0',
       'amazon.nova-micro-v1:0',
       'amazon.titan-text-express-v1'
     ],
+    // Titan falls back to Nova Micro for better reliability
     'amazon.titan-text-express-v1': [
       'amazon.titan-text-express-v1',
       'amazon.nova-micro-v1:0'
     ],
+    // Meta's model falls back to Amazon's options when unavailable
     'meta.llama3-70b-instruct-v1:0': [
       'meta.llama3-70b-instruct-v1:0',
       'amazon.nova-micro-v1:0'
     ]
   };
   
+  // Return the defined chain or a default fallback if no specific chain exists
   return fallbackMap[primaryModelId] || [primaryModelId, config.defaultModelId];
 }
 
 /**
- * Check if an error indicates model availability issues
- * @param error Error object from API call
- * @returns Boolean indicating if error is due to model availability
+ * Check for Model Availability Errors
+ * 
+ * Analyzes error messages from the model provider to determine if
+ * the error is related to model availability rather than a more
+ * fundamental API or system error.
+ * 
+ * This helps distinguish between temporary model unavailability
+ * (which should trigger fallback) versus other types of errors
+ * that require different handling.
+ * 
+ * @param error - Error object from the model API call
+ * @returns Boolean indicating if the error relates to model availability
  */
 export function isModelAvailabilityError(error: any): boolean {
   const message = error.message || '';

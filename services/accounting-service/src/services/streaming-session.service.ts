@@ -1,4 +1,12 @@
 // src/services/streaming-session.service.ts
+/**
+ * Streaming Session Service
+ * 
+ * Manages streaming sessions for AI text generation.
+ * Handles credit allocation, tracking, and finalization for streaming responses,
+ * which require special handling to pre-allocate credits and then reconcile
+ * actual usage when complete.
+ */
 import { Op } from 'sequelize';
 import StreamingSession from '../models/streaming-session.model';
 import CreditService from './credit.service';
@@ -7,6 +15,14 @@ import UsageService from './usage.service';
 export class StreamingSessionService {
   /**
    * Initialize a streaming session and pre-allocate credits
+   * 
+   * @param {Object} params - Session initialization parameters
+   * @param {string} params.sessionId - Unique ID for the streaming session
+   * @param {string} params.userId - User ID who owns the session
+   * @param {string} params.modelId - ID of the AI model being used
+   * @param {number} params.estimatedTokens - Estimated number of tokens for the session
+   * @returns {Promise<StreamingSession>} - The created streaming session record
+   * @throws {Error} If there are insufficient credits or allocation fails
    */
   async initializeSession(params: {
     sessionId: string,
@@ -53,6 +69,18 @@ export class StreamingSessionService {
   
   /**
    * Finalize a streaming session with actual usage
+   * Calculates actual credits used and refunds any excess allocation
+   * 
+   * @param {Object} params - Session finalization parameters
+   * @param {string} params.sessionId - ID of the session to finalize
+   * @param {string} params.userId - User ID who owns the session
+   * @param {number} params.actualTokens - Actual number of tokens used
+   * @param {boolean} [params.success=true] - Whether the session completed successfully
+   * @returns {Promise<Object>} Object containing:
+   *   - sessionId: ID of the finalized session
+   *   - actualCredits: Credits actually used
+   *   - refund: Credits refunded to the user
+   * @throws {Error} If the session cannot be found or finalization fails
    */
   async finalizeSession(params: {
     sessionId: string,
@@ -121,6 +149,9 @@ export class StreamingSessionService {
   
   /**
    * Get active streaming sessions for a user
+   * 
+   * @param {string} userId - User ID to get sessions for
+   * @returns {Promise<StreamingSession[]>} Array of active session records
    */
   async getActiveSessions(userId: string) {
     return StreamingSession.findAll({
@@ -133,6 +164,8 @@ export class StreamingSessionService {
   
   /**
    * Get all active streaming sessions (admin only)
+   * 
+   * @returns {Promise<StreamingSession[]>} Array of all active session records
    */
   async getAllActiveSessions() {
     return StreamingSession.findAll({
@@ -145,6 +178,9 @@ export class StreamingSessionService {
   /**
    * Get recent streaming sessions (including recently completed)
    * This helps supervisors to catch sessions that completed very recently
+   * 
+   * @param {number} [minutesAgo=5] - Look back period in minutes
+   * @returns {Promise<StreamingSession[]>} Array of recent session records
    */
   async getRecentSessions(minutesAgo = 5) {
     const cutoffTime = new Date();
@@ -170,6 +206,10 @@ export class StreamingSessionService {
   
   /**
    * Get recent sessions for a specific user
+   * 
+   * @param {string} userId - User ID to get sessions for
+   * @param {number} [minutesAgo=5] - Look back period in minutes
+   * @returns {Promise<StreamingSession[]>} Array of recent session records for the user
    */
   async getUserRecentSessions(userId: string, minutesAgo = 5) {
     const cutoffTime = new Date();
@@ -196,6 +236,17 @@ export class StreamingSessionService {
   
   /**
    * Abort a streaming session (for errors or timeouts)
+   * Calculates credits for partial usage and refunds the rest
+   * 
+   * @param {Object} params - Session abort parameters
+   * @param {string} params.sessionId - ID of the session to abort
+   * @param {string} params.userId - User ID who owns the session
+   * @param {number} [params.tokensGenerated=0] - Number of tokens generated before abort
+   * @returns {Promise<Object>} Object containing:
+   *   - sessionId: ID of the aborted session
+   *   - partialCredits: Credits used for partial generation
+   *   - refund: Credits refunded to the user
+   * @throws {Error} If the session cannot be found or abort fails
    */
   async abortSession(params: {
     sessionId: string,

@@ -1,3 +1,17 @@
+/**
+ * Chat Controller Module
+ * 
+ * This module provides the business logic for the chat API endpoints.
+ * It handles chat session management, message processing, streaming responses,
+ * and supervisor monitoring capabilities.
+ * 
+ * Core responsibilities:
+ * - Managing chat sessions (create, retrieve, list, delete)
+ * - Processing and storing messages
+ * - Streaming AI responses in real-time
+ * - Handling supervisor observation functionality
+ * - Enforcing permissions and access control
+ */
 import { Request, Response } from 'express';
 import ChatSession from '../models/chat-session.model';
 import { initializeStreamingSession, streamResponse } from '../services/streaming.service';
@@ -5,7 +19,21 @@ import { ObservationManager } from '../services/observation.service';
 import logger from '../utils/logger';
 import config from '../config/config';
 
-// Create a new chat session
+/**
+ * Create Chat Session
+ * 
+ * Creates a new chat conversation for a user with optional initial message.
+ * The session is initialized with a system message defining the AI assistant's role.
+ * 
+ * Request Body:
+ * - title: Optional custom title for the chat session
+ * - initialMessage: Optional first user message to start the conversation
+ * - modelId: Optional AI model ID to use for this session
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 201 with session details on success, error response otherwise
+ */
 export const createChatSession = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
@@ -29,7 +57,7 @@ export const createChatSession = async (req: Request, res: Response) => {
       });
     }
     
-    // Create new session
+    // Create new session with metadata for tracking and analytics
     const session = new ChatSession({
       userId,
       title: title || 'New Chat',
@@ -54,12 +82,26 @@ export const createChatSession = async (req: Request, res: Response) => {
   }
 };
 
-// Get chat session details
+/**
+ * Get Chat Session
+ * 
+ * Retrieves the details of a specific chat session including
+ * all messages and metadata. Limited to sessions owned by the
+ * requesting user for security.
+ * 
+ * URL Parameters:
+ * - sessionId: The unique identifier of the chat session
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with full session details on success, error response otherwise
+ */
 export const getChatSession = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const sessionId = req.params.sessionId;
     
+    // Retrieve session with ownership verification
     const session = await ChatSession.findOne({ _id: sessionId, userId });
     
     if (!session) {
@@ -81,7 +123,20 @@ export const getChatSession = async (req: Request, res: Response) => {
   }
 };
 
-// List chat sessions for a user
+/**
+ * List Chat Sessions
+ * 
+ * Retrieves a paginated list of all chat sessions belonging
+ * to the requesting user, sorted by most recently updated.
+ * 
+ * Query Parameters:
+ * - page: Page number for pagination (default: 1)
+ * - limit: Number of sessions per page (default: 20)
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with sessions list and pagination info, error response otherwise
+ */
 export const listChatSessions = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
@@ -89,12 +144,14 @@ export const listChatSessions = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string || '20');
     const skip = (page - 1) * limit;
     
+    // Retrieve paginated list of sessions
     const sessions = await ChatSession.find({ userId })
-      .sort({ updatedAt: -1 })
+      .sort({ updatedAt: -1 }) // Most recent first
       .skip(skip)
       .limit(limit)
-      .select('_id title createdAt updatedAt modelId metadata');
+      .select('_id title createdAt updatedAt modelId metadata'); // Exclude message content for efficiency
     
+    // Get total count for pagination
     const total = await ChatSession.countDocuments({ userId });
     
     return res.status(200).json({
@@ -112,12 +169,25 @@ export const listChatSessions = async (req: Request, res: Response) => {
   }
 };
 
-// Delete a chat session
+/**
+ * Delete Chat Session
+ * 
+ * Permanently removes a chat session and all its messages.
+ * Limited to sessions owned by the requesting user.
+ * 
+ * URL Parameters:
+ * - sessionId: The unique identifier of the chat session
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with success message on deletion, error response otherwise
+ */
 export const deleteChatSession = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const sessionId = req.params.sessionId;
     
+    // Delete session with ownership verification
     const session = await ChatSession.findOneAndDelete({ _id: sessionId, userId });
     
     if (!session) {
@@ -134,21 +204,38 @@ export const deleteChatSession = async (req: Request, res: Response) => {
   }
 };
 
-// Send a message in non-streaming mode
+/**
+ * Send Message (Non-streaming)
+ * 
+ * Adds a user message to a chat session. This is a non-streaming
+ * implementation primarily used for message storage without immediate AI response.
+ * For AI responses, the streaming endpoint is preferred.
+ * 
+ * URL Parameters:
+ * - sessionId: The unique identifier of the chat session
+ * 
+ * Request Body:
+ * - message: The user's message content
+ * - modelId: Optional AI model to use for this message
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with success message, error response otherwise
+ */
 export const sendMessage = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const sessionId = req.params.sessionId;
     const { message, modelId } = req.body;
     
-    // Find the chat session
+    // Find chat session with ownership verification
     const session = await ChatSession.findOne({ _id: sessionId, userId });
     
     if (!session) {
       return res.status(404).json({ message: 'Chat session not found' });
     }
     
-    // Add user message
+    // Add user message to the session
     const userMessage = {
       role: 'user' as const,
       content: message,
@@ -178,12 +265,25 @@ export const sendMessage = async (req: Request, res: Response) => {
   }
 };
 
-// Get messages for a session
+/**
+ * Get Messages
+ * 
+ * Retrieves all messages from a specific chat session.
+ * Limited to sessions owned by the requesting user.
+ * 
+ * URL Parameters:
+ * - sessionId: The unique identifier of the chat session
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with array of messages, error response otherwise
+ */
 export const getMessages = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const sessionId = req.params.sessionId;
     
+    // Retrieve session with ownership verification
     const session = await ChatSession.findOne({ _id: sessionId, userId });
     
     if (!session) {
@@ -199,31 +299,51 @@ export const getMessages = async (req: Request, res: Response) => {
   }
 };
 
-// Stream chat response
+/**
+ * Stream Chat Response
+ * 
+ * The core method for real-time AI interactions. It:
+ * 1. Adds the user's message to the session
+ * 2. Initializes a streaming session with the accounting service
+ * 3. Sets up a streaming connection with AWS Bedrock
+ * 4. Sends real-time chunks to the client via SSE
+ * 5. Registers the stream for potential supervisor observation
+ * 6. Saves the complete response to the database when finished
+ * 
+ * URL Parameters:
+ * - sessionId: The unique identifier of the chat session
+ * 
+ * Request Body:
+ * - message: The user's message content
+ * - modelId: Optional AI model to use for this response
+ * 
+ * @param req - Express request object (with authorization header for accounting service)
+ * @param res - Express response object (used as SSE stream to client)
+ */
 export const streamChatResponse = async (req: Request, res: Response) => {
   const userId = req.user?.userId;
   const sessionId = req.params.sessionId;
   const { message, modelId } = req.body;
   
-  // Observation manager to handle supervisor observers
+  // Get singleton observation manager for supervisor monitoring
   const observationManager = ObservationManager.getInstance();
   
-  // Declare session variable at function scope level
+  // Declare session variable at function scope level for error handling
   let session;
   
   try {
-    // Find chat session
+    // Find chat session with ownership verification
     session = await ChatSession.findOne({ _id: sessionId, userId });
     if (!session) {
       return res.status(404).json({ message: 'Chat session not found' });
     }
     
-    // Verify no active streaming session for this chat
+    // Prevent multiple simultaneous streaming sessions for the same chat
     if (session.metadata?.activeStreamingSession) {
       return res.status(400).json({ message: 'This chat session already has an active streaming session' });
     }
     
-    // Add user message to session
+    // Add user message to the session
     const userMessage = {
       role: 'user' as const,
       content: message,
@@ -242,13 +362,14 @@ export const streamChatResponse = async (req: Request, res: Response) => {
     session.metadata.activeStreamingSession = true;
     await session.save();
     
-    // Prepare messages for Bedrock
+    // Prepare message history for the AI model in the correct format
     const messageHistory = session.messages.map(m => ({
       role: m.role,
       content: m.content
     }));
     
-    // Initialize streaming session with accounting
+    // Initialize streaming session with the accounting service
+    // This ensures the user has sufficient credits and creates a billing record
     const authHeader = req.headers.authorization || '';
     const streamSession = await initializeStreamingSession(
       userId!, 
@@ -257,28 +378,35 @@ export const streamChatResponse = async (req: Request, res: Response) => {
       authHeader
     );
     
-    // Update session with streaming session ID
+    // Update session with streaming session ID for tracking
     session.metadata.streamingSessionId = streamSession.sessionId;
     await session.save();
     
-    // Log streaming start
+    // Log streaming start for monitoring and debugging
     logger.info(`Starting streaming session ${streamSession.sessionId} for chat ${sessionId}`);
     
-    // Set up SSE headers
+    /**
+     * Set up Server-Sent Events (SSE) headers
+     * 
+     * These headers configure the response as a real-time
+     * event stream that can push data to the client as it arrives.
+     */
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     
-    // Add CORS headers if needed
+    // Add CORS headers if needed for cross-origin requests
     const origin = req.headers.origin;
     if (origin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
     
+    // Send headers immediately to establish the SSE connection
     res.flushHeaders();
     
-    // Create and register a placeholder for the assistant's response
+    // Create a placeholder for the assistant's response in the database
+    // This will be updated with the complete response when streaming ends
     const assistantMessage = {
       role: 'assistant' as const,
       content: '',
@@ -287,7 +415,12 @@ export const streamChatResponse = async (req: Request, res: Response) => {
     session.messages.push(assistantMessage);
     await session.save();
     
-    // Create and send the stream
+    /**
+     * Create and initiate the streaming response
+     * 
+     * This calls the streaming service to establish a connection with AWS Bedrock
+     * and start receiving chunks of the AI response in real-time.
+     */
     const responseStream = await streamResponse(
       userId!,
       streamSession.sessionId,
@@ -296,15 +429,26 @@ export const streamChatResponse = async (req: Request, res: Response) => {
       authHeader
     );
     
-    // Register this stream with the observation manager
+    /**
+     * Register stream with observation manager
+     * 
+     * This makes the stream available for supervisors to observe,
+     * enabling real-time monitoring of conversations.
+     */
     observationManager.registerStream(sessionId, responseStream);
     
-    // Pipe the stream to the response
+    // Pipe the stream directly to the client response
     responseStream.pipe(res);
     
-    // Collect the full response to save later
+    // Collect the full response to save to the database when complete
     let fullResponse = '';
     
+    /**
+     * Process streaming data chunks
+     * 
+     * As data arrives from the AI model, parse each chunk to extract
+     * the text content and accumulate the complete response.
+     */
     responseStream.on('data', (data) => {
       const sseData = data.toString();
       
@@ -322,22 +466,27 @@ export const streamChatResponse = async (req: Request, res: Response) => {
       }
     });
     
-    // Handle stream close
+    /**
+     * Handle stream completion
+     * 
+     * When the stream ends, update the database with the complete
+     * AI response and reset the streaming status flags.
+     */
     responseStream.on('end', async () => {
       try {
-        // Update the assistant message with the complete response
+        // Log completion for monitoring
         logger.info(`Completed streaming session for chat ${sessionId}`);
         
         // Find the session again to get the latest state
         const updatedSession = await ChatSession.findById(sessionId);
         if (updatedSession) {
-          // Update the last message (assistant's response)
+          // Update the last message (assistant's response) with complete text
           const lastIndex = updatedSession.messages.length - 1;
           if (lastIndex >= 0 && updatedSession.messages[lastIndex].role === 'assistant') {
             updatedSession.messages[lastIndex].content = fullResponse;
           }
           
-          // Update metadata
+          // Mark streaming as inactive
           updatedSession.metadata = updatedSession.metadata || {};
           updatedSession.metadata.activeStreamingSession = false;
           
@@ -348,11 +497,17 @@ export const streamChatResponse = async (req: Request, res: Response) => {
       }
     });
     
-    // Handle client disconnect
+    /**
+     * Handle client disconnect
+     * 
+     * If the client disconnects before the stream completes,
+     * perform cleanup but allow the stream to finish processing
+     * so the response can still be saved to the database.
+     */
     req.on('close', () => {
       logger.info(`Client disconnected from stream for session ${sessionId}`);
       
-      // Attempt to clean up
+      // Disconnect response stream from the HTTP response
       responseStream.unpipe(res);
       
       // Note: The stream will still continue processing until completion
@@ -362,7 +517,12 @@ export const streamChatResponse = async (req: Request, res: Response) => {
   } catch (error:any) {
     logger.error('Streaming error:', error);
     
-    // Clean up the session's streaming status
+    /**
+     * Clean up streaming status on error
+     * 
+     * If an error occurs, ensure the session is marked as not streaming
+     * to prevent it from being stuck in a streaming state.
+     */
     try {
       if (session) {
         session.metadata.activeStreamingSession = false;
@@ -372,14 +532,20 @@ export const streamChatResponse = async (req: Request, res: Response) => {
       logger.error('Error cleaning up session after streaming error:', cleanupError);
     }
     
-    // If headers are already sent, we're in SSE mode
+    /**
+     * Send appropriate error response
+     * 
+     * Handle errors differently based on whether we've already
+     * started sending the SSE stream or not.
+     */
     if (res.headersSent) {
+      // If we're already streaming, send an error event
       res.write(`event: error\ndata: ${JSON.stringify({ 
         error: error.message || 'Unknown streaming error'
       })}\n\n`);
       res.end();
     } else {
-      // Otherwise send a normal error response
+      // Otherwise send a standard error response
       if (error.message === 'Insufficient credits for streaming') {
         return res.status(402).json({
           message: 'Insufficient credits to start streaming session',
@@ -395,27 +561,45 @@ export const streamChatResponse = async (req: Request, res: Response) => {
   }
 };
 
-// Update chat with stream response
+/**
+ * Update Chat with Stream Response
+ * 
+ * Updates a chat session with the complete response from a streaming session.
+ * This endpoint is used as a fallback mechanism to ensure the response is saved
+ * if the automatic database update in the streaming endpoint fails.
+ * 
+ * URL Parameters:
+ * - sessionId: The unique identifier of the chat session
+ * 
+ * Request Body:
+ * - completeResponse: The complete AI-generated text
+ * - streamingSessionId: ID of the streaming session for verification
+ * - tokensUsed: Number of tokens consumed by this interaction
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with success message, error response otherwise
+ */
 export const updateChatWithStreamResponse = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const sessionId = req.params.sessionId;
     const { completeResponse, streamingSessionId, tokensUsed } = req.body;
     
-    // Find chat session
+    // Find chat session with ownership verification
     const session = await ChatSession.findOne({ _id: sessionId, userId });
     if (!session) {
       return res.status(404).json({ message: 'Chat session not found' });
     }
     
-    // Verify this is the right streaming session
+    // Security check: verify this is the right streaming session
     if (session.metadata?.streamingSessionId !== streamingSessionId) {
       return res.status(400).json({ 
         message: 'Streaming session ID mismatch'
       });
     }
     
-    // Find the last message (which should be the assistant's response)
+    // Verify the last message is from the assistant
     const lastIndex = session.messages.length - 1;
     if (lastIndex < 0 || session.messages[lastIndex].role !== 'assistant') {
       return res.status(400).json({ 
@@ -423,10 +607,10 @@ export const updateChatWithStreamResponse = async (req: Request, res: Response) 
       });
     }
     
-    // Update the message content
+    // Update the message content with the complete response
     session.messages[lastIndex].content = completeResponse;
     
-    // Update metadata
+    // Update session metadata with token usage and status
     session.metadata = session.metadata || {};
     session.metadata.lastTokensUsed = tokensUsed;
     session.metadata.totalTokensUsed = (session.metadata.totalTokensUsed || 0) + tokensUsed;
@@ -449,22 +633,36 @@ export const updateChatWithStreamResponse = async (req: Request, res: Response) 
   }
 };
 
-// Observe an active session (for supervisors/monitoring)
+/**
+ * Observe Session
+ * 
+ * Allows supervisors and admins to monitor an active chat session in real-time.
+ * Sets up a second SSE stream that receives the same data as the primary user.
+ * Used for quality assurance, training, and monitoring purposes.
+ * 
+ * URL Parameters:
+ * - sessionId: The unique identifier of the chat session to observe
+ * 
+ * @param req - Express request object
+ * @param res - Express response object (used as SSE stream to the supervisor)
+ * @returns SSE stream of the observed session, or error response if unavailable
+ */
 export const observeSession = async (req: Request, res: Response) => {
   try {
     const supervisorId = req.user?.userId;
     const role = req.user?.role;
     const sessionId = req.params.sessionId;
     
-    // Check if user has permission to observe
+    // Permission check: only supervisors and admins can observe sessions
     if (role !== 'admin' && role !== 'supervisor') {
       return res.status(403).json({ message: 'Insufficient permissions to observe sessions' });
     }
     
-    // Get the observation manager and check if the session is active
+    // Get the observation manager and check if the session is available
     const observationManager = ObservationManager.getInstance();
     const isStreamActive = observationManager.isStreamActive(sessionId);
     
+    // If session isn't active, return helpful error with available sessions list
     if (!isStreamActive) {
       logger.info(`Supervisor ${supervisorId} attempted to observe inactive session ${sessionId}`);
       return res.status(404).json({ 
@@ -476,16 +674,21 @@ export const observeSession = async (req: Request, res: Response) => {
       });
     }
     
-    // Log the observation start
-    logger.info(`Supervisor ${supervisorId} started observing session ${sessionId}`);
+    // Log the observation for audit trail
+    logger.supervisorAction(`Supervisor ${supervisorId} started observing session ${sessionId}`);
     
-    // Set up SSE headers
+    /**
+     * Set up SSE stream for supervisor
+     * 
+     * Configure headers for Server-Sent Events to stream
+     * the observed conversation to the supervisor in real-time.
+     */
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
     
-    // Send initial observer connected message
+    // Send initial connection confirmation event
     res.write(`event: observer\ndata: ${JSON.stringify({ 
       message: 'Observer connected',
       sessionId: sessionId,
@@ -493,20 +696,26 @@ export const observeSession = async (req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     })}\n\n`);
     
-    // Register this observer to receive stream events
+    /**
+     * Register the supervisor as an observer
+     * 
+     * This function returns an unsubscribe function that will be used
+     * when the supervisor disconnects to clean up resources.
+     */
     const unsubscribe = observationManager.addObserver(sessionId, (data) => {
       res.write(data);
     });
     
-    // Handle client disconnect
+    // Handle supervisor disconnect
     req.on('close', () => {
-      logger.info(`Observer ${supervisorId} disconnected from session ${sessionId}`);
+      logger.supervisorAction(`Supervisor ${supervisorId} disconnected from session ${sessionId}`);
       unsubscribe();
     });
     
   } catch (error:any) {
     logger.error('Error setting up observation:', error);
     
+    // Send appropriate error response based on connection state
     if (res.headersSent) {
       res.write(`event: error\ndata: ${JSON.stringify({ 
         error: 'Error setting up observation',
@@ -522,26 +731,40 @@ export const observeSession = async (req: Request, res: Response) => {
   }
 };
 
-// Get chat session as supervisor
+/**
+ * Supervisor Get Chat Session
+ * 
+ * Allows supervisors and admins to retrieve the details of any user's chat session.
+ * Used for monitoring user experiences and addressing support issues.
+ * 
+ * URL Parameters:
+ * - userId: ID of the user whose session is being accessed
+ * - sessionId: The unique identifier of the chat session
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with session details, error response otherwise
+ */
 export const supervisorGetChatSession = async (req: Request, res: Response) => {
   try {
     const role = req.user?.role;
     const targetUserId = req.params.userId;
     const sessionId = req.params.sessionId;
     
-    // Check if user has permission to access other users' sessions
+    // Permission check: only supervisors and admins can access
     if (role !== 'admin' && role !== 'supervisor') {
       return res.status(403).json({ message: 'Insufficient permissions to view user sessions' });
     }
     
-    // Find the session without userId restriction
+    // Find the session by both user ID and session ID
     const session = await ChatSession.findOne({ _id: sessionId, userId: targetUserId });
     
     if (!session) {
       return res.status(404).json({ message: 'Chat session not found' });
     }
     
-    logger.info(`Supervisor ${req.user?.userId} accessed session ${sessionId} of user ${targetUserId}`);
+    // Log the access for audit trail
+    logger.supervisorAction(`Supervisor ${req.user?.userId} accessed session ${sessionId} of user ${targetUserId}`);
     
     return res.status(200).json({
       sessionId: session._id,
@@ -559,7 +782,23 @@ export const supervisorGetChatSession = async (req: Request, res: Response) => {
   }
 };
 
-// List chat sessions for any user (supervisor/admin)
+/**
+ * Supervisor List Chat Sessions
+ * 
+ * Allows supervisors and admins to list all chat sessions for a specific user.
+ * Used for user support and monitoring user activity patterns.
+ * 
+ * URL Parameters:
+ * - userId: ID of the user whose sessions are being listed
+ * 
+ * Query Parameters:
+ * - page: Page number for pagination (default: 1)
+ * - limit: Number of sessions per page (default: 20)
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with sessions list and pagination info, error response otherwise
+ */
 export const supervisorListChatSessions = async (req: Request, res: Response) => {
   try {
     const role = req.user?.role;
@@ -568,12 +807,12 @@ export const supervisorListChatSessions = async (req: Request, res: Response) =>
     const limit = parseInt(req.query.limit as string || '20');
     const skip = (page - 1) * limit;
     
-    // Check if user has permission to list other users' sessions
+    // Permission check: only supervisors and admins can access
     if (role !== 'admin' && role !== 'supervisor') {
       return res.status(403).json({ message: 'Insufficient permissions to list user sessions' });
     }
     
-    // Get sessions for the target user
+    // Get paginated sessions for the target user
     const sessions = await ChatSession.find({ userId: targetUserId })
       .sort({ updatedAt: -1 })
       .skip(skip)
@@ -582,7 +821,8 @@ export const supervisorListChatSessions = async (req: Request, res: Response) =>
     
     const total = await ChatSession.countDocuments({ userId: targetUserId });
     
-    logger.info(`Supervisor ${req.user?.userId} listed chat sessions for user ${targetUserId}`);
+    // Log the access for audit trail
+    logger.supervisorAction(`Supervisor ${req.user?.userId} listed chat sessions for user ${targetUserId}`);
     
     return res.status(200).json({
       userId: targetUserId,
@@ -600,7 +840,22 @@ export const supervisorListChatSessions = async (req: Request, res: Response) =>
   }
 };
 
-// Search for users and their chat sessions (admin/supervisor)
+/**
+ * Search Users
+ * 
+ * Allows supervisors and admins to search for users based on various criteria
+ * and see summary information about their chat sessions.
+ * Used for finding specific users for support or monitoring purposes.
+ * 
+ * Query Parameters:
+ * - query: Search term to match against user IDs, session titles, etc.
+ * - page: Page number for pagination (default: 1)
+ * - limit: Number of results per page (default: 20)
+ * 
+ * @param req - Express request object
+ * @param res - Express response object
+ * @returns 200 with matching users and session counts, error response otherwise
+ */
 export const searchUsers = async (req: Request, res: Response) => {
   try {
     const role = req.user?.role;
@@ -609,7 +864,7 @@ export const searchUsers = async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string || '20');
     const skip = (page - 1) * limit;
     
-    // Check if user has permission
+    // Permission check: only supervisors and admins can search
     if (role !== 'admin' && role !== 'supervisor') {
       return res.status(403).json({ message: 'Insufficient permissions to search users' });
     }
@@ -618,13 +873,13 @@ export const searchUsers = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Search query is required' });
     }
     
-    // First, find users with matching IDs (exact match)
+    // Find users with exact matching IDs (highest priority matches)
     const exactMatches = await ChatSession.aggregate([
       { $match: { userId: query.toString() } },
       { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
     ]);
     
-    // Then find users with partial matches in sessions or metadata
+    // Find users with partial matches in sessions or metadata
     const partialMatches = await ChatSession.aggregate([
       {
         $match: {
@@ -637,15 +892,16 @@ export const searchUsers = async (req: Request, res: Response) => {
       { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
     ]);
     
-    // Combine and remove duplicates
+    // Combine results and remove duplicates
     const allUsers = [...exactMatches, ...partialMatches.filter(pm => 
       !exactMatches.some(em => em._id === pm._id)
     )];
     
-    // Paginate results
+    // Apply pagination to the results
     const paginatedUsers = allUsers.slice(skip, skip + limit);
     
-    logger.info(`Supervisor ${req.user?.userId} searched for users with query: ${query}`);
+    // Log the search for audit trail
+    logger.supervisorAction(`Supervisor ${req.user?.userId} searched for users with query: ${query}`);
     
     return res.status(200).json({
       users: paginatedUsers,

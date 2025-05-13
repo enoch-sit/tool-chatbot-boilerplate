@@ -1,3 +1,19 @@
+/**
+ * Streaming Service Module
+ * 
+ * This module provides real-time streaming capabilities for AI responses using
+ * AWS Bedrock. It handles the establishment of streaming sessions, credit allocation,
+ * streaming of responses in Server-Sent Events (SSE) format, and proper session
+ * finalization for billing purposes.
+ * 
+ * Key features:
+ * - Streaming session initialization with credit pre-allocation
+ * - Real-time response streaming from AWS Bedrock models
+ * - Support for multiple model providers (Anthropic, Amazon, Meta)
+ * - Token usage tracking for billing and analytics
+ * - Automatic session timeout handling
+ * - Error handling and recovery mechanisms
+ */
 import { 
   BedrockRuntimeClient, 
   InvokeModelWithResponseStreamCommand 
@@ -8,7 +24,12 @@ import { v4 as uuidv4 } from 'uuid';
 import logger from '../utils/logger';
 import config from '../config/config';
 
-// Initialize AWS client
+/**
+ * AWS Bedrock Client Configuration
+ * 
+ * Initialize the Bedrock client with region and authentication
+ * credentials from the application configuration.
+ */
 const bedrockClient = new BedrockRuntimeClient({ 
   region: config.awsRegion,
   credentials: {
@@ -18,7 +39,22 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 
 /**
- * Initialize a streaming session with the accounting service
+ * Initialize Streaming Session
+ * 
+ * Creates a new streaming session by coordinating with the accounting service
+ * to pre-allocate credits for the upcoming streaming request.
+ * 
+ * Process:
+ * 1. Generate a unique session identifier
+ * 2. Estimate token usage based on prompt length and expected response
+ * 3. Register the session with the accounting service to reserve credits
+ * 
+ * @param userId - ID of the user initiating the stream
+ * @param messages - Array of conversation messages that form the prompt
+ * @param modelId - ID of the AI model to be used
+ * @param authHeader - Authorization header value for accounting service auth
+ * @returns Object containing session ID and allocated credits
+ * @throws Error if credit allocation fails or other errors occur
  */
 export const initializeStreamingSession = async (
   userId: string,
@@ -27,16 +63,27 @@ export const initializeStreamingSession = async (
   authHeader: string
 ) => {
   try {
-    // Generate a unique session ID
+    // Generate a unique session ID with timestamp and UUID for tracking
     const sessionId = `stream-${Date.now()}-${uuidv4().slice(0, 8)}`;
     
-    // Estimate token usage from prompt plus expected response
+    /**
+     * Estimate token usage based on input prompt
+     * 
+     * This is a simple estimation using a character-to-token ratio of 4:1,
+     * plus a buffer for the expected response length.
+     * More sophisticated token counting would be needed for production.
+     */
     const promptText = messages.map(m => m.content).join(' ');
     const estimatedTokens = Math.ceil(promptText.length / 4) + 1000; // Simple estimation with buffer
     
     logger.info(`Initializing streaming session for user ${userId} with model ${modelId}`);
     
-    // Initialize session with accounting service - fix the endpoint path to match accounting service API
+    /**
+     * Initialize session with accounting service
+     * 
+     * This reserves credits for the streaming session and ensures
+     * the user has sufficient balance before starting the stream.
+     */
     const response = await axios.post(
       `${config.accountingApiUrl}/streaming-sessions/initialize`,
       {
@@ -54,6 +101,7 @@ export const initializeStreamingSession = async (
     
     logger.debug(`Streaming session initialized: ${sessionId}, allocated credits: ${response.data.allocatedCredits}`);
     
+    // Return session details to be used by the streaming endpoint
     return {
       sessionId: response.data.sessionId,
       allocatedCredits: response.data.allocatedCredits
@@ -61,16 +109,36 @@ export const initializeStreamingSession = async (
   } catch (error) {
     logger.error('Error initializing streaming session:', error);
     
+    // Special handling for insufficient credits
     if (axios.isAxiosError(error) && error.response?.status === 402) {
       throw new Error('Insufficient credits for streaming');
     }
     
+    // Re-throw for other errors
     throw error;
   }
 };
 
 /**
- * Stream a response from AWS Bedrock
+ * Stream Response from AWS Bedrock
+ * 
+ * Establishes a streaming connection with AWS Bedrock to receive
+ * real-time AI-generated content and forwards it to the client
+ * using Server-Sent Events (SSE).
+ * 
+ * Features:
+ * - Handles multiple model formats (Anthropic, Titan, Nova, Llama)
+ * - Streams partial responses as they arrive
+ * - Tracks token usage for billing
+ * - Implements timeouts to prevent runaway sessions
+ * - Finalizes sessions with the accounting service
+ * 
+ * @param userId - ID of the user receiving the stream
+ * @param sessionId - Streaming session identifier from initialization
+ * @param messages - Array of conversation messages forming the prompt
+ * @param modelId - ID of the AI model to use
+ * @param authHeader - Authorization header for accounting service calls
+ * @returns PassThrough stream that emits Server-Sent Events
  */
 export const streamResponse = async (
   userId: string,
@@ -79,13 +147,27 @@ export const streamResponse = async (
   modelId: string,
   authHeader: string
 ) => {
-  // Create PassThrough stream
+  /**
+   * Create a PassThrough stream for SSE
+   * 
+   * This stream allows us to push events to the client in real-time
+   * as they arrive from AWS Bedrock.
+   */
   const stream = new PassThrough();
   let totalTokensGenerated = 0;
   
-  // Set a timeout to enforce maximum streaming duration
+  /**
+   * Stream Timeout Handler
+   * 
+   * Sets a maximum duration for streaming to prevent runaway
+   * sessions that could consume excessive resources or credits.
+   * If the timeout is reached, the stream is closed and the
+   * session is aborted.
+   */
   const timeout = setTimeout(() => {
     logger.warn(`Stream timeout reached for session ${sessionId}`);
+    
+    // Send error event to the client
     stream.write(`event: error\ndata: ${JSON.stringify({ 
       error: 'Stream timeout reached', 
       code: 'STREAM_TIMEOUT' 
@@ -111,10 +193,17 @@ export const streamResponse = async (
   }, config.maxStreamingDuration);
   
   try {
-    // Format messages for Bedrock based on the model
+    /**
+     * Model-specific Prompt Formatting
+     * 
+     * Different AI models require different input formats.
+     * This section detects the model type and formats the messages
+     * appropriately for the specific model API.
+     */
     let promptBody;
     
     if (modelId.includes('anthropic')) {
+      // Format for Anthropic Claude models
       promptBody = {
         anthropic_version: 'bedrock-2023-05-31',
         max_tokens: 2000,
@@ -164,7 +253,12 @@ export const streamResponse = async (
       };
     }
     
-    // Create streaming command
+    /**
+     * Create AWS Bedrock Streaming Command
+     * 
+     * Prepares the API request for AWS Bedrock with the properly
+     * formatted prompt and streaming configuration.
+     */
     const command = new InvokeModelWithResponseStreamCommand({
       modelId: modelId,
       body: JSON.stringify(promptBody),
@@ -172,29 +266,39 @@ export const streamResponse = async (
       accept: 'application/json'
     });
     
-    // Invoke Bedrock with streaming
+    // Send streaming request to AWS Bedrock
     logger.debug(`Sending streaming request to Bedrock: ${modelId}`);
     const response = await bedrockClient.send(command);
     
-    // Process streaming response
+    // Process the streaming response
     if (response.body) {
-      // Track start time for monitoring
+      // Track performance metrics
       const startTime = Date.now();
       let lastChunkTime = startTime;
-      let responseContent = '';
+      let responseContent = ''; // Collect the complete response
       
-      // Process each chunk as it arrives
+      /**
+       * Process Streaming Response Chunks
+       * 
+       * Iterates through the chunks of data as they arrive from AWS Bedrock,
+       * extracts the text content, and forwards them to the client as SSE events.
+       */
       for await (const chunk of response.body) {
         lastChunkTime = Date.now();
         
         if (chunk.chunk?.bytes) {
           try {
-            // Parse the chunk data
+            // Parse the binary chunk data as JSON
             const chunkData = JSON.parse(
               Buffer.from(chunk.chunk.bytes).toString('utf-8')
             );
             
-            // Extract text based on model type
+            /**
+             * Model-specific Text Extraction
+             * 
+             * Different models return text in different JSON structures.
+             * This section extracts the text content based on the model type.
+             */
             let chunkText = '';
             if (modelId.includes('anthropic')) {
               chunkText = chunkData.delta?.text || '';
@@ -206,14 +310,15 @@ export const streamResponse = async (
               chunkText = chunkData.generation || '';
             }
             
-            // If we got some text, process it
+            // Process the text chunk if we got valid content
             if (chunkText) {
-              // Approximate token count (very rough estimate)
+              // Estimate token count for billing
+              // This is a rough approximation; a proper tokenizer would be more accurate
               const tokenEstimate = Math.ceil(chunkText.length / 4);
               totalTokensGenerated += tokenEstimate;
-              responseContent += chunkText;
+              responseContent += chunkText; // Accumulate the full response
               
-              // Format and send SSE chunk
+              // Send the chunk to the client as an SSE event
               stream.write(`event: chunk\ndata: ${JSON.stringify({
                 text: chunkText,
                 tokens: tokenEstimate,
@@ -226,18 +331,28 @@ export const streamResponse = async (
         }
       }
       
-      // Send completion event
+      /**
+       * Send Completion Event
+       * 
+       * Signals to the client that the streaming response is complete
+       * and provides final statistics.
+       */
       stream.write(`event: complete\ndata: ${JSON.stringify({
         status: 'complete',
         tokens: totalTokensGenerated,
         sessionId
       })}\n\n`);
       
-      // Record completion time
+      // Log completion metrics
       const completionTime = Date.now() - startTime;
       logger.debug(`Streaming completed in ${completionTime}ms, generated ${totalTokensGenerated} tokens`);
       
-      // Finalize the streaming session with accounting
+      /**
+       * Finalize Streaming Session with Accounting
+       * 
+       * Records the actual token usage with the accounting service
+       * to ensure proper billing and credit deduction.
+       */
       try {
         await axios.post(
           `${config.accountingApiUrl}/streaming-sessions/finalize`,
@@ -265,10 +380,16 @@ export const streamResponse = async (
   } catch (error:any) {
     logger.error('Error in stream processing:', error);
     
-    // Clean up timeout
+    // Clean up timeout to prevent memory leaks
     clearTimeout(timeout);
     
-    // Attempt to abort the streaming session
+    /**
+     * Error Recovery: Abort Streaming Session
+     * 
+     * In case of errors during streaming, attempt to properly
+     * abort the session with the accounting service to ensure
+     * accurate credit tracking.
+     */
     try {
       await axios.post(
         `${config.accountingApiUrl}/streaming-sessions/abort`,
@@ -287,7 +408,7 @@ export const streamResponse = async (
       logger.error('Error aborting streaming session:', abortError);
     }
     
-    // Write error to stream and end
+    // Send error event to the client
     stream.write(`event: error\ndata: ${JSON.stringify({ 
       error: error.message || 'Stream processing error',
       code: error.code || 'STREAM_ERROR'
@@ -295,5 +416,6 @@ export const streamResponse = async (
     stream.end();
   }
   
+  // Return the stream for the controller to pipe to the HTTP response
   return stream;
 };

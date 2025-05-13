@@ -1,4 +1,21 @@
 // src/controllers/streaming-session.controller.ts
+/**
+ * Streaming Session Controller
+ * 
+ * Handles API endpoints related to AI text streaming sessions.
+ * Manages initialization, finalization, and monitoring of streaming sessions,
+ * which require special handling for credit allocation and reconciliation.
+ * 
+ * API Routes:
+ * - POST /api/streaming-sessions/initialize - Initialize a streaming session
+ * - POST /api/streaming-sessions/finalize - Finalize a streaming session
+ * - POST /api/streaming-sessions/abort - Abort a streaming session
+ * - GET /api/streaming-sessions/active - Get active sessions for current user
+ * - GET /api/streaming-sessions/active/:userId - Get active sessions for a specific user (admin/supervisor)
+ * - GET /api/streaming-sessions/active/all - Get all active sessions (admin only)
+ * - GET /api/streaming-sessions/recent - Get recent sessions (admin/supervisor)
+ * - GET /api/streaming-sessions/recent/:userId - Get recent sessions for a specific user (admin/supervisor)
+ */
 import { Request, Response } from 'express';
 import StreamingSessionService from '../services/streaming-session.service';
 
@@ -6,6 +23,23 @@ export class StreamingSessionController {
   /**
    * Initialize a new streaming session
    * POST /api/streaming-sessions/initialize
+   * 
+   * Request body:
+   * {
+   *   "sessionId": string (required) - Unique identifier for the session
+   *   "modelId": string (required) - ID of the AI model being used
+   *   "estimatedTokens": number (required) - Estimated token usage
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 201 Created: { sessionId: string, allocatedCredits: number, status: string }
+   *   - 400 Bad Request: If required fields are missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 402 Payment Required: If user has insufficient credits
+   *   - 500 Server Error: If initialization fails
    */
   async initializeSession(req: Request, res: Response) {
     try {
@@ -45,6 +79,22 @@ export class StreamingSessionController {
   /**
    * Finalize a streaming session
    * POST /api/streaming-sessions/finalize
+   * 
+   * Request body:
+   * {
+   *   "sessionId": string (required) - ID of the session to finalize
+   *   "actualTokens": number (required) - Actual tokens used in the session
+   *   "success": boolean (optional, default true) - Whether the session was successful
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { sessionId: string, actualCredits: number, refund: number }
+   *   - 400 Bad Request: If required fields are missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If finalization fails
    */
   async finalizeSession(req: Request, res: Response) {
     try {
@@ -75,6 +125,21 @@ export class StreamingSessionController {
   /**
    * Abort a streaming session
    * POST /api/streaming-sessions/abort
+   * 
+   * Request body:
+   * {
+   *   "sessionId": string (required) - ID of the session to abort
+   *   "tokensGenerated": number (optional, default 0) - Tokens generated before abort
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { sessionId: string, partialCredits: number, refund: number }
+   *   - 400 Bad Request: If sessionId is missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If abort fails
    */
   async abortSession(req: Request, res: Response) {
     try {
@@ -104,6 +169,14 @@ export class StreamingSessionController {
   /**
    * Get active sessions for the current user
    * GET /api/streaming-sessions/active
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: Array of active session objects
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If retrieval fails
    */
   async getActiveSessions(req: Request, res: Response) {
     try {
@@ -123,6 +196,16 @@ export class StreamingSessionController {
   /**
    * Get active sessions for a specific user (supervisor/admin only)
    * GET /api/streaming-sessions/active/:userId
+   * 
+   * @param req Express request object with userId param
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: Array of active session objects for the user
+   *   - 400 Bad Request: If userId is missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 500 Server Error: If retrieval fails
    */
   async getUserActiveSessions(req: Request, res: Response) {
     try {
@@ -153,6 +236,14 @@ export class StreamingSessionController {
   /**
    * Get all active sessions in the system (admin only)
    * GET /api/streaming-sessions/active/all
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: Array of all active session objects
+   *   - 403 Forbidden: If user lacks admin permission
+   *   - 500 Server Error: If retrieval fails
    */
   async getAllActiveSessions(req: Request, res: Response) {
     try {
@@ -172,6 +263,18 @@ export class StreamingSessionController {
   /**
    * Get recent streaming sessions (active + recently completed)
    * GET /api/streaming-sessions/recent
+   * 
+   * Query parameters:
+   * - minutes: number (optional, default 5) - Look back period in minutes
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { sessions: Array, timestamp: string, filter: Object }
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 500 Server Error: If retrieval fails
    */
   async getRecentSessions(req: Request, res: Response) {
     try {
@@ -205,6 +308,19 @@ export class StreamingSessionController {
   /**
    * Get recent streaming sessions for a specific user
    * GET /api/streaming-sessions/recent/:userId
+   * 
+   * Query parameters:
+   * - minutes: number (optional, default 5) - Look back period in minutes
+   * 
+   * @param req Express request object with userId param
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { sessions: Array, timestamp: string, filter: Object }
+   *   - 400 Bad Request: If userId is missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 500 Server Error: If retrieval fails
    */
   async getUserRecentSessions(req: Request, res: Response) {
     try {

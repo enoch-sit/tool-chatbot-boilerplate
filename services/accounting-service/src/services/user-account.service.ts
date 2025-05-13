@@ -1,10 +1,24 @@
 // src/services/user-account.service.ts
+/**
+ * User Account Service
+ * 
+ * Manages user account operations in the Accounting service.
+ * Responsible for creating and checking user accounts that are synced from the Auth service.
+ */
 import UserAccount from '../models/user-account.model';
 
 export class UserAccountService {
   /**
    * Create a user account in the Accounting service if it doesn't exist
    * This is used when a user from the Auth service needs to be created in Accounting
+   * 
+   * @param {Object} params - The user account parameters
+   * @param {string} params.userId - Unique identifier for the user (required)
+   * @param {string} params.email - User's email address (optional)
+   * @param {string} params.username - User's username (optional)
+   * @param {string} params.role - User's role (optional)
+   * @returns {Promise<UserAccount>} - The existing or newly created user account
+   * @throws {Error} If the operation fails
    */
   async findOrCreateUser(params: {
     userId: string,
@@ -40,6 +54,9 @@ export class UserAccountService {
   
   /**
    * Check if a user exists in the Accounting service
+   * 
+   * @param {string} userId - Unique identifier for the user
+   * @returns {Promise<boolean>} - True if the user exists, false otherwise
    */
   async userExists(userId: string): Promise<boolean> {
     try {

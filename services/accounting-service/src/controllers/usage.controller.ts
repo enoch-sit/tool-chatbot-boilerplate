@@ -1,4 +1,17 @@
 // src/controllers/usage.controller.ts
+/**
+ * Usage Controller
+ * 
+ * Handles API endpoints related to service usage tracking and statistics.
+ * Provides functionality for recording usage events and retrieving usage data
+ * for both individual users and system-wide analysis.
+ * 
+ * API Routes:
+ * - POST /api/usage/record - Record a usage event
+ * - GET /api/usage/stats - Get current user's usage statistics
+ * - GET /api/usage/stats/:userId - Get usage statistics for a specific user (admin/supervisor)
+ * - GET /api/usage/system-stats - Get system-wide usage statistics (admin only)
+ */
 import { Request, Response } from 'express';
 import UsageService from '../services/usage.service';
 
@@ -6,6 +19,23 @@ export class UsageController {
   /**
    * Record a usage event
    * POST /api/usage/record
+   * 
+   * Request body:
+   * {
+   *   "service": string (required) - Name of service being used (e.g. "chat", "chat-streaming")
+   *   "operation": string (required) - Operation being performed (often model name)
+   *   "credits": number (required) - Number of credits consumed
+   *   "metadata": object (optional) - Additional context about the usage
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 201 Created: Usage record details
+   *   - 400 Bad Request: If required fields are missing or invalid
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If recording fails
    */
   async recordUsage(req: Request, res: Response) {
     try {
@@ -43,6 +73,19 @@ export class UsageController {
   /**
    * Get usage statistics for the current user
    * GET /api/usage/stats
+   * 
+   * Query parameters:
+   * - startDate: ISO date string (optional) - Start date for filtering records
+   * - endDate: ISO date string (optional) - End date for filtering records
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: Object containing usage statistics 
+   *     (totalRecords, totalCredits, byService, byDay, byModel, recentActivity)
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If retrieval fails
    */
   async getUserStats(req: Request, res: Response) {
     try {
@@ -80,6 +123,20 @@ export class UsageController {
   /**
    * Get system-wide usage statistics (admin only)
    * GET /api/usage/system-stats
+   * 
+   * Query parameters:
+   * - startDate: ISO date string (optional) - Start date for filtering records
+   * - endDate: ISO date string (optional) - End date for filtering records
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: Object containing system-wide usage statistics
+   *     (totalRecords, totalCredits, byUser, byService, byDay, byModel)
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks admin permission
+   *   - 500 Server Error: If retrieval fails
    */
   async getSystemStats(req: Request, res: Response) {
     try {
@@ -120,6 +177,20 @@ export class UsageController {
   /**
    * Get usage statistics for a specific user (admin and supervisor only)
    * GET /api/usage/stats/:userId
+   * 
+   * Query parameters:
+   * - startDate: ISO date string (optional) - Start date for filtering records
+   * - endDate: ISO date string (optional) - End date for filtering records
+   * 
+   * @param req Express request object with userId param
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: Object containing user's usage statistics
+   *   - 400 Bad Request: If userId is missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 500 Server Error: If retrieval fails
    */
   async getUserStatsByAdmin(req: Request, res: Response) {
     try {

@@ -1,3 +1,21 @@
+/**
+ * Chat Service - Main Application Server
+ * 
+ * This file serves as the entry point for the Chat Service application.
+ * It initializes the Express server, sets up middleware, defines routes,
+ * establishes database connections, and implements error handling.
+ * 
+ * The server implements various security measures including:
+ * - Helmet for securing HTTP headers
+ * - CORS protection with specific allowed origins
+ * - Rate limiting to prevent abuse
+ * - Metrics collection for monitoring performance
+ * 
+ * Process monitoring:
+ * - Graceful error handling for uncaught exceptions
+ * - Unhandled promise rejection monitoring
+ * - Structured logging through a custom logger
+ */
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -13,10 +31,22 @@ import { metricsMiddleware, metricsEndpoint } from './middleware/metrics.middlew
 // Initialize the Express application
 const app = express();
 
-// Initialize the Observation Manager singleton
+/**
+ * Initialize the Observation Manager singleton
+ * This service tracks and manages usage patterns across the application
+ * for analytics and monitoring purposes.
+ */
 ObservationManager.getInstance();
 
-// Middleware
+/**
+ * Middleware Configuration
+ * 
+ * Applied in specific order to ensure proper request processing flow:
+ * 1. Security middleware first (helmet, cors)
+ * 2. Request parsing middleware (json, urlencoded)
+ * 3. Logging (morgan)
+ * 4. Application-specific middleware (metrics, rate limiting)
+ */
 app.use(helmet());
 app.use(cors({
   origin: config.corsOrigin,
@@ -34,13 +64,23 @@ app.use(metricsMiddleware);
 // Apply rate limiting to all routes
 app.use(rateLimiter());
 
-// API Routes - using the consolidated router
+/**
+ * Route Registration
+ * All API routes are prefixed with '/api' and defined in api.routes.ts
+ */
 app.use('/api', apiRoutes);
 
-// Metrics endpoint (internal access only)
+/**
+ * Metrics Endpoint
+ * Internal endpoint for collecting Prometheus metrics
+ * Should be protected in production environments
+ */
 app.get('/metrics', metricsEndpoint);
 
-// Default route
+/**
+ * Default Route
+ * Provides basic service information and documentation link
+ */
 app.get('/', (req: Request, res: Response) => {
   res.status(200).json({
     message: 'Chat Service API',
@@ -48,7 +88,11 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-// Error handling middleware
+/**
+ * Global Error Handling Middleware
+ * Catches all errors thrown in route handlers or other middleware
+ * Formats error responses consistently and logs details for debugging
+ */
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   logger.error('Unhandled error:', err);
   res.status(500).json({
@@ -57,16 +101,30 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// Not found middleware
+/**
+ * 404 Not Found Middleware
+ * Handles requests to undefined routes
+ */
 app.use((req: Request, res: Response) => {
   res.status(404).json({
     message: `Cannot ${req.method} ${req.path}`
   });
 });
 
-// Start the server
+/**
+ * Server Initialization
+ */
 const PORT = config.port;
 
+/**
+ * Application Startup Function
+ * 
+ * Performs necessary initialization before server can accept requests:
+ * 1. Connect to MongoDB database
+ * 2. Start the Express server
+ * 
+ * Fails fast if critical services (like database) can't be reached
+ */
 const startServer = async () => {
   try {
     // Connect to MongoDB database
@@ -81,6 +139,13 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+/**
+ * Global Error Handlers
+ * 
+ * Process-level error handling to prevent silent failures
+ * and ensure proper logging of critical errors
+ */
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {

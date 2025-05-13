@@ -1,4 +1,17 @@
 // src/controllers/credit.controller.ts
+/**
+ * Credit Controller
+ * 
+ * Handles API endpoints related to user credit management.
+ * Responsible for credit balance checks, allocation, and credit calculations.
+ * 
+ * API Routes:
+ * - GET /api/credits/balance - Get current user's credit balance
+ * - POST /api/credits/check - Check if user has sufficient credits
+ * - POST /api/credits/calculate - Calculate credits for a specific operation
+ * - GET /api/credits/balance/:userId - Get a user's credit balance (admin/supervisor)
+ * - POST /api/credits/allocate - Allocate credits to a user (admin/supervisor)
+ */
 import { Request, Response } from 'express';
 import CreditService from '../services/credit.service';
 import UserAccountService from '../services/user-account.service';
@@ -6,47 +19,191 @@ import UserAccount from '../models/user-account.model';
 
 export class CreditController {
   /**
-   * Get the current user's credit balance
+   * Get current user's credit balance
    * GET /api/credits/balance
+   * 
+   * @param req Express request object (requires authenticated user)
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { totalCredits: number, activeAllocations: Array }
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If retrieval fails
    */
   async getUserBalance(req: Request, res: Response) {
     try {
       if (!req.user?.userId) {
         return res.status(401).json({ message: 'User not authenticated' });
       }
-      
+
       const balanceInfo = await CreditService.getUserBalance(req.user.userId);
-      
       return res.status(200).json(balanceInfo);
     } catch (error) {
-      console.error('Error fetching user balance:', error);
-      return res.status(500).json({ message: 'Failed to fetch credit balance' });
+      console.error('Error getting user balance:', error);
+      return res.status(500).json({ message: 'Failed to retrieve credit balance' });
     }
   }
   
   /**
-   * Allocate credits to a user (admin and supervisors only)
-   * POST /api/credits/allocate
+   * Get a specific user's credit balance (admin/supervisor only)
+   * GET /api/credits/balance/:userId
+   * 
+   * @param req Express request object with userId param
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { totalCredits: number, activeAllocations: Array }
+   *   - 400 Bad Request: If userId is missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 500 Server Error: If retrieval fails
    */
-  async allocateCredits(req: Request, res: Response) {
+  async getUserBalanceByAdmin(req: Request, res: Response) {
     try {
-      const { userId, credits, expiryDays, notes } = req.body;
-      
-      console.log(`Credit allocation request received - userId: ${userId}, credits: ${credits}, expiryDays: ${expiryDays}`);
-      
-      if (!userId || !credits || credits <= 0) {
-        return res.status(400).json({ message: 'Missing or invalid required fields' });
-      }
-      
       if (!req.user?.userId) {
         return res.status(401).json({ message: 'User not authenticated' });
       }
       
-      if (!['admin', 'supervisor'].includes(req.user.role)) {
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
         return res.status(403).json({ message: 'Insufficient permissions' });
       }
       
-      console.log(`Processing credit allocation by admin ${req.user.userId} to user ${userId}`);
+      const { userId } = req.params;
+      
+      if (!userId) {
+        return res.status(400).json({ message: 'User ID is required' });
+      }
+      
+      // Check if target user exists
+      const userExists = await UserAccountService.userExists(userId);
+      if (!userExists) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      const balanceInfo = await CreditService.getUserBalance(userId);
+      return res.status(200).json(balanceInfo);
+    } catch (error) {
+      console.error('Error getting user balance by admin:', error);
+      return res.status(500).json({ message: 'Failed to retrieve credit balance' });
+    }
+  }
+  
+  /**
+   * Check if user has sufficient credits for an operation
+   * POST /api/credits/check
+   * 
+   * Request body:
+   * {
+   *   "credits": number (required)
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { sufficient: boolean }
+   *   - 400 Bad Request: If credits field is missing/invalid
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If check fails
+   */
+  async checkCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      const { credits } = req.body;
+      
+      if (typeof credits !== 'number' || credits <= 0) {
+        return res.status(400).json({ message: 'Valid credits amount required' });
+      }
+      
+      const sufficient = await CreditService.checkUserCredits(req.user.userId, credits);
+      
+      return res.status(200).json({ sufficient });
+    } catch (error) {
+      console.error('Error checking credits:', error);
+      return res.status(500).json({ message: 'Failed to check credit balance' });
+    }
+  }
+  
+  /**
+   * Calculate credits for a token count (often used for estimation)
+   * POST /api/credits/calculate
+   * 
+   * Request body:
+   * {
+   *   "modelId": string (required),
+   *   "tokens": number (required)
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { credits: number }
+   *   - 400 Bad Request: If required fields are missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If calculation fails
+   */
+  async calculateCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      const { modelId, tokens } = req.body;
+      
+      if (!modelId || typeof tokens !== 'number' || tokens < 0) {
+        return res.status(400).json({ message: 'Valid modelId and tokens required' });
+      }
+      
+      const credits = await CreditService.calculateCreditsForTokens(modelId, tokens);
+      
+      return res.status(200).json({ credits });
+    } catch (error) {
+      console.error('Error calculating credits:', error);
+      return res.status(500).json({ message: 'Failed to calculate credits' });
+    }
+  }
+  
+  /**
+   * Allocate credits to a user (admin/supervisor only)
+   * POST /api/credits/allocate
+   * 
+   * Request body:
+   * {
+   *   "userId": string (required),
+   *   "credits": number (required),
+   *   "expiryDays": number (optional, default 30),
+   *   "notes": string (optional)
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 201 Created: { id: string, userId: string, credits: number, expiresAt: string }
+   *   - 400 Bad Request: If required fields are missing
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 500 Server Error: If allocation fails
+   */
+  async allocateCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const { userId, credits, expiryDays, notes } = req.body;
+      
+      if (!userId || typeof credits !== 'number' || credits <= 0) {
+        return res.status(400).json({ message: 'Valid userId and credits required' });
+      }
       
       // CRITICAL FIX: Create the user account FIRST before attempting to allocate credits
       try {
@@ -105,94 +262,6 @@ export class CreditController {
     } catch (error) {
       console.error('Error allocating credits:', error);
       return res.status(500).json({ message: 'Failed to allocate credits' });
-    }
-  }
-  
-  /**
-   * Check if a user has sufficient credits for an operation
-   * POST /api/credits/check
-   */
-  async checkCredits(req: Request, res: Response) {
-    try {
-      const { requiredCredits } = req.body;
-      
-      if (!requiredCredits || requiredCredits <= 0) {
-        return res.status(400).json({ message: 'Missing or invalid required fields' });
-      }
-      
-      if (!req.user?.userId) {
-        return res.status(401).json({ message: 'User not authenticated' });
-      }
-      
-      const hasSufficientCredits = await CreditService.checkUserCredits(
-        req.user.userId,
-        requiredCredits
-      );
-      
-      return res.status(200).json({
-        hasSufficientCredits
-      });
-    } catch (error) {
-      console.error('Error checking credits:', error);
-      return res.status(500).json({ message: 'Failed to check credits' });
-    }
-  }
-  
-  /**
-   * Get a user's credit balance (for admins and supervisors)
-   * GET /api/credits/balance/:userId
-   */
-  async getUserBalanceByAdmin(req: Request, res: Response) {
-    try {
-      const { userId } = req.params;
-      
-      if (!userId) {
-        return res.status(400).json({ message: 'User ID is required' });
-      }
-      
-      if (!req.user?.userId) {
-        return res.status(401).json({ message: 'User not authenticated' });
-      }
-      
-      if (!['admin', 'supervisor'].includes(req.user.role)) {
-        return res.status(403).json({ message: 'Insufficient permissions' });
-      }
-      
-      const balanceInfo = await CreditService.getUserBalance(userId);
-      
-      return res.status(200).json(balanceInfo);
-    } catch (error) {
-      console.error('Error fetching user balance:', error);
-      return res.status(500).json({ message: 'Failed to fetch credit balance' });
-    }
-  }
-  
-  /**
-   * Calculate required credits for a specific operation
-   * POST /api/credits/calculate
-   */
-  async calculateCredits(req: Request, res: Response) {
-    try {
-      const { modelId, tokens } = req.body;
-      
-      if (!modelId || !tokens || tokens <= 0) {
-        return res.status(400).json({ message: 'Missing or invalid required fields' });
-      }
-      
-      if (!req.user?.userId) {
-        return res.status(401).json({ message: 'User not authenticated' });
-      }
-      
-      const requiredCredits = await CreditService.calculateCreditsForTokens(modelId, tokens);
-      
-      return res.status(200).json({
-        modelId,
-        tokens,
-        requiredCredits
-      });
-    } catch (error) {
-      console.error('Error calculating required credits:', error);
-      return res.status(500).json({ message: 'Failed to calculate required credits' });
     }
   }
 }

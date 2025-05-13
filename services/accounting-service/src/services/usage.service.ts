@@ -1,4 +1,11 @@
 // src/services/usage.service.ts
+/**
+ * Usage Service
+ * 
+ * Manages the recording and retrieval of service usage statistics.
+ * This service tracks credit usage across different services and operations,
+ * providing detailed statistics for users and admins.
+ */
 import { Op } from 'sequelize';
 import UsageRecord from '../models/usage-record.model';
 
@@ -9,6 +16,14 @@ interface UsageStats {
 export class UsageService {
   /**
    * Record usage of a service
+   * 
+   * @param {Object} params - Usage record parameters
+   * @param {string} params.userId - ID of the user using the service
+   * @param {string} params.service - Name of the service being used (e.g., 'chat', 'chat-streaming')
+   * @param {string} params.operation - Operation being performed (often the model name for LLM services)
+   * @param {number} params.credits - Number of credits consumed
+   * @param {Object} [params.metadata] - Additional metadata about the usage
+   * @returns {Promise<UsageRecord>} The created usage record
    */
   async recordUsage(params: {
     userId: string,
@@ -32,6 +47,18 @@ export class UsageService {
   
   /**
    * Get usage statistics for a user in a date range
+   * 
+   * @param {Object} params - Query parameters
+   * @param {string} params.userId - ID of the user to get stats for
+   * @param {Date} [params.startDate] - Start of date range to filter by
+   * @param {Date} [params.endDate] - End of date range to filter by
+   * @returns {Promise<Object>} Object containing usage statistics:
+   *  - totalRecords: Number of usage records found
+   *  - totalCredits: Total credits consumed
+   *  - byService: Credits broken down by service
+   *  - byDay: Credits broken down by day
+   *  - byModel: Credits broken down by model (for chat operations)
+   *  - recentActivity: Last 10 usage records
    */
   async getUserStats(params: {
     userId: string,
@@ -92,6 +119,17 @@ export class UsageService {
   
   /**
    * Get system-wide usage statistics (admin only)
+   * 
+   * @param {Object} params - Query parameters
+   * @param {Date} [params.startDate] - Start of date range to filter by
+   * @param {Date} [params.endDate] - End of date range to filter by
+   * @returns {Promise<Object>} Object containing system-wide usage statistics:
+   *  - totalRecords: Number of usage records found
+   *  - totalCredits: Total credits consumed across all users
+   *  - byUser: Credits broken down by user
+   *  - byService: Credits broken down by service
+   *  - byDay: Credits broken down by day
+   *  - byModel: Credits broken down by model (for chat operations)
    */
   async getSystemStats(params: {
     startDate?: Date,
