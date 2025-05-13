@@ -8,16 +8,6 @@ import { v4 as uuidv4 } from 'uuid';
 import logger from '../utils/logger';
 import config from '../config/config';
 
-// Define StreamingSession interface
-interface StreamingSession {
-  sessionId: string;
-  userId: string;
-  modelId: string;
-  status: string;
-  createdAt?: Date;
-  expiresAt?: Date;
-}
-
 // Initialize AWS client
 const bedrockClient = new BedrockRuntimeClient({ 
   region: config.awsRegion,
@@ -28,59 +18,54 @@ const bedrockClient = new BedrockRuntimeClient({
 });
 
 /**
- * Add detailed logging for credit checks and allocation
+ * Initialize a streaming session with the accounting service
  */
-export const initializeStreamingSession = async (userId: string, messageHistory: any[], modelId: string, authHeader: string): Promise<StreamingSession> => {
+export const initializeStreamingSession = async (
+  userId: string,
+  messages: any[],
+  modelId: string,
+  authHeader: string
+) => {
   try {
+    // Generate a unique session ID
+    const sessionId = `stream-${Date.now()}-${uuidv4().slice(0, 8)}`;
+    
+    // Estimate token usage from prompt plus expected response
+    const promptText = messages.map(m => m.content).join(' ');
+    const estimatedTokens = Math.ceil(promptText.length / 4) + 1000; // Simple estimation with buffer
+    
     logger.info(`Initializing streaming session for user ${userId} with model ${modelId}`);
     
-    // Check user credits before proceeding
-    const creditCheckResponse = await axios.post(
-      `${config.accountingApiUrl}/credits/check`,
-      { 
-        userId,
-        operation: 'streaming',
-        modelId
-      },
-      { headers: { Authorization: authHeader } }
-    );
-    
-    const { hasSufficientCredits, requiredCredits, availableCredits } = creditCheckResponse.data;
-    
-    logger.info(`Credit check for user ${userId}: required=${requiredCredits}, available=${availableCredits}, sufficient=${hasSufficientCredits}`);
-    
-    if (!hasSufficientCredits) {
-      logger.warn(`Insufficient credits for user ${userId}: required=${requiredCredits}, available=${availableCredits}`);
-      throw new Error('Insufficient credits for streaming');
-    }
-    
-    // Initialize the streaming session with the accounting service
+    // Initialize session with accounting service - fix the endpoint path to match accounting service API
     const response = await axios.post(
       `${config.accountingApiUrl}/streaming-sessions/initialize`,
       {
         userId,
+        sessionId,
         modelId,
-        messageHistory
+        estimatedTokens
       },
-      { headers: { Authorization: authHeader } }
+      {
+        headers: {
+          Authorization: authHeader
+        }
+      }
     );
     
-    logger.info(`Streaming session initialized for user ${userId}: ${response.data.sessionId}`);
-    return response.data;
-  } catch (error: any) {
-    // Enhance error logging for credit-related failures
-    if (error.message === 'Insufficient credits for streaming') {
-      logger.error(`Credit allocation failed for user ${userId} with model ${modelId}: Insufficient credits`);
-      throw error;
-    }
+    logger.debug(`Streaming session initialized: ${sessionId}, allocated credits: ${response.data.allocatedCredits}`);
     
-    if (error.response && error.response.status === 402) {
-      logger.error(`Credit allocation failed for user ${userId} with model ${modelId}: ${error.response.data.message}`);
+    return {
+      sessionId: response.data.sessionId,
+      allocatedCredits: response.data.allocatedCredits
+    };
+  } catch (error) {
+    logger.error('Error initializing streaming session:', error);
+    
+    if (axios.isAxiosError(error) && error.response?.status === 402) {
       throw new Error('Insufficient credits for streaming');
     }
     
-    logger.error('Error initializing streaming session:', error);
-    throw new Error(`Failed to initialize streaming session: ${error.message}`);
+    throw error;
   }
 };
 
