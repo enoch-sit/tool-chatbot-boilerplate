@@ -101,7 +101,7 @@ export class CreditController {
    * @param res Express response object
    * 
    * @returns {Promise<Response>} JSON response with:
-   *   - 200 OK: { sufficient: boolean }
+   *   - 200 OK: { sufficient: boolean, credits: number, requiredCredits: number } or { sufficient: boolean, message: string }
    *   - 400 Bad Request: If credits field is missing/invalid
    *   - 401 Unauthorized: If no user authenticated
    *   - 500 Server Error: If check fails
@@ -112,15 +112,28 @@ export class CreditController {
         return res.status(401).json({ message: 'User not authenticated' });
       }
       
-      const { credits } = req.body;
+      const { credits: requiredCredits } = req.body;
       
-      if (typeof credits !== 'number' || credits <= 0) {
+      if (typeof requiredCredits !== 'number' || requiredCredits <= 0) {
         return res.status(400).json({ message: 'Valid credits amount required' });
       }
       
-      const sufficient = await CreditService.checkUserCredits(req.user.userId, credits);
+      const sufficient = await CreditService.checkUserCredits(req.user.userId, requiredCredits);
       
-      return res.status(200).json({ sufficient });
+      // Get the user's current balance to include in the response
+      if (sufficient) {
+        const balanceInfo = await CreditService.getUserBalance(req.user.userId);
+        return res.status(200).json({ 
+          sufficient: true,
+          credits: balanceInfo.totalCredits,
+          requiredCredits
+        });
+      } else {
+        return res.status(200).json({ 
+          sufficient: false, 
+          message: "Insufficient credits"
+        });
+      }
     } catch (error) {
       console.error('Error checking credits:', error);
       return res.status(500).json({ message: 'Failed to check credit balance' });

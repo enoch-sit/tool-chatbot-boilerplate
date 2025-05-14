@@ -94,27 +94,62 @@ export const validateStreamChat = [
 ];
 
 /**
- * Create Chat Session Validation
+ * Validation Middleware for Creating Chat Sessions
  * 
- * Validates inputs for creating a new chat session:
- * - Optional title with length constraints
- * - Optional initial message with length constraints
- * - Optional valid model ID if specified
+ * This middleware validates the request body when a user attempts to create a new chat session.
+ * It ensures that the input data adheres to the expected format and constraints, preventing invalid
+ * or malicious data from reaching the business logic. This is critical for maintaining the integrity
+ * and security of the application.
+ * 
+ * Validation Steps:
+ * 1. Title Validation:
+ *    - The 'title' field is optional, meaning it can be omitted from the request body.
+ *    - If provided, it must be a string.
+ *    - Leading and trailing whitespace will be removed automatically.
+ *    - The title must not exceed 100 characters in length. This limit is set to ensure concise and
+ *      meaningful titles that are easy to display in the UI and do not overwhelm the database or
+ *      application logic.
+ *    - If the title exceeds 100 characters, a custom error message will be returned to the client.
+ * 
+ * 2. Initial Message Validation:
+ *    - The 'initialMessage' field is also optional.
+ *    - If provided, it must be a string.
+ *    - Leading and trailing whitespace will be removed automatically.
+ *    - The initial message must not exceed 10,000 characters in length. This limit is set to:
+ *      a) Ensure compatibility with AI models that have token limits.
+ *      b) Manage server performance and prevent excessive processing costs.
+ *      c) Encourage users to provide concise and focused initial messages.
+ *    - If the initial message exceeds 10,000 characters, a custom error message will be returned.
+ * 
+ * 3. Model ID Validation:
+ *    - The 'modelId' field is validated using a pre-defined validator (modelIdValidator).
+ *    - This ensures that the model ID follows the expected format (e.g., provider.model-name:version).
+ *    - The format is critical for identifying and interacting with the correct AI model.
+ * 
+ * Usage:
+ * This middleware is used in the '/chat/sessions' POST route to validate the input data before
+ * creating a new chat session. If any validation fails, the request will not proceed to the
+ * controller, and the client will receive a detailed error response.
  */
 export const validateCreateSession = [
+  // Validate the 'title' field in the request body
   body('title')
-    .optional()
-    .isString()
-    .trim()
-    .isLength({ max: 100 })
-    .withMessage('Title must be at most 100 characters'),
+    .optional() // The 'title' field is not required; it can be omitted
+    .isString() // If provided, it must be a string
+    .trim() // Removes any leading or trailing whitespace from the string
+    .isLength({ max: 100 }) // Ensures the string is at most 100 characters long, not limited by database
+    .withMessage('Title must be at most 100 characters'), // Custom error message if validation fails
+
+  // Validate the 'initialMessage' field in the request body
   body('initialMessage')
-    .optional()
-    .isString()
-    .trim()
-    .isLength({ max: 10000 })
-    .withMessage('Initial message exceeds maximum length of 10000 characters'),
-  modelIdValidator
+    .optional() // The 'initialMessage' field is not required; it can be omitted
+    .isString() // If provided, it must be a string
+    .trim() // Removes any leading or trailing whitespace from the string
+    .isLength({ max: 10000 }) // Ensures the string is at most 10,000 characters long
+    .withMessage('Initial message exceeds maximum length of 10000 characters'), // Custom error message if validation fails
+
+  // Validate the 'modelId' field using a pre-defined validator
+  modelIdValidator // Ensures the 'modelId' follows the expected format (e.g., provider.model-name:version)
 ];
 
 /**

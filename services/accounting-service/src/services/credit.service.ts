@@ -183,22 +183,40 @@ export class CreditService {
   
   /**
    * Calculate credits needed for a token count
-   * Uses a simple model-based pricing structure
+   * Uses a simple model-based pricing structure where 1 credit = price in USD
    * 
    * @param {string} modelId - The ID of the AI model being used
    * @param {number} tokens - The number of tokens used/estimated
+   * @param {string} [tokenType='both'] - Whether to calculate for 'input', 'output', or 'both' tokens
    * @returns {Promise<number>} The calculated credit cost
    */
-  async calculateCreditsForTokens(modelId: string, tokens: number): Promise<number> {
-    // Default pricing if not found
-    const defaultPricing: Record<string, number> = {
-      'anthropic.claude-3-sonnet-20240229-v1:0': 3,
-      'anthropic.claude-3-haiku-20240307-v1:0': 0.25,
-      'anthropic.claude-instant-v1': 0.8,
-      'amazon.titan-text-express-v1': 0.3,
+  async calculateCreditsForTokens(modelId: string, tokens: number, tokenType: 'input' | 'output' | 'both' = 'both'): Promise<number> {
+    // Model pricing (in USD per 1000 tokens, which directly equals credits per 1000 tokens)
+    const modelPricing: Record<string, { input: number, output: number }> = {
+      // Amazon models
+      'amazon.nova-micro-v1:0': { input: 0.060, output: 0.060 },
+      'amazon.nova-lite-v1:0': { input: 0.250, output: 0.800 },
+      'amazon.titan-text-express-v1': { input: 0.200, output: 0.600 },
+      // Meta model
+      'meta.llama3-70b-instruct-v1:0': { input: 0.265, output: 0.350 },
+      
+      // Default fallback pricing
+      'default': { input: 0.200, output: 0.500 }
     };
     
-    return Math.ceil((tokens / 1000) * (defaultPricing[modelId] || 1));
+    const pricing = modelPricing[modelId] || modelPricing['default'];
+    
+    // Calculate based on token type
+    if (tokenType === 'input') {
+      return Math.ceil((tokens / 1000) * pricing.input);
+    } else if (tokenType === 'output') {
+      return Math.ceil((tokens / 1000) * pricing.output);
+    } else {
+      // For 'both', assume half input, half output for estimation purposes
+      const inputCost = (tokens / 2 / 1000) * pricing.input;
+      const outputCost = (tokens / 2 / 1000) * pricing.output;
+      return Math.ceil(inputCost + outputCost);
+    }
   }
 }
 

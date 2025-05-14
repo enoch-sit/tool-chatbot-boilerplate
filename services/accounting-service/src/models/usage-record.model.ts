@@ -101,13 +101,11 @@ UsageRecord.init({
   indexes: [
     {
       name: 'idx_usage_user_timestamp',
-      fields: ['user_id', 'timestamp'],
-      comment: 'Index for efficient queries by user and time'
+      fields: ['user_id', 'timestamp']
     },
     {
       name: 'idx_usage_service',
-      fields: ['service'],
-      comment: 'Index for queries by service type'
+      fields: ['service']
     }
   ]
 });

@@ -133,7 +133,6 @@ export const initializeStreamingSession = async (
  * - Implements timeouts to prevent runaway sessions
  * - Finalizes sessions with the accounting service
  * 
- * @param userId - ID of the user receiving the stream
  * @param sessionId - Streaming session identifier from initialization
  * @param messages - Array of conversation messages forming the prompt
  * @param modelId - ID of the AI model to use
@@ -141,7 +140,6 @@ export const initializeStreamingSession = async (
  * @returns PassThrough stream that emits Server-Sent Events
  */
 export const streamResponse = async (
-  userId: string,
   sessionId: string,
   messages: any[],
   modelId: string,

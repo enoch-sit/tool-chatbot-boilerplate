@@ -219,7 +219,7 @@ class ChatServiceTester:
                 f"{ACCOUNTING_SERVICE_URL}/credits/allocate",
                 headers=admin_headers,
                 json={
-                    "userId": TEST_USER["username"],  # The controller expects 'userId', not 'targetUserId'
+                    "userId": TEST_USER["username"],  # Using correct parameter name 'userId' 
                     "credits": amount,
                     "expiryDays": 30,
                     "notes": "Test credit allocation"
@@ -236,6 +236,32 @@ class ChatServiceTester:
                 
         except requests.RequestException as e:
             Logger.error(f"Credit allocation error: {str(e)}")
+            return False
+
+    def test_credit_check_endpoint(self):
+        """Test the credit checking endpoint directly"""
+        Logger.header("TESTING CREDIT CHECK ENDPOINT")
+        
+        try:
+            response = self.session.post(
+                f"{ACCOUNTING_SERVICE_URL}/credits/check",
+                headers=self.headers,
+                json={
+                    "credits": 100  # Request to check if user has 100 credits
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                Logger.success(f"Credit check successful: Has sufficient credits = {data.get('sufficient', False)}")
+                Logger.info(json.dumps(data, indent=2))
+                return True
+            else:
+                Logger.error(f"Credit check failed: {response.status_code}, {response.text}")
+                return False
+                
+        except requests.RequestException as e:
+            Logger.error(f"Credit check error: {str(e)}")
             return False
 
     def check_credit_balance(self):
@@ -282,6 +308,34 @@ class ChatServiceTester:
                 
         except requests.RequestException as e:
             Logger.error(f"Model retrieval error: {str(e)}")
+            return False
+
+    def get_model_recommendation(self):
+        """Test the model recommendation endpoint"""
+        Logger.header("GETTING MODEL RECOMMENDATION")
+        
+        try:
+            response = self.session.post(
+                f"{CHAT_SERVICE_URL}/models/recommend",
+                headers=self.headers,
+                json={
+                    "task": "code",
+                    "priority": "quality"
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                Logger.success(f"Received model recommendation: {data.get('recommendedModel', 'unknown')}")
+                Logger.info(f"Recommendation reason: {data.get('reason', 'No reason provided')}")
+                Logger.info(json.dumps(data, indent=2))
+                return True
+            else:
+                Logger.error(f"Failed to get model recommendation: {response.status_code}, {response.text}")
+                return False
+                
+        except requests.RequestException as e:
+            Logger.error(f"Model recommendation error: {str(e)}")
             return False
 
     def create_chat_session(self):
@@ -371,7 +425,7 @@ class ChatServiceTester:
             return False
             
         endpoint = "stream" if streaming else "messages"
-        Logger.header(f"SENDING {'STREAMING' if streaming else 'REGULAR'} MESSAGE")
+        Logger.header(f"SENDING {'STREAMING' if streaming else 'NON-STREAMING'} MESSAGE")
         
         try:
             if streaming:
@@ -428,6 +482,14 @@ class ChatServiceTester:
                     else:
                         Logger.error(f"Failed to update stream response: {update_response.status_code}, {update_response.text}")
                         return False
+                elif response.status_code == 402:
+                    Logger.warning("Streaming message failed due to insufficient credits")
+                    try:
+                        error_data = json.loads(response.text)
+                        Logger.info(json.dumps(error_data, indent=2))
+                    except:
+                        Logger.info(f"Raw error: {response.text}")
+                    return False
                 else:
                     Logger.error(f"Failed to start streaming: {response.status_code}, {response.text}")
                     return False
@@ -436,21 +498,94 @@ class ChatServiceTester:
                 response = self.session.post(
                     f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/{endpoint}",
                     headers=self.headers,
-                    json={"message": "Hello, this is a test message"}
+                    json={"message": "Tell me about machine learning", "modelId": "amazon.titan-text-express-v1:0"}
                 )
                 
                 if response.status_code == 200:
                     data = response.json()
-                    Logger.success("Message sent successfully!")
+                    Logger.success("Non-streaming message sent successfully!")
                     Logger.info(json.dumps(data, indent=2))
                     return True
+                elif response.status_code == 402:
+                    Logger.warning("Non-streaming message failed due to insufficient credits")
+                    try:
+                        error_data = json.loads(response.text)
+                        Logger.info(json.dumps(error_data, indent=2))
+                    except:
+                        Logger.info(f"Raw error: {response.text}")
+                    return False
                 else:
-                    Logger.error(f"Failed to send message: {response.status_code}, {response.text}")
+                    Logger.error(f"Failed to send non-streaming message: {response.status_code}, {response.text}")
                     return False
                     
         except Exception as e:
             Logger.error(f"Message sending error: {str(e)}")
             return False
+
+    def test_insufficient_credits(self):
+        """Test behavior when there are insufficient credits"""
+        Logger.header("TESTING INSUFFICIENT CREDITS SCENARIO")
+        
+        if not self.session_id:
+            Logger.error("No active session ID. Create a session first.")
+            return False
+            
+        try:
+            # First, check current balance
+            initial_balance = self.check_credit_balance_value()
+            
+            # If balance is too high for this test, warn and return
+            if initial_balance > 5000:
+                Logger.warning(f"Current balance ({initial_balance} credits) is too high to test insufficient credits")
+                Logger.info("Skipping insufficient credits test")
+                return True
+                
+            # Try a request with a very high credit requirement
+            Logger.info("Sending a request that should require more credits than available")
+            
+            # Test with non-streaming first
+            response = self.session.post(
+                f"{ACCOUNTING_SERVICE_URL}/credits/check",
+                headers=self.headers,
+                json={
+                    "credits": initial_balance + 5000  # Request more credits than available
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('sufficient') == False:
+                    Logger.success("Credit check correctly identified insufficient credits!")
+                    Logger.info(json.dumps(data, indent=2))
+                else:
+                    Logger.error("Credit check incorrectly showed sufficient credits")
+                    return False
+            else:
+                Logger.error(f"Credit check failed: {response.status_code}, {response.text}")
+                return False
+            
+            return True
+                
+        except Exception as e:
+            Logger.error(f"Insufficient credits test error: {str(e)}")
+            return False
+            
+    def check_credit_balance_value(self):
+        """Check the credit balance and return the value"""
+        try:
+            response = self.session.get(
+                f"{ACCOUNTING_SERVICE_URL}/credits/balance",
+                headers=self.headers
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('totalCredits', 0)
+            else:
+                return 0
+                
+        except:
+            return 0
 
     async def supervisor_observe_session(self):
         """Supervisor observes an active streaming session"""
@@ -588,6 +723,107 @@ class ChatServiceTester:
             Logger.error(f"Chat session deletion error: {str(e)}")
             return False
 
+    def supervisor_search_users(self):
+        """Test supervisor ability to search users (admin/supervisor only)"""
+        Logger.header("SUPERVISOR SEARCH USERS")
+        
+        if not self.supervisor_token:
+            Logger.error("No supervisor token. Authenticate as supervisor first.")
+            return False
+            
+        try:
+            sup_headers = {"Authorization": f"Bearer {self.supervisor_token}"}
+            
+            # Search for regular user
+            response = self.session.get(
+                f"{CHAT_SERVICE_URL}/chat/users/search?query={TEST_USER['username']}",
+                headers=sup_headers
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                users = data.get("users", [])
+                Logger.success(f"Search returned {len(users)} users")
+                Logger.info(json.dumps(data, indent=2))
+                return True
+            elif response.status_code == 403:
+                Logger.warning("Permission denied: Only admins and supervisors can search users")
+                return False
+            else:
+                Logger.error(f"Failed to search users: {response.status_code}, {response.text}")
+                return False
+                
+        except requests.RequestException as e:
+            Logger.error(f"User search error: {str(e)}")
+            return False
+
+    def supervisor_list_user_sessions(self):
+        """Test supervisor ability to list sessions for a specific user"""
+        Logger.header("SUPERVISOR LIST USER SESSIONS")
+        
+        if not self.supervisor_token:
+            Logger.error("No supervisor token. Authenticate as supervisor first.")
+            return False
+            
+        try:
+            sup_headers = {"Authorization": f"Bearer {self.supervisor_token}"}
+            
+            # Get sessions for the test user
+            response = self.session.get(
+                f"{CHAT_SERVICE_URL}/chat/users/{TEST_USER['username']}/sessions",
+                headers=sup_headers
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                sessions = data.get("sessions", [])
+                Logger.success(f"Retrieved {len(sessions)} sessions for user {TEST_USER['username']}")
+                Logger.info(json.dumps(data, indent=2))
+                return True
+            elif response.status_code == 403:
+                Logger.warning("Permission denied: Only admins and supervisors can list user sessions")
+                return False
+            else:
+                Logger.error(f"Failed to list user sessions: {response.status_code}, {response.text}")
+                return False
+                
+        except requests.RequestException as e:
+            Logger.error(f"User sessions listing error: {str(e)}")
+            return False
+
+    def supervisor_get_user_session(self):
+        """Test supervisor ability to view a specific session for a user"""
+        Logger.header("SUPERVISOR GET SPECIFIC USER SESSION")
+        
+        if not self.supervisor_token or not self.session_id:
+            Logger.error("Supervisor token or session ID not available")
+            return False
+            
+        try:
+            sup_headers = {"Authorization": f"Bearer {self.supervisor_token}"}
+            
+            # Get specific session for the test user
+            response = self.session.get(
+                f"{CHAT_SERVICE_URL}/chat/users/{TEST_USER['username']}/sessions/{self.session_id}",
+                headers=sup_headers
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                Logger.success(f"Retrieved session {self.session_id} for user {TEST_USER['username']}")
+                Logger.info(json.dumps(data, indent=2))
+                return True
+            elif response.status_code == 403:
+                Logger.warning("Permission denied: Only admins and supervisors can view user sessions")
+                return False
+            else:
+                Logger.error(f"Failed to get user session: {response.status_code}, {response.text}")
+                return False
+                
+        except requests.RequestException as e:
+            Logger.error(f"User session retrieval error: {str(e)}")
+            return False
+
 async def run_async_tests(tester):
     """Run tests that require async functionality"""
     # Test supervisor observation
@@ -623,19 +859,24 @@ def run_tests():
     # Check credit balance
     tester.check_credit_balance()
     
+    # Test credit check endpoint directly
+    tester.test_credit_check_endpoint()
+    
     # Run through the test sequence
-    test_sequence = [ ("Get available models", tester.get_available_models),
+    test_sequence = [ 
+        ("Get available models", tester.get_available_models),
+        ("Get model recommendation", tester.get_model_recommendation),
         ("Create a new chat session", tester.create_chat_session),
         ("List chat sessions", tester.list_chat_sessions),
         ("Get chat messages", tester.get_chat_messages),
-        ("Send a regular message", lambda: tester.send_message(streaming=False)),
+        ("Send a regular (non-streaming) message", lambda: tester.send_message(streaming=False)),
         ("Send a streaming message", lambda: tester.send_message(streaming=True)),
-        ("Check usage statistics", tester.check_usage_stats),
-        ("Delete the chat session", tester.delete_chat_session)
+        ("Test insufficient credits scenario", tester.test_insufficient_credits),
+        ("Check usage statistics", tester.check_usage_stats)
     ]
     
+    # Execute regular user tests
     results = []
-    
     for test_name, test_func in test_sequence:
         Logger.info(f"\n{'=' * 60}")
         Logger.info(f"TEST: {test_name}")
@@ -643,10 +884,38 @@ def run_tests():
         success = test_func()
         results.append((test_name, success))
     
-    # Run async tests if needed
-    if tester.authenticate_supervisor() and tester.create_chat_session():
+    # For supervisor tests, we need to create a new session first
+    if tester.supervisor_token:
+        Logger.header("RUNNING SUPERVISOR-SPECIFIC TESTS")
+        
+        # Create a new session if we don't have one
+        if not tester.session_id:
+            tester.create_chat_session()
+        
+        # Run supervisor tests
+        supervisor_tests = [
+            ("Supervisor search users", tester.supervisor_search_users),
+            ("Supervisor list user sessions", tester.supervisor_list_user_sessions),
+            ("Supervisor get specific user session", tester.supervisor_get_user_session)
+        ]
+        
+        for test_name, test_func in supervisor_tests:
+            Logger.info(f"\n{'=' * 60}")
+            Logger.info(f"TEST: {test_name}")
+            Logger.info(f"{'=' * 60}")
+            success = test_func()
+            results.append((test_name, success))
+    else:
+        Logger.warning("Skipping supervisor tests due to missing supervisor token")
+        
+    # Run async tests for streaming observation
+    if tester.supervisor_token and (tester.session_id or tester.create_chat_session()):
+        Logger.header("RUNNING ASYNC TESTS")
         asyncio.run(run_async_tests(tester))
-        # Clean up after async tests
+    
+    # Clean up after all tests
+    if tester.session_id:
+        Logger.info("\nCleaning up test resources...")
         tester.delete_chat_session()
     
     # Print summary

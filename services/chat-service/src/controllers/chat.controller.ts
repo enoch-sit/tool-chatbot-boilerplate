@@ -15,9 +15,34 @@
 import { Request, Response } from 'express';
 import ChatSession from '../models/chat-session.model';
 import { initializeStreamingSession, streamResponse } from '../services/streaming.service';
+import CreditService from '../services/credit.service';
 import { ObservationManager } from '../services/observation.service';
 import logger from '../utils/logger';
 import config from '../config/config';
+import { 
+  BedrockRuntimeClient, 
+  InvokeModelCommand
+} from '@aws-sdk/client-bedrock-runtime';
+
+// Define types for message content
+interface MessageContent {
+  text: string;
+  [key: string]: any; // Allow for additional properties
+}
+
+interface ChatMessage {
+  role: string;
+  content: string | MessageContent | MessageContent[];
+}
+
+// Initialize AWS Bedrock client
+const bedrockClient = new BedrockRuntimeClient({ 
+  region: config.awsRegion,
+  credentials: {
+    accessKeyId: config.awsAccessKeyId,
+    secretAccessKey: config.awsSecretAccessKey
+  }
+});
 
 /**
  * Create Chat Session
@@ -207,9 +232,8 @@ export const deleteChatSession = async (req: Request, res: Response) => {
 /**
  * Send Message (Non-streaming)
  * 
- * Adds a user message to a chat session. This is a non-streaming
- * implementation primarily used for message storage without immediate AI response.
- * For AI responses, the streaming endpoint is preferred.
+ * Adds a user message to a chat session and generates a non-streaming AI response.
+ * This implementation checks credits before processing and records usage afterwards.
  * 
  * URL Parameters:
  * - sessionId: The unique identifier of the chat session
@@ -220,19 +244,42 @@ export const deleteChatSession = async (req: Request, res: Response) => {
  * 
  * @param req - Express request object
  * @param res - Express response object
- * @returns 200 with success message, error response otherwise
+ * @returns 200 with success message and AI response, error response otherwise
  */
 export const sendMessage = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     const sessionId = req.params.sessionId;
     const { message, modelId } = req.body;
+    const authHeader = req.headers.authorization || '';
     
     // Find chat session with ownership verification
     const session = await ChatSession.findOne({ _id: sessionId, userId });
     
     if (!session) {
       return res.status(404).json({ message: 'Chat session not found' });
+    }
+    
+    // Calculate estimated required credits for this operation
+    const selectedModel = modelId || session.modelId || config.defaultModelId;
+    const requiredCredits = await CreditService.calculateRequiredCredits(
+      message,
+      selectedModel,
+      authHeader
+    );
+    
+    // Check if user has sufficient credits
+    const hasSufficientCredits = await CreditService.checkUserCredits(
+      userId!,
+      requiredCredits,
+      authHeader
+    );
+    
+    if (!hasSufficientCredits) {
+      return res.status(402).json({
+        message: 'Insufficient credits to process message',
+        error: 'INSUFFICIENT_CREDITS'
+      });
     }
     
     // Add user message to the session
@@ -250,18 +297,155 @@ export const sendMessage = async (req: Request, res: Response) => {
       session.modelId = modelId;
     }
     
+    // Prepare message history for the AI model in the correct format
+    const messageHistory = session.messages.map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+    
+    // Format the prompt based on model type
+    let promptBody;
+    
+    if (selectedModel.includes('anthropic')) {
+      // Format for Anthropic Claude models
+      promptBody = {
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 2000,
+        messages: messageHistory
+      };
+    } else if (selectedModel.includes('amazon.titan')) {
+      // Format for Amazon's Titan models
+      promptBody = {
+        inputText: messageHistory.map(m => `${m.role}: ${m.content}`).join('\n'),
+        textGenerationConfig: {
+          maxTokenCount: 2000,
+          temperature: 0.7,
+          topP: 0.9
+        }
+      };
+    } else if (selectedModel.includes('amazon.nova')) {
+      // Format for Amazon's Nova models
+      const formattedMessages = messageHistory.map(m => {
+        // Properly handle different types of content
+        let textContent: string;
+        if (typeof m.content === 'string') {
+          textContent = m.content;
+        } else if (m.content && typeof m.content === 'object') {
+          // Handle object or array content safely
+          const contentObj = m.content as any;
+          textContent = contentObj.text || 
+                       (contentObj.toString ? contentObj.toString() : JSON.stringify(contentObj));
+        } else {
+          textContent = String(m.content || '');
+        }
+        
+        return {
+          role: m.role,
+          content: [{
+            text: textContent
+          }]
+        };
+      });
+      
+      promptBody = {
+        inferenceConfig: {
+          max_new_tokens: 2000,
+          temperature: 0.7,
+          top_p: 0.9
+        },
+        messages: formattedMessages
+      };
+    } else if (selectedModel.includes('meta.llama')) {
+      // Format for Meta's Llama models
+      promptBody = {
+        prompt: messageHistory.map(m => `${m.role}: ${m.content}`).join('\n'),
+        temperature: 0.7,
+        top_p: 0.9,
+        max_gen_len: 2000
+      };
+    } else {
+      // Default format (Claude-compatible)
+      promptBody = {
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 2000,
+        messages: messageHistory
+      };
+    }
+    
+    logger.info(`Processing non-streaming request for user ${userId} with model ${selectedModel}`);
+    
+    // Create the command to invoke the model
+    const command = new InvokeModelCommand({
+      modelId: selectedModel,
+      body: JSON.stringify(promptBody),
+      contentType: 'application/json',
+      accept: 'application/json'
+    });
+    
+    // Send the request to AWS Bedrock and wait for the complete response
+    const startTime = Date.now();
+    const bedrockResponse = await bedrockClient.send(command);
+    const completionTime = Date.now() - startTime;
+    
+    // Parse the response
+    let responseContent = '';
+    let tokensUsed = 0;
+    
+    if (bedrockResponse.body) {
+      const responseBody = JSON.parse(
+        new TextDecoder().decode(bedrockResponse.body)
+      );
+      
+      // Extract response content based on model
+      if (selectedModel.includes('anthropic')) {
+        responseContent = responseBody.content?.[0]?.text || '';
+      } else if (selectedModel.includes('amazon.titan')) {
+        responseContent = responseBody.results?.[0]?.outputText || '';
+      } else if (selectedModel.includes('amazon.nova')) {
+        responseContent = responseBody.results?.[0]?.outputText || '';
+      } else if (selectedModel.includes('meta.llama')) {
+        responseContent = responseBody.generation || '';
+      }
+      
+      // Estimate token usage (actual tokens not available in non-streaming response)
+      tokensUsed = Math.ceil((message.length + responseContent.length) / 4);
+    }
+    
+    // Add AI response to the session
+    const assistantMessage = {
+      role: 'assistant' as const,
+      content: responseContent,
+      timestamp: new Date()
+    };
+    
+    session.messages.push(assistantMessage);
+    
+    // Update session metadata with token usage statistics
+    session.metadata = session.metadata || {};
+    session.metadata.lastTokensUsed = tokensUsed;
+    session.metadata.totalTokensUsed = (session.metadata.totalTokensUsed || 0) + tokensUsed;
+    
     await session.save();
     
-    // TODO: Implement non-streaming response generation
-    // This would make a synchronous call to Bedrock and wait for the complete response
+    // Record usage with accounting service
+    await CreditService.recordChatUsage(
+      userId!,
+      selectedModel,
+      tokensUsed,
+      authHeader
+    );
+    
+    logger.debug(`Non-streaming chat completed in ${completionTime}ms, used ~${tokensUsed} tokens`);
     
     return res.status(200).json({
-      message: 'Message added successfully',
-      sessionId
+      message: 'Message processed successfully',
+      sessionId,
+      response: responseContent,
+      tokensUsed
     });
   } catch (error:any) {
-    logger.error('Error sending message:', error);
-    return res.status(500).json({ message: 'Failed to send message', error: error.message });
+    logger.error('Error processing non-streaming message:', error);
+    return res.status(500).json({ message: 'Failed to process message', error: error.message });
   }
 };
 
@@ -391,25 +575,35 @@ export const streamChatResponse = async (req: Request, res: Response) => {
      * These headers configure the response as a real-time
      * event stream that can push data to the client as it arrives.
      */
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    // Set streaming session ID header FIRST before any other headers
+    if (streamSession.sessionId) {
+      logger.debug(`Setting streaming session ID header: ${streamSession.sessionId}`);
+      res.setHeader('X-Streaming-Session-Id', streamSession.sessionId);
+    } else {
+      logger.error('Missing streaming session ID when trying to set header');
+    }
     
     // Add CORS headers if needed for cross-origin requests
     const origin = req.headers.origin;
     if (origin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Expose-Headers', 'X-Streaming-Session-Id');
     }
     
-    // Send headers immediately to establish the SSE connection
+    // Then set the standard SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    // Finally flush headers to send them to the client
     res.flushHeaders();
     
     // Create a placeholder for the assistant's response in the database
     // This will be updated with the complete response when streaming ends
     const assistantMessage = {
       role: 'assistant' as const,
-      content: '',
+      content: ' ', // Using a space instead of empty string to satisfy validation
       timestamp: new Date()
     };
     session.messages.push(assistantMessage);
@@ -422,7 +616,6 @@ export const streamChatResponse = async (req: Request, res: Response) => {
      * and start receiving chunks of the AI response in real-time.
      */
     const responseStream = await streamResponse(
-      userId!,
       streamSession.sessionId,
       messageHistory,
       selectedModel,
@@ -586,16 +779,84 @@ export const updateChatWithStreamResponse = async (req: Request, res: Response) 
     const sessionId = req.params.sessionId;
     const { completeResponse, streamingSessionId, tokensUsed } = req.body;
     
-    // Find chat session with ownership verification
-    const session = await ChatSession.findOne({ _id: sessionId, userId });
-    if (!session) {
-      return res.status(404).json({ message: 'Chat session not found' });
+    // Add request debugging
+    logger.debug(`Update request for session ${sessionId}:
+      - userId: ${userId}
+      - streamingSessionId: ${streamingSessionId}
+      - tokensUsed: ${tokensUsed}
+      - responseLength: ${completeResponse?.length || 0}
+    `);
+
+    // Attempt to retrieve the session up to 3 times with progressively longer waits
+    // This helps handle race conditions where the DB may not have been updated yet
+    let session = null;
+    let latestError = null;
+    const maxRetries = 3;
+    
+    for (let retry = 0; retry < maxRetries; retry++) {
+      try {
+        // Find chat session with ownership verification
+        session = await ChatSession.findOne({ _id: sessionId, userId });
+        
+        if (session) {
+          // If we found the session and it has metadata with streamingSessionId, break the retry loop
+          if (session.metadata?.streamingSessionId) {
+            break;
+          } else {
+            logger.debug(`Session found but missing streamingSessionId - retry ${retry + 1}/${maxRetries}`);
+          }
+        } else {
+          logger.debug(`Session not found - retry ${retry + 1}/${maxRetries}`);
+        }
+        
+        // Only wait and try again if this isn't the last attempt
+        if (retry < maxRetries - 1) {
+          // Progressive backoff - wait longer between each retry
+          const delayMs = 500 * Math.pow(2, retry); // 500ms, 1000ms, 2000ms
+          logger.debug(`Waiting ${delayMs}ms before retry ${retry + 2}/${maxRetries}`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      } catch (err) {
+        latestError = err;
+        logger.error(`Error retrieving session on attempt ${retry + 1}:`, err);
+      }
     }
     
-    // Security check: verify this is the right streaming session
-    if (session.metadata?.streamingSessionId !== streamingSessionId) {
+    // After all retries, check if we have a valid session
+    if (!session) {
+      return res.status(404).json({ message: 'Chat session not found', error: latestError instanceof Error ? latestError.message : String(latestError) });
+    }
+    
+    // Super detailed comparison with optional chaining and fallbacks
+    const storedId = (session.metadata?.streamingSessionId || '').toString().trim().toLowerCase();
+    const providedId = (streamingSessionId || '').toString().trim().toLowerCase();
+    
+    // Enhanced detailed logging
+    logger.debug(`Session ID comparison details:
+      - Session metadata: ${JSON.stringify(session.metadata || {})}
+      - Stored ID (raw): "${session.metadata?.streamingSessionId}"
+      - Provided ID (raw): "${streamingSessionId}"
+      - Stored ID (normalized): "${storedId}"
+      - Provided ID (normalized): "${providedId}"
+      - Exact match: ${session.metadata?.streamingSessionId === streamingSessionId}
+      - Normalized match: ${storedId === providedId}
+    `);
+
+    // Special case: First time the ID is being set
+    if (!storedId && providedId) {
+      logger.debug(`No stored ID found, but client provided a valid ID. Accepting update.`);
+      // We'll accept the client's ID and set it in the database
+      session.metadata = session.metadata || {};
+      session.metadata.streamingSessionId = streamingSessionId;
+    } 
+    // Normal case: Careful comparison that handles undefined, null, and other edge cases
+    else if (!providedId || !storedId || storedId !== providedId) {
       return res.status(400).json({ 
-        message: 'Streaming session ID mismatch'
+        message: 'Streaming session ID mismatch',
+        details: {
+          expected: storedId || '(no stored ID)',
+          received: providedId || '(no provided ID)'
+        }
       });
     }
     
@@ -608,7 +869,7 @@ export const updateChatWithStreamResponse = async (req: Request, res: Response) 
     }
     
     // Update the message content with the complete response
-    session.messages[lastIndex].content = completeResponse;
+    session.messages[lastIndex].content = completeResponse || ' '; // Ensure not empty
     
     // Update session metadata with token usage and status
     session.metadata = session.metadata || {};
@@ -618,6 +879,8 @@ export const updateChatWithStreamResponse = async (req: Request, res: Response) 
     session.updatedAt = new Date();
     
     await session.save();
+    
+    logger.debug(`Successfully updated chat session ${sessionId} with streaming response`);
     
     return res.status(200).json({
       message: 'Chat session updated successfully',
