@@ -35,6 +35,7 @@ export interface IMessage {
 export interface IChatSession extends Document {
   _id: string;          // MongoDB document ID
   userId: string;       // ID of the user who owns this chat session
+  username?: string;    // Human-readable username for easier lookup
   title: string;        // User-friendly title for the chat session
   messages: IMessage[]; // Array of messages in the conversation
   modelId: string;      // ID of the AI model used for this session
@@ -67,6 +68,9 @@ export interface IChatSession extends Document {
 const ChatSessionSchema = new Schema({
   // User ID who owns this chat session (required, indexed for quick user-based queries)
   userId: { type: String, required: true, index: true },
+  
+  // Username for easier lookup by supervisors
+  username: { type: String, index: true },
   
   // Display title for the chat session
   title: { type: String, required: true },

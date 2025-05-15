@@ -2,6 +2,7 @@
 import requests
 import json
 import sys
+import time
 from colorama import Fore, Style, init
 
 # Initialize colorama for colored terminal output
@@ -197,31 +198,53 @@ class CreditTester:
             return False
     
     def test_credit_check_endpoint(self):
-        """Test the credit checking endpoint directly"""
+        """Test the credit checking endpoint with retry mechanism"""
         Logger.header("TESTING CREDIT CHECK ENDPOINT")
         
-        try:
-            # The API expects "requiredCredits" parameter, not "credits"
-            response = self.session.post(
-                f"{ACCOUNTING_SERVICE_URL}/credits/check",
-                headers=self.headers,
-                json={
-                    "requiredCredits": 100  # Corrected parameter name
-                }
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                Logger.success(f"Credit check successful: Has sufficient credits = {data.get('sufficient', False)}")
-                Logger.info(json.dumps(data, indent=2))
-                return True
-            else:
-                Logger.error(f"Credit check failed: {response.status_code}, {response.text}")
-                return False
+        # Add retry mechanism for potentially flaky network operations
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    Logger.info(f"Retry attempt {attempt+1}/{max_retries}...")
                 
-        except requests.RequestException as e:
-            Logger.error(f"Credit check error: {str(e)}")
-            return False
+                response = self.session.post(
+                    f"{ACCOUNTING_SERVICE_URL}/credits/check",
+                    headers=self.headers,
+                    json={
+                        "requiredCredits": 100  # Corrected parameter name
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    Logger.success(f"Credit check successful: Has sufficient credits = {data.get('sufficient', False)}")
+                    Logger.info(json.dumps(data, indent=2))
+                    return True
+                # Handle specific error codes that might benefit from retry
+                elif response.status_code in [502, 503, 504]:  # Gateway errors, service unavailable
+                    if attempt < max_retries - 1:
+                        retry_delay = (attempt + 1) * 2  # Progressive backoff: 2s, 4s, 6s...
+                        Logger.warning(f"Service temporarily unavailable ({response.status_code}). Retrying in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                    else:
+                        Logger.error(f"Credit check failed after {max_retries} attempts: {response.status_code}")
+                        return False
+                else:
+                    Logger.error(f"Credit check failed: {response.status_code}, {response.text}")
+                    return False
+                    
+            except requests.RequestException as e:
+                Logger.error(f"Credit check error: {str(e)}")
+                if attempt < max_retries - 1:
+                    retry_delay = (attempt + 1) * 2
+                    Logger.warning(f"Network error. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    return False
+        
+        return False  # All retries failed
     
     def check_credit_balance(self):
         """Check the test user's credit balance"""

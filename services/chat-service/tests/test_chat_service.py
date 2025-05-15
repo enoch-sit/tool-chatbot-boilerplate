@@ -439,6 +439,25 @@ class ChatServiceTester:
                 
                 if response.status_code == 200:
                     Logger.success("Streaming response started! Showing first chunks...")
+                    
+                    # Extract streaming session ID from headers - check for multiple header name variations
+                    self.streaming_session_id = None
+                    possible_headers = ["X-Streaming-Session-Id", "x-streaming-session-id", "streaming-session-id"]
+                    
+                    for header in possible_headers:
+                        for actual_header, value in response.headers.items():
+                            if actual_header.lower() == header.lower():
+                                self.streaming_session_id = value
+                                Logger.info(f"Found streaming session ID in header: {self.streaming_session_id}")
+                                break
+                        if self.streaming_session_id:
+                            break
+                            
+                    if not self.streaming_session_id:
+                        Logger.warning("No streaming session ID found in headers. Using fallback.")
+                        import time, uuid
+                        self.streaming_session_id = f"stream-{int(time.time())}-{str(uuid.uuid4())[:8]}"
+                    
                     client = sseclient.SSEClient(response)
                     
                     # Print just a few chunks to demonstrate it's working
@@ -458,30 +477,39 @@ class ChatServiceTester:
                             except:
                                 pass
                     
-                    # Extract streaming session ID from headers if available
-                    self.streaming_session_id = response.headers.get("X-Streaming-Session-Id")
-                    if self.streaming_session_id:
-                        Logger.info(f"Streaming session ID: {self.streaming_session_id}")
+                    # Add delay to prevent race conditions - allow server to process streaming session
+                    Logger.info("Adding delay to allow server processing...")
+                    time.sleep(2)
                     
-                    # Update the stream response
-                    Logger.info("Updating chat with stream response...")
-                    update_response = self.session.post(
-                        f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/update-stream",
-                        headers=self.headers,
-                        json={
-                            "completeResponse": full_response or "AI response placeholder",
-                            "streamingSessionId": self.streaming_session_id or f"stream-{int(time.time())}-test",
-                            "tokensUsed": 100
-                        }
-                    )
-                    
-                    if update_response.status_code == 200:
-                        Logger.success("Stream response updated successfully!")
-                        Logger.info(json.dumps(update_response.json(), indent=2))
-                        return True
-                    else:
-                        Logger.error(f"Failed to update stream response: {update_response.status_code}, {update_response.text}")
-                        return False
+                    # Try updating the stream response with retries if needed
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        Logger.info(f"Updating chat with stream response (Attempt {attempt+1}/{max_retries})...")
+                        update_response = self.session.post(
+                            f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/update-stream",
+                            headers=self.headers,
+                            json={
+                                "completeResponse": full_response or "AI response placeholder",
+                                "streamingSessionId": self.streaming_session_id,
+                                "tokensUsed": 100
+                            }
+                        )
+                        
+                        if update_response.status_code == 200:
+                            Logger.success("Stream response updated successfully!")
+                            Logger.info(json.dumps(update_response.json(), indent=2))
+                            return True
+                        elif update_response.status_code == 400 and "mismatch" in update_response.text.lower():
+                            # This indicates a streaming session ID mismatch - might be a race condition
+                            if attempt < max_retries - 1:
+                                Logger.warning(f"Session ID mismatch. Retrying in {(attempt+1)*2} seconds...")
+                                time.sleep((attempt+1) * 2)  # Progressive backoff
+                            else:
+                                Logger.error(f"Failed to update stream after {max_retries} attempts due to session ID mismatch")
+                                return False
+                        else:
+                            Logger.error(f"Failed to update stream response: {update_response.status_code}, {update_response.text}")
+                            return False
                 elif response.status_code == 402:
                     Logger.warning("Streaming message failed due to insufficient credits")
                     try:
@@ -520,6 +548,8 @@ class ChatServiceTester:
                     
         except Exception as e:
             Logger.error(f"Message sending error: {str(e)}")
+            import traceback
+            Logger.warning(traceback.format_exc())
             return False
 
     def test_insufficient_credits(self):

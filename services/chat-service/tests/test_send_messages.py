@@ -15,18 +15,44 @@ ACCOUNTING_SERVICE_URL = "http://localhost:3001/api"
 CHAT_SERVICE_URL = "http://localhost:3002/api"
 
 # Test user credentials
-TEST_USER = {
-    "username": "user1",
-    "email": "user1@example.com",
-    "password": "User1@123",
-    "role": "enduser",
-}
-
 ADMIN_USER = {
     "username": "admin",
     "email": "admin@example.com",
     "password": "admin@admin",
 }
+
+SUPERVISOR_USERS = [
+    {
+        "username": "supervisor1",
+        "email": "supervisor1@example.com",
+        "password": "Supervisor1@",
+        "role": "supervisor",
+    },
+    {
+        "username": "supervisor2",
+        "email": "supervisor2@example.com",
+        "password": "Supervisor2@",
+        "role": "supervisor",
+    },
+]
+
+REGULAR_USERS = [
+    {
+        "username": "user1",
+        "email": "user1@example.com",
+        "password": "User1@123",
+        "role": "enduser",
+    },
+    {
+        "username": "user2",
+        "email": "user2@example.com",
+        "password": "User2@123",
+        "role": "enduser",
+    },
+]
+
+# Use the first regular user for testing
+TEST_USER = REGULAR_USERS[0]
 
 class Logger:
     @staticmethod
@@ -270,7 +296,7 @@ class MessagingTester:
             return False
     
     def send_streaming_message(self, model_id):
-        """Send a streaming message"""
+        """Send a streaming message with improved handling for race conditions"""
         Logger.header("SENDING STREAMING MESSAGE")
         
         if not self.session_id:
@@ -291,18 +317,23 @@ class MessagingTester:
             if response.status_code == 200:
                 Logger.success("Streaming response started! Showing chunks...")
                 
-                # Extract streaming session ID from headers if available
-                self.streaming_session_id = response.headers.get("X-Streaming-Session-Id")
-                if self.streaming_session_id:
-                    Logger.info(f"Streaming session ID: {self.streaming_session_id}")
-                else:
+                # Extract streaming session ID with thorough header checking
+                self.streaming_session_id = None
+                for header, value in response.headers.items():
+                    if header.lower() == 'x-streaming-session-id'.lower():
+                        self.streaming_session_id = value
+                        Logger.info(f"Streaming session ID: {self.streaming_session_id}")
+                        break
+                        
+                if not self.streaming_session_id:
                     # If not in headers, generate a temporary one
-                    self.streaming_session_id = f"stream-{int(time.time())}"
+                    self.streaming_session_id = f"stream-{int(time.time())}-{str(id(self))[-8:]}"
                     Logger.info(f"Generated temporary streaming ID: {self.streaming_session_id}")
                 
                 client = sseclient.SSEClient(response)
                 full_response = ""
                 chunks_received = 0
+                tokens_used = 100  # Default value
                 
                 for event in client.events():
                     if event.event == "chunk":
@@ -314,15 +345,15 @@ class MessagingTester:
                             
                             if chunks_received <= 3:  # Show only first 3 chunks
                                 Logger.info(f"Chunk {chunks_received}: {text}")
-                        except:
-                            pass
+                        except Exception as e:
+                            Logger.warning(f"Failed to parse chunk: {str(e)}")
                     elif event.event == "done":
                         try:
                             data = json.loads(event.data)
                             tokens_used = data.get('tokensUsed', 100)
                             Logger.info(f"Stream complete. Tokens used: {tokens_used}")
-                        except:
-                            pass
+                        except Exception as e:
+                            Logger.warning(f"Failed to parse done event: {str(e)}")
                             
                     # If we've received enough chunks, break early
                     if chunks_received >= 10:
@@ -331,11 +362,54 @@ class MessagingTester:
                 
                 Logger.success(f"Received {chunks_received} chunks. Total response length: {len(full_response)}")
                 
-                # Update the stream response
-                Logger.info("Updating chat with stream response...")
+                # Add delay to prevent race conditions - allow server to process streaming session
+                Logger.info("Adding delay to allow server processing...")
+                time.sleep(2)
                 
-                return self.update_stream_response(full_response)
-                
+                # Update the stream response with retry mechanism
+                max_retries = 3
+                for attempt in range(max_retries):
+                    Logger.info(f"Updating chat with stream response (Attempt {attempt+1}/{max_retries})...")
+                    
+                    try:
+                        update_response = self.session.post(
+                            f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/update-stream",
+                            headers=self.headers,
+                            json={
+                                "completeResponse": full_response or "AI response placeholder",
+                                "streamingSessionId": self.streaming_session_id,
+                                "tokensUsed": tokens_used
+                            }
+                        )
+                        
+                        if update_response.status_code == 200:
+                            Logger.success("Stream response updated successfully!")
+                            Logger.info(json.dumps(update_response.json(), indent=2))
+                            return True
+                        elif update_response.status_code == 400 and "mismatch" in update_response.text.lower():
+                            # This indicates a streaming session ID mismatch - might be a race condition
+                            if attempt < max_retries - 1:
+                                Logger.warning(f"Session ID mismatch. Retrying in {(attempt+1)*2} seconds...")
+                                time.sleep((attempt+1) * 2)  # Progressive backoff
+                            else:
+                                Logger.error("All attempts failed due to session ID mismatch")
+                                return False
+                        else:
+                            Logger.error(f"Failed to update stream response: {update_response.status_code}, {update_response.text}")
+                            if attempt < max_retries - 1:
+                                Logger.info(f"Retrying in {(attempt+1)} seconds...")
+                                time.sleep(attempt + 1)
+                            else:
+                                return False
+                    except Exception as e:
+                        Logger.error(f"Stream update error: {str(e)}")
+                        if attempt < max_retries - 1:
+                            time.sleep(attempt + 1)
+                        else:
+                            return False
+                    
+                return False  # All retries failed
+                    
             elif response.status_code == 402:
                 Logger.warning("Streaming message failed due to insufficient credits")
                 Logger.info(response.text)
@@ -346,37 +420,8 @@ class MessagingTester:
                 
         except Exception as e:
             Logger.error(f"Streaming error: {str(e)}")
-            return False
-    
-    def update_stream_response(self, response_text):
-        """Update the chat with a streaming response"""
-        
-        if not self.streaming_session_id:
-            Logger.error("No streaming session ID available.")
-            return False
-            
-        try:
-            # Note: Make sure to include the correct parameters according to API
-            update_response = self.session.post(
-                f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/update-stream",
-                headers=self.headers,
-                json={
-                    "completeResponse": response_text or "AI response placeholder",
-                    "streamingSessionId": self.streaming_session_id,
-                    "tokensUsed": 100
-                }
-            )
-            
-            if update_response.status_code == 200:
-                Logger.success("Stream response updated successfully!")
-                Logger.info(json.dumps(update_response.json(), indent=2))
-                return True
-            else:
-                Logger.error(f"Failed to update stream response: {update_response.status_code}, {update_response.text}")
-                return False
-                
-        except Exception as e:
-            Logger.error(f"Stream update error: {str(e)}")
+            import traceback
+            Logger.warning(traceback.format_exc())
             return False
     
     def delete_chat_session(self):

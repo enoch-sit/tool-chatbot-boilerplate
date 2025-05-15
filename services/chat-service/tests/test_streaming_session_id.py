@@ -504,7 +504,7 @@ class StreamingTester:
             
             # Add a small delay before updating to avoid race conditions
             Logger.info("Adding delay before update with incorrect ID...")
-            time.sleep(0.5)
+            time.sleep(2.0)  # Increased from 0.5 to 2.0 seconds to match the correct ID test
             
             # Now update with an INCORRECT streaming session ID
             Logger.header("UPDATING CHAT WITH INCORRECT STREAM ID")

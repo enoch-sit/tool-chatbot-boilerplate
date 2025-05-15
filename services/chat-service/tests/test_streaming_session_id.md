@@ -19,22 +19,22 @@ graph TD
     Client --> ChatSvc["Chat Service<br>localhost:3002"]
     
     subgraph "Authentication Flow"
-        AuthSvc --> |"1. Username/Password"|Validate[Validate Credentials]
-        Validate --> |"2. Generate"|Token[JWT Token]
-        Token --> |"3. Return"|User[Authenticated User]
+        AuthSvc --> |"1 Username/Password"|Validate[Validate Credentials]
+        Validate --> |"2 Generate"|Token[JWT Token]
+        Token --> |"3 Return"|User[Authenticated User]
     end
     
     subgraph "Credits Management"
-        AcctSvc --> |"1. Check"|Credits[User Credits]
-        Credits --> |"2. Allocate/Deduct"|Balance[Credit Balance]
-        Balance --> |"3. Update"|Database[(Credits DB)]
+        AcctSvc --> |"1 Check"|Credits[User Credits]
+        Credits --> |"2 Allocate/Deduct"|Balance[Credit Balance]
+        Balance --> |"3 Update"|Database[(Credits DB)]
     end
     
     subgraph "Chat Session Management"
-        ChatSvc --> |"1. Receive"|Messages[User Messages]
-        Messages --> |"2. Validate"|Sessions[(Session DB)]
-        Sessions --> |"3. Generate"|Stream[AI Stream]
-        Stream --> |"4. Return"|Response[Response Chunks]
+        ChatSvc --> |"1 Receive"|Messages[User Messages]
+        Messages --> |"2 Validate"|Sessions[(Session DB)]
+        Sessions --> |"3 Generate"|Stream[AI Stream]
+        Stream --> |"4 Return"|Response[Response Chunks]
     end
 
     style Client fill:#f9f,stroke:#333,stroke-width:2px

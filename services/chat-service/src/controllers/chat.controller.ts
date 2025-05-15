@@ -35,6 +35,19 @@ interface ChatMessage {
   content: string | MessageContent | MessageContent[];
 }
 
+/**
+ * Escape special characters in a regular expression pattern
+ * 
+ * This utility function escapes special regex characters to ensure
+ * they are treated as literal characters in a regex pattern.
+ * 
+ * @param string - The string to escape for safe use in regex
+ * @returns The escaped string with special characters prefixed with backslashes
+ */
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+}
+
 // Initialize AWS Bedrock client
 const bedrockClient = new BedrockRuntimeClient({ 
   region: config.awsRegion,
@@ -62,6 +75,8 @@ const bedrockClient = new BedrockRuntimeClient({
 export const createChatSession = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
+    // Get the username from X-User-ID header or from JWT user object
+    const username = req.headers['x-user-id'] as string || req.user?.username;
     const { title, initialMessage, modelId = config.defaultModelId } = req.body;
     
     // Create initial messages array with system message
@@ -85,6 +100,7 @@ export const createChatSession = async (req: Request, res: Response) => {
     // Create new session with metadata for tracking and analytics
     const session = new ChatSession({
       userId,
+      username, // Store the username for easier supervisor lookup
       title: title || 'New Chat',
       messages,
       modelId,
@@ -842,15 +858,31 @@ export const updateChatWithStreamResponse = async (req: Request, res: Response) 
       - Normalized match: ${storedId === providedId}
     `);
 
-    // Special case: First time the ID is being set
+    // SECURITY IMPROVEMENT: Better handling of streaming session ID validation
+    // Special case: First time the ID is being set (race condition handling)
     if (!storedId && providedId) {
-      logger.debug(`No stored ID found, but client provided a valid ID. Accepting update.`);
-      // We'll accept the client's ID and set it in the database
-      session.metadata = session.metadata || {};
-      session.metadata.streamingSessionId = streamingSessionId;
+      // Only accept the provided ID if it has the correct format
+      // This mitigates the security issue while still handling race conditions
+      const validIdRegex = /^stream-\d+-[a-zA-Z0-9]+$/;
+      if (validIdRegex.test(providedId)) {
+        logger.debug(`No stored ID found, but client provided a valid formatted ID: ${providedId}`);
+        // We'll accept the client's ID and set it in the database since it has the correct format
+        session.metadata = session.metadata || {};
+        session.metadata.streamingSessionId = streamingSessionId;
+      } else {
+        // Reject IDs that don't match the expected format
+        logger.warn(`Rejecting invalid format streaming ID: ${providedId}`);
+        return res.status(400).json({ 
+          message: 'Invalid streaming session ID format',
+          details: {
+            expected: 'stream-{timestamp}-{uuid}',
+            received: providedId || '(no provided ID)'
+          }
+        });
+      }
     } 
     // Normal case: Careful comparison that handles undefined, null, and other edge cases
-    else if (!providedId || !storedId || storedId !== providedId) {
+    else if (!providedId || storedId !== providedId) {
       return res.status(400).json({ 
         message: 'Streaming session ID mismatch',
         details: {
@@ -1019,8 +1051,14 @@ export const supervisorGetChatSession = async (req: Request, res: Response) => {
       return res.status(403).json({ message: 'Insufficient permissions to view user sessions' });
     }
     
-    // Find the session by both user ID and session ID
-    const session = await ChatSession.findOne({ _id: sessionId, userId: targetUserId });
+    // Find the session by session ID and either user ID or username
+    const session = await ChatSession.findOne({ 
+      _id: sessionId,
+      $or: [
+        { userId: targetUserId },
+        { username: targetUserId }
+      ]
+    });
     
     if (!session) {
       return res.status(404).json({ message: 'Chat session not found' });
@@ -1032,6 +1070,7 @@ export const supervisorGetChatSession = async (req: Request, res: Response) => {
     return res.status(200).json({
       sessionId: session._id,
       userId: session.userId,
+      username: session.username,
       title: session.title,
       messages: session.messages,
       modelId: session.modelId,
@@ -1075,14 +1114,25 @@ export const supervisorListChatSessions = async (req: Request, res: Response) =>
       return res.status(403).json({ message: 'Insufficient permissions to list user sessions' });
     }
     
-    // Get paginated sessions for the target user
-    const sessions = await ChatSession.find({ userId: targetUserId })
+    // Look for sessions with either userId or username matching the target
+    // This handles cases where userId in JWT is different from username in URL parameter
+    const sessions = await ChatSession.find({ 
+      $or: [
+        { userId: targetUserId }, 
+        { username: targetUserId }
+      ]
+    })
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select('_id userId title createdAt updatedAt modelId metadata');
+      .select('_id userId username title createdAt updatedAt modelId metadata');
     
-    const total = await ChatSession.countDocuments({ userId: targetUserId });
+    const total = await ChatSession.countDocuments({ 
+      $or: [
+        { userId: targetUserId }, 
+        { username: targetUserId }
+      ]
+    });
     
     // Log the access for audit trail
     logger.supervisorAction(`Supervisor ${req.user?.userId} listed chat sessions for user ${targetUserId}`);
@@ -1136,45 +1186,79 @@ export const searchUsers = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Search query is required' });
     }
     
-    // Find users with exact matching IDs (highest priority matches)
-    const exactMatches = await ChatSession.aggregate([
-      { $match: { userId: query.toString() } },
-      { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
-    ]);
-    
-    // Find users with partial matches in sessions or metadata
-    const partialMatches = await ChatSession.aggregate([
-      {
-        $match: {
-          $or: [
-            { title: { $regex: query, $options: 'i' } },
-            { 'metadata.source': { $regex: query, $options: 'i' } }
-          ]
+    // Special handling for wildcard searches
+    let matchCondition;
+    if (query === '*') {
+      // If the query is a single wildcard, match all sessions
+      matchCondition = {};
+      logger.info(`Supervisor ${req.user?.userId} performed a wildcard search (match all)`);
+    } else {
+      // Escape special regex characters in the query string
+      const safeQuery = escapeRegExp(query.toString());
+      logger.debug(`Original query: "${query}", escaped for regex: "${safeQuery}"`);
+      
+      // Find users with exact matching IDs (highest priority matches)
+      const exactMatches = await ChatSession.aggregate([
+        { $match: { userId: query.toString() } },
+        { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
+      ]);
+      
+      // Find users with partial matches in sessions or metadata
+      // Use the escaped query string for regex safety
+      const partialMatches = await ChatSession.aggregate([
+        {
+          $match: {
+            $or: [
+              { title: { $regex: safeQuery, $options: 'i' } },
+              { 'metadata.source': { $regex: safeQuery, $options: 'i' } }
+            ]
+          }
+        },
+        { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
+      ]);
+      
+      // Combine results and remove duplicates
+      const allUsers = [...exactMatches, ...partialMatches.filter(pm => 
+        !exactMatches.some(em => em._id === pm._id)
+      )];
+      
+      // Apply pagination to the results
+      const paginatedUsers = allUsers.slice(skip, skip + limit);
+      
+      // Log the search for audit trail
+      logger.supervisorAction(`Supervisor ${req.user?.userId} searched for users with query: ${query}`);
+      
+      return res.status(200).json({
+        users: paginatedUsers,
+        pagination: {
+          total: allUsers.length,
+          pages: Math.ceil(allUsers.length / limit),
+          currentPage: page,
+          perPage: limit
         }
-      },
-      { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
-    ]);
+      });
+    }
     
-    // Combine results and remove duplicates
-    const allUsers = [...exactMatches, ...partialMatches.filter(pm => 
-      !exactMatches.some(em => em._id === pm._id)
-    )];
-    
-    // Apply pagination to the results
-    const paginatedUsers = allUsers.slice(skip, skip + limit);
-    
-    // Log the search for audit trail
-    logger.supervisorAction(`Supervisor ${req.user?.userId} searched for users with query: ${query}`);
-    
-    return res.status(200).json({
-      users: paginatedUsers,
-      pagination: {
-        total: allUsers.length,
-        pages: Math.ceil(allUsers.length / limit),
-        currentPage: page,
-        perPage: limit
-      }
-    });
+    // Handle wildcard search with the match all condition
+    if (matchCondition !== undefined) {
+      const allSessions = await ChatSession.aggregate([
+        { $match: matchCondition },
+        { $group: { _id: '$userId', sessionCount: { $sum: 1 } } }
+      ]);
+      
+      // Apply pagination
+      const paginatedUsers = allSessions.slice(skip, skip + limit);
+      
+      return res.status(200).json({
+        users: paginatedUsers,
+        pagination: {
+          total: allSessions.length,
+          pages: Math.ceil(allSessions.length / limit),
+          currentPage: page,
+          perPage: limit
+        }
+      });
+    }
   } catch (error:any) {
     logger.error('Error searching users:', error);
     return res.status(500).json({ message: 'Failed to search users', error: error.message });

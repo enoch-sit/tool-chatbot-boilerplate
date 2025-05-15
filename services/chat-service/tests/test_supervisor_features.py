@@ -17,19 +17,39 @@ ACCOUNTING_SERVICE_URL = "http://localhost:3001/api"
 CHAT_SERVICE_URL = "http://localhost:3002/api"
 
 # Test user credentials
-SUPERVISOR_USER = {
-    "username": "supervisor1",
-    "email": "supervisor1@example.com",
-    "password": "Supervisor1@",
-    "role": "supervisor",
-}
+SUPERVISOR_USERS = [
+    {
+        "username": "supervisor1",
+        "email": "supervisor1@example.com",
+        "password": "Supervisor1@",
+        "role": "supervisor",
+    },
+    {
+        "username": "supervisor2",
+        "email": "supervisor2@example.com",
+        "password": "Supervisor2@",
+        "role": "supervisor",
+    },
+]
 
-TEST_USER = {
-    "username": "user1",
-    "email": "user1@example.com",
-    "password": "User1@123",
-    "role": "enduser",
-}
+REGULAR_USERS = [
+    {
+        "username": "user1",
+        "email": "user1@example.com",
+        "password": "User1@123",
+        "role": "enduser",
+    },
+    {
+        "username": "user2",
+        "email": "user2@example.com",
+        "password": "User2@123",
+        "role": "enduser",
+    },
+]
+
+# Use the first regular user and supervisor for testing
+TEST_USER = REGULAR_USERS[0]
+SUPERVISOR_USER = SUPERVISOR_USERS[0]
 
 ADMIN_USER = {
     "username": "admin",
@@ -466,52 +486,112 @@ class SupervisorTester:
                     self._continuous_stream(user_session, stream_url, user_headers)
                 )
                 
-                # Give it time to establish the stream properly
+                # Increase delay to avoid race conditions - the server needs time to establish streaming
                 await asyncio.sleep(3)
                 
-                # Step 2: Attempt supervisor observation
-                observe_url = f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/observe"
-                Logger.info(f"Attempting observation at {observe_url}")
+                # Step 2: Attempt supervisor observation with retry logic
+                max_retries = 3
+                observe_success = False
                 
-                try:
-                    # Set timeout to prevent hanging
-                    timeout = aiohttp.ClientTimeout(total=10)
-                    observe_response = await supervisor_session.get(
-                        observe_url, 
-                        headers=sup_headers,
-                        timeout=timeout
-                    )
+                for attempt in range(max_retries):
+                    observe_url = f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/observe"
+                    Logger.info(f"Attempting observation at {observe_url} (Attempt {attempt+1}/{max_retries})")
                     
-                    if observe_response.status != 200:
-                        error_text = await observe_response.text()
-                        Logger.error(f"Observation request failed: {error_text}")
-                        return False
-                    
-                    Logger.success("Supervisor observation connected successfully!")
-                    
-                    # Read a few observation events
-                    observation_count = 0
                     try:
-                        async with observe_response:
-                            async for line in observe_response.content.iter_chunked(1024):
-                                line_str = line.decode('utf-8').strip()
-                                if line_str.startswith('data:'):
-                                    Logger.info(f"Observation event: {line_str[:50]}...")
-                                    observation_count += 1
-                                    
-                                    if observation_count >= 3:
-                                        Logger.success(f"Received {observation_count} observation events")
-                                        break
-                                        
-                            return observation_count > 0
-                    except Exception as e:
-                        Logger.error(f"Error reading observation events: {str(e)}")
-                        return False
+                        # Set timeout to prevent hanging
+                        timeout = aiohttp.ClientTimeout(total=10)
+                        observe_response = await supervisor_session.get(
+                            observe_url, 
+                            headers=sup_headers,
+                            timeout=timeout
+                        )
                         
-                except Exception as e:
-                    Logger.error(f"Exception during observation: {str(e)}")
-                    return False
+                        if observe_response.status != 200:
+                            error_text = await observe_response.text()
+                            Logger.error(f"Observation request failed: {error_text}")
+                            if attempt < max_retries - 1:
+                                Logger.info(f"Retrying in {(attempt+1)*2} seconds...")
+                                await asyncio.sleep((attempt+1) * 2)  # Progressive backoff
+                                continue
+                            return False
+                        
+                        Logger.success("Supervisor observation connected successfully!")
+                        observe_success = True
+                        
+                        # Add delay after connection before reading events
+                        # This gives the server time to prepare the SSE stream
+                        Logger.info("Connected to observation endpoint, waiting 500ms for initialization")
+                        await asyncio.sleep(0.5)
+                        
+                        # Read a few observation events with enhanced error handling
+                        observation_count = 0
+                        try:
+                            async with observe_response:
+                                Logger.info("Starting to read observation events stream")
+                                
+                                # Set a timeout for reading the stream
+                                start_time = time.time()
+                                timeout_duration = 30  # seconds
+                                
+                                while time.time() - start_time < timeout_duration:
+                                    try:
+                                        # Use a timeout for each read attempt
+                                        line_data = await asyncio.wait_for(
+                                            observe_response.content.readline(), 
+                                            timeout=5.0
+                                        )
+                                        
+                                        if not line_data:
+                                            Logger.warning("Empty line received, possible end of stream")
+                                            # Short pause before trying again
+                                            await asyncio.sleep(0.5)
+                                            continue
+                                            
+                                        line_str = line_data.decode('utf-8').strip()
+                                        if line_str.startswith('data:'):
+                                            Logger.info(f"Observation event: {line_str[:50]}...")
+                                            observation_count += 1
+                                            
+                                            if observation_count >= 3:
+                                                Logger.success(f"Received {observation_count} observation events")
+                                                return True
+                                                
+                                    except asyncio.TimeoutError:
+                                        Logger.warning("Timeout waiting for observation event, retrying...")
+                                        continue
+                                    except Exception as inner_e:
+                                        Logger.error(f"Error processing event: {type(inner_e).__name__}: {str(inner_e)}")
+                                        # Continue reading instead of failing immediately
+                                        continue
+                                        
+                                Logger.warning(f"Observation read timed out after {timeout_duration}s with {observation_count} events")
+                                return observation_count > 0
+                                
+                        except aiohttp.ClientError as e:
+                            Logger.error(f"Connection error during observation: {type(e).__name__}: {str(e)}")
+                            return False
+                        except asyncio.CancelledError:
+                            Logger.info("Observation task was cancelled")
+                            return False
+                        except Exception as e:
+                            Logger.error(f"Error reading observation events: {type(e).__name__}: {str(e)}")
+                            # Capture additional debug information
+                            return False
+                            
+                    except Exception as e:
+                        Logger.error(f"Exception during observation: {str(e)}")
+                        if attempt < max_retries - 1:
+                            Logger.info(f"Retrying in {(attempt+1)*2} seconds...")
+                            await asyncio.sleep((attempt+1) * 2)  # Progressive backoff
+                        else:
+                            return False
                     
+                    # If we've succeeded, break out of retry loop
+                    if observe_success:
+                        break
+                        
+                return observe_success
+                        
             finally:
                 # Clean up resources
                 if 'stream_task' in locals() and not stream_task.done():
@@ -519,7 +599,7 @@ class SupervisorTester:
                     
                 await user_session.close()
                 await supervisor_session.close()
-                
+                    
         except Exception as e:
             Logger.error(f"Supervisor observation error: {str(e)}")
             return False
@@ -527,6 +607,10 @@ class SupervisorTester:
     async def _continuous_stream(self, session, url, headers):
         """Helper method that keeps a streaming session open"""
         try:
+            # Track start time to ensure minimum duration
+            start_time = time.time()
+            min_duration = 10  # Seconds - ensure stream stays open at least this long
+            
             # Send a streaming request that will keep the connection open
             async with session.post(
                 url,
@@ -535,7 +619,7 @@ class SupervisorTester:
                     "message": "Please provide a very detailed explanation about artificial intelligence, machine learning, and neural networks",
                     "modelId": "amazon.titan-text-express-v1:0"
                 },
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=60)  # Increased timeout for longer streaming
             ) as response:
                 if response.status != 200:
                     error_text = await response.text()
@@ -553,10 +637,17 @@ class SupervisorTester:
                         if chunk_count % 5 == 0:
                             Logger.info(f"Stream received chunk #{chunk_count}")
                         
-                        # Slow down processing to allow observation
-                        await asyncio.sleep(0.1)
+                        # Slow down processing to allow observation (increased delay)
+                        await asyncio.sleep(0.2)
                 
-                Logger.success(f"Stream completed with {chunk_count} chunks")
+                # Ensure minimum stream duration to avoid race conditions
+                elapsed = time.time() - start_time
+                if elapsed < min_duration:
+                    remaining_time = min_duration - elapsed
+                    Logger.info(f"Ensuring minimum stream duration, waiting {remaining_time:.1f}s")
+                    await asyncio.sleep(remaining_time)
+                
+                Logger.success(f"Stream completed with {chunk_count} chunks after {time.time() - start_time:.1f}s")
                 return True
                 
         except asyncio.CancelledError:

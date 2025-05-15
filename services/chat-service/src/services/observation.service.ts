@@ -69,7 +69,7 @@ export class ObservationManager {
    * Time to keep session available for observation after completion
    * Sessions remain observable for this period after they end
    */
-  private streamBufferTime: number = 60000; // 1 minute buffer to keep streams available for observation
+  private streamBufferTime: number = 120000; // 2 minutes buffer to keep streams available for observation (increased from 1 minute)
   
   /**
    * Cleanup timeout references by session ID
@@ -169,9 +169,22 @@ export class ObservationManager {
     stream.on('end', () => {
       logger.debug(`Stream ended for session ${sessionId}, keeping available for ${this.streamBufferTime}ms`);
       
+      // Notify any observers that the original stream has ended but observation continues
+      this.eventEmitter.emit(`stream:${sessionId}`, `event: info\ndata: ${JSON.stringify({
+        message: "Original stream ended, remaining in observation buffer",
+        timestamp: new Date().toISOString(),
+      })}\n\n`);
+      
       // Schedule delayed cleanup
       const timeout = setTimeout(() => {
-        this.deregisterStream(sessionId);
+        // Notify before deregistering
+        this.eventEmitter.emit(`stream:${sessionId}`, `event: info\ndata: ${JSON.stringify({
+          message: "Observation period ending",
+          timestamp: new Date().toISOString(),
+        })}\n\n`);
+        
+        // Add small delay to ensure notification is sent before deregistration
+        setTimeout(() => this.deregisterStream(sessionId), 500);
       }, this.streamBufferTime);
       
       // Store the timeout reference for potential cancellation
@@ -236,24 +249,53 @@ export class ObservationManager {
    */
   public addObserver(sessionId: string, callback: ObserverCallback): () => void {
     // Check if the session is available for observation
-    if (!this.isStreamActive(sessionId)) {
-      logger.warn(`Attempted to observe inactive stream: ${sessionId}`);
+    const isActive = this.activeStreams.has(sessionId);
+    const isBuffered = this.streamTimeouts.has(sessionId);
+    
+    if (!isActive && !isBuffered) {
+      logger.warn(`Attempted to observe unavailable stream: ${sessionId}`);
+      
+      // Send error notification to the observer
+      callback(`event: error\ndata: ${JSON.stringify({ 
+        message: 'Stream not available for observation',
+        error: 'STREAM_NOT_AVAILABLE',
+        sessionId: sessionId,
+        timestamp: new Date().toISOString()
+      })}\n\n`);
+      
       return () => {}; // Return no-op function when session isn't available
+    }
+    
+    // If stream is in buffer period (completed but still available)
+    if (!isActive && isBuffered) {
+      logger.info(`Observer connected to completed stream in buffer period: ${sessionId}`);
+      callback(`event: info\ndata: ${JSON.stringify({ 
+        message: 'Connected to recently completed stream in buffer period',
+        sessionId: sessionId,
+        timestamp: new Date().toISOString()
+      })}\n\n`);
     }
     
     // Generate a unique identifier for this observer
     const observerId = `obs_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     
-    // Register the observer callback
+    // Create or get the observers map for this session
+    if (!this.observers.has(sessionId)) {
+      this.observers.set(sessionId, new Map());
+    }
     const sessionObservers = this.observers.get(sessionId)!;
     sessionObservers.set(observerId, callback);
     
     // Create listener function for event subscription
     const listener = (data: string) => {
-      callback(data);
+      try {
+        callback(data);
+      } catch (error) {
+        logger.error(`Error in observer callback for session ${sessionId}:`, error);
+      }
     };
     
-    // Subscribe to session events
+    // Subscribe to session events with error handling
     this.eventEmitter.on(`stream:${sessionId}`, listener);
     
     /**
@@ -264,19 +306,47 @@ export class ObservationManager {
      */
     const history = this.streamHistory.get(sessionId);
     if (history && history.length > 0) {
-      // Mark the start of historical data replay
-      callback(`event: history-start\ndata: ${JSON.stringify({ 
-        message: 'Starting historical data replay' 
-      })}\n\n`);
-      
-      // Send each historical chunk
-      history.forEach(chunk => {
-        callback(chunk);
-      });
-      
-      // Mark the end of historical data replay
-      callback(`event: history-end\ndata: ${JSON.stringify({ 
-        message: 'End of historical data, now receiving live updates' 
+      try {
+        // Mark the start of historical data replay
+        callback(`event: history-start\ndata: ${JSON.stringify({ 
+          message: 'Starting historical data replay',
+          count: history.length,
+          timestamp: new Date().toISOString()
+        })}\n\n`);
+        
+        // Send each historical chunk with a small delay to avoid overwhelming the client
+        history.forEach((chunk, index) => {
+          setTimeout(() => {
+            try {
+              callback(chunk);
+            } catch (error) {
+              logger.error(`Error sending historical chunk ${index} for session ${sessionId}:`, error);
+            }
+          }, index * 50); // 50ms delay between chunks
+        });
+        
+        // Mark the end of historical data replay after all chunks
+        setTimeout(() => {
+          callback(`event: history-end\ndata: ${JSON.stringify({ 
+            message: 'End of historical data, now receiving live updates',
+            timestamp: new Date().toISOString()
+          })}\n\n`);
+        }, history.length * 50 + 100);
+      } catch (error) {
+        logger.error(`Error during history replay for session ${sessionId}:`, error);
+        
+        // Send error notification
+        callback(`event: error\ndata: ${JSON.stringify({ 
+          message: 'Error during history replay',
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString()
+        })}\n\n`);
+      }
+    } else {
+      // No history available
+      callback(`event: info\ndata: ${JSON.stringify({ 
+        message: 'No history available, receiving live updates only',
+        timestamp: new Date().toISOString()
       })}\n\n`);
     }
     
