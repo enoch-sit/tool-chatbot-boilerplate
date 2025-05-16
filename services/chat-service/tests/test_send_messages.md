@@ -6,9 +6,70 @@
 ================================================================================
 TEST RESULTS SUMMARY
 ================================================================================
-[ERROR] FAIL - Send non-streaming message
+[SUCCESS] PASS - Send non-streaming message
 [SUCCESS] PASS - Send streaming message
 ```
+
+## Root Cause and Solution: Nova Model Message Formatting
+
+After analyzing the source code, the issue affecting non-streaming messages was identified as a **JSON format mismatch** when sending requests to Amazon Nova models. This has now been fixed, and all tests are passing.
+
+### The Problem
+
+In AWS Bedrock, Amazon Nova models require a specific message format:
+
+```typescript
+// Nova messages must use this format
+{
+  role: "user",
+  content: [{ text: "message content" }] // Content must be a JSONArray
+}
+```
+
+The issue occurred because:
+
+1. **Streaming endpoint (working correctly)**: In `streaming.service.ts`, the Nova model messages were formatted correctly:
+
+   ```typescript
+   const formattedMessages = messages.map(m => ({
+     role: m.role,
+     content: [{
+       text: typeof m.content === 'string' ? m.content : m.content.text || m.content
+     }]
+   }));
+   ```
+
+2. **Non-streaming endpoint (previously failing)**: In `chat.controller.ts`, the Nova model messages were incorrectly formatted with plain strings:
+
+   ```typescript
+   // Previous incorrect implementation
+   return {
+     role: m.role,
+     content: textContent  // String instead of required JSONArray
+   };
+   ```
+
+   This resulted in the error: `"Malformed input request: #/messages/0/content: expected type: JSONArray, found: String"`
+
+### The Solution
+
+We fixed the issue by updating the non-streaming endpoint in `chat.controller.ts` to format the content field correctly:
+
+```typescript
+return {
+  role: m.role,
+  content: [{ text: textContent }]  // Now using the correct array format for Nova models
+};
+```
+
+This change ensures both streaming and non-streaming requests format messages according to the Nova model requirements.
+
+## Verification
+
+After implementing the fix, we:
+1. Tested with multiple Nova models (`amazon.nova-micro-v1:0`, `amazon.nova-lite-v1:0`)
+2. Verified both streaming and non-streaming requests now work correctly
+3. Added version tracking to confirm the fix is in the current deployment
 
 ## System Architecture Overview
 
@@ -108,58 +169,6 @@ flowchart TB
     end
 ```
 
-## Root Cause: Nova Model Message Formatting
-
-After analyzing the source code, the issue affecting non-streaming messages has been identified as a **JSON format mismatch** when sending requests to Amazon Nova models.
-
-### The Problem
-
-In AWS Bedrock, Amazon Nova models require a specific message format:
-
-```typescript
-// Nova messages must use this format
-{
-  role: "user",
-  content: [{ text: "message content" }] // Content must be a JSONArray
-}
-```
-
-The issue occurred because:
-
-1. **Streaming endpoint (working correctly)**: In `streaming.service.ts`, the Nova model messages were correctly formatted:
-
-   ```typescript
-   const formattedMessages = messages.map(m => ({
-     role: m.role,
-     content: [{
-       text: typeof m.content === 'string' ? m.content : m.content.text || m.content
-     }]
-   }));
-   ```
-
-2. **Non-streaming endpoint (failing)**: In `chat.controller.ts`, the Nova model messages were incorrectly formatted with plain strings:
-
-   ```typescript
-   // Previous incorrect implementation
-   return {
-     role: m.role,
-     content: textContent  // String instead of required JSONArray
-   };
-   ```
-
-   This resulted in the error: `"Malformed input request: #/messages/0/content: expected type: JSONArray, found: String"`
-
-### The Fix
-
-The solution was to update the non-streaming endpoint in `chat.controller.ts` to format the content field correctly:
-
-```typescript
-return {
-  role: m.role,
-  content: [{ text: textContent }]  // Now using the correct array format for Nova models
-};
-```
-
 ## Potential Causes of Non-Streaming Message Failure
 
 ### 1. API Implementation Issues
@@ -211,37 +220,32 @@ flowchart TD
 ### Core Files
 
 1. **`services/chat-service/src/controllers/chat.controller.ts`**
-   - **FIXED**: The non-streaming message handler for Nova models was formatting content as a string instead of a JSONArray with a text property.
+   - **FIXED**: The non-streaming message handler now formats Nova model messages correctly, using the JSONArray content format required by the API.
 
-2. **`services/chat-service/src/services/message.service.ts`** 
-   - Business logic for processing messages
-   - Handles credit verification and model submission
-
-3. **`services/chat-service/src/services/streaming.service.ts`**
-   - Manages streaming interactions with AI models
-   - May contain code paths used for both request types
+2. **`services/chat-service/src/services/streaming.service.ts`** 
+   - This contained the correct implementation for Nova models that was used as a reference to fix the non-streaming issue
 
 ### Support Files
 
-4. **`services/chat-service/src/models/chat-session.model.ts`**
+3. **`services/chat-service/src/models/chat-session.model.ts`**
    - Schema definition for chat sessions
    - May have validation that affects non-streaming messages
 
-5. **`services/chat-service/src/middleware/auth.middleware.ts`**
+4. **`services/chat-service/src/middleware/auth.middleware.ts`**
    - Authentication logic that might be behaving differently
 
-6. **`services/chat-service/src/middleware/credits.middleware.ts`**
+5. **`services/chat-service/src/middleware/credits.middleware.ts`**
    - Credit verification middleware that might have issues
 
-7. **`services/chat-service/src/integrations/bedrock.service.ts`**
+6. **`services/chat-service/src/integrations/bedrock.service.ts`**
    - AWS Bedrock integration that might be failing for non-streaming
 
 ### Accounting Service Files
 
-8. **`services/accounting-service/src/services/usage.service.ts`**
+7. **`services/accounting-service/src/services/usage.service.ts`**
    - Tracks API usage, might have issues verifying credits
 
-9. **`services/accounting-service/src/services/credit.service.ts`**
+8. **`services/accounting-service/src/services/credit.service.ts`**
    - Credit management service, might reject non-streaming requests
 
 ## Debugging Steps
@@ -556,19 +560,22 @@ export async function checkCredits(req: Request, res: Response, next: NextFuncti
 
 ## Recommended Testing Strategy
 
-1. **Implement model-specific tests** for both streaming and non-streaming endpoints
-2. **Create shared formatter utilities** for message content to ensure consistency between streaming and non-streaming
+1. **Implement shared formatter utilities** for message content to ensure consistency between streaming and non-streaming endpoints
+2. **Create model-specific test fixtures** to validate formatting for each model type
 3. **Add validation** to catch format errors before sending requests to AWS Bedrock
-4. **Create model-specific test fixtures** to verify correct formatting for each model type
-5. **Implement format validation** in middleware to catch incorrect formats early
+4. **Add tests that specifically verify message format** for each supported model family
+5. **Create a unit test that checks message format** against each model's expected schema
 
 ## Conclusion
 
 The issue was resolved by fixing the model-specific formatting in the non-streaming message path. This highlights the importance of maintaining consistent formatting requirements across different code paths when working with external AI services like AWS Bedrock.
 
-The streaming flow worked because it correctly implemented the format requirements for Nova models, while the non-streaming flow had an incorrect implementation. The fix ensures both flows format messages correctly according to each model's specifications.
+Key learnings:
+1. Different model providers (Anthropic, Amazon, Meta) have different message format requirements
+2. The Nova models from Amazon have particularly strict requirements for message format
+3. When implementing multiple code paths (streaming vs. non-streaming), ensure consistent formatting logic
 
-For future development:
-1. Consider implementing a shared utility function for model-specific message formatting
-2. Add comprehensive test cases for each model type
-3. Implement more detailed error messages when format validation fails
+For future development, we recommend:
+1. Creating a shared utility function for model-specific message formatting
+2. Adding stronger validation for request formats before sending to API
+3. Implementing comprehensive test cases for each model type
