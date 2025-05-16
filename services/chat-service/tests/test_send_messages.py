@@ -3,6 +3,8 @@ import requests
 import json
 import sys
 import time
+import traceback
+import uuid
 import sseclient
 from colorama import Fore, Style, init
 
@@ -100,16 +102,26 @@ class MessagingTester:
         
         for service in services:
             try:
+                Logger.info(f"Checking {service['name']} at {service['url']}...")
                 response = self.session.get(service["url"], timeout=5)
+                Logger.info(f"Response status: {response.status_code}")
                 if response.status_code == 200:
-                    Logger.success(f"{service['name']} is healthy")
+                    try:
+                        data = response.json()
+                        Logger.success(f"{service['name']} is healthy: {json.dumps(data)}")
+                    except json.JSONDecodeError:
+                        Logger.success(f"{service['name']} is healthy")
                 else:
                     Logger.error(f"{service['name']} returned status code {response.status_code}")
+                    Logger.error(f"Response: {response.text}")
                     all_healthy = False
             except requests.RequestException as e:
                 Logger.error(f"{service['name']} health check failed: {str(e)}")
                 all_healthy = False
         
+        if not all_healthy:
+            Logger.error("One or more services are not healthy. This may cause test failures.")
+            
         return all_healthy
     
     def authenticate(self):
@@ -201,6 +213,11 @@ class MessagingTester:
             Logger.error(f"Credit allocation error: {str(e)}")
             return False
     
+    def allocate_non_streaming_credits(self, amount=20000):
+        """Allocate higher amount of credits specifically for non-streaming testing"""
+        Logger.header("ALLOCATING CREDITS FOR NON-STREAMING TESTS")
+        return self.allocate_credits(amount)
+    
     def create_chat_session(self):
         """Create a new chat session"""
         Logger.header("CREATING NEW CHAT SESSION")
@@ -260,40 +277,149 @@ class MessagingTester:
             return None
 
     def send_non_streaming_message(self, model_id):
-        """Send a regular (non-streaming) message"""
-        Logger.header("SENDING NON-STREAMING MESSAGE")
+        """Send a regular (non-streaming) message with enhanced debugging"""
+        Logger.header(f"SENDING NON-STREAMING MESSAGE USING {model_id}")
         
         if not self.session_id:
             Logger.error("No active session ID. Create a session first.")
             return False
-            
+        
+        # Enhanced logging for request details
+        Logger.info(f"Session ID: {self.session_id}")
+        Logger.info(f"Model ID: {model_id}")
+        Logger.info(f"Headers: {json.dumps(self.headers)}")
+        
+        # Additional debugging: check user balance before sending message
         try:
+            Logger.info("Checking credit balance before sending message...")
+            balance_response = requests.get(
+                f"{ACCOUNTING_SERVICE_URL}/credits/balance",
+                headers=self.headers
+            )
+            
+            if balance_response.status_code == 200:
+                balance_data = balance_response.json()
+                Logger.info(f"Current credit balance: {json.dumps(balance_data)}")
+                
+                # Warn if balance is low
+                if balance_data.get('totalCredits', 0) < 100:
+                    Logger.warning(f"Credit balance is low: {balance_data.get('totalCredits')} credits")
+            else:
+                Logger.warning(f"Failed to get credit balance: {balance_response.status_code}")
+                Logger.info(balance_response.text)
+        except Exception as e:
+            Logger.warning(f"Error checking credit balance: {str(e)}")
+        
+        # Try manually checking credits first
+        try:
+            Logger.info("Manually checking credit availability...")
+            credit_check_response = requests.post(
+                f"{ACCOUNTING_SERVICE_URL}/credits/check",
+                headers=self.headers,
+                json={
+                    "credits": 5,  # Try with old parameter name
+                    "requiredCredits": 5  # Also try with new parameter name
+                }
+            )
+            
+            Logger.info(f"Credit check response status: {credit_check_response.status_code}")
+            Logger.info(f"Credit check response: {credit_check_response.text}")
+        except Exception as e:
+            Logger.warning(f"Error in manual credit check: {str(e)}")
+        
+        try:
+            Logger.info(f"Sending non-streaming message with model {model_id}...")
+            req_start_time = time.time()
             response = self.session.post(
                 f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/messages",
                 headers=self.headers,
                 json={
-                    "message": "Tell me about machine learning",
+                    "message": "What are the three primary colors?",
                     "modelId": model_id
-                }
+                },
+                timeout=60
             )
+            req_duration = time.time() - req_start_time
             
+            # Detailed response logging
+            Logger.info(f"Request completed in {req_duration:.2f} seconds")
+            Logger.info(f"Response status: {response.status_code}")
+            Logger.info(f"Response headers: {dict(response.headers)}")
+            
+            # Log truncated response body (first 500 chars)
+            response_text = response.text
+            Logger.info(f"Response body (truncated): {response_text[:500]}")
+            if len(response_text) > 500:
+                Logger.info("Response too long to display in full")
+            
+            # Enhanced error handling based on status code
             if response.status_code == 200:
-                data = response.json()
-                Logger.success("Message sent successfully!")
-                Logger.info(f"Response contains: {data.keys()}")
-                Logger.info(f"Message: {data.get('message', 'No message')}")
-                return True
+                Logger.success(f"Non-streaming message with {model_id} sent successfully!")
+                try:
+                    data = response.json()
+                    Logger.info(json.dumps(data, indent=2))
+                    return True
+                except json.JSONDecodeError:
+                    Logger.warning("Response not in JSON format")
+                    return True  # Still consider it a success if status is 200
             elif response.status_code == 402:
                 Logger.warning("Message failed due to insufficient credits")
                 Logger.info(response.text)
                 return False
             else:
-                Logger.error(f"Failed to send message: {response.status_code}, {response.text}")
+                Logger.error(f"Failed to send message: {response.status_code}")
+                Logger.info(response.text)
                 return False
                 
+        except requests.exceptions.Timeout:
+            Logger.error("Request timed out. The model might be taking too long to respond.")
+            return False
+        except requests.exceptions.ConnectionError:
+            Logger.error("Connection error. The chat service might be overloaded or unreachable.")
+            return False
         except requests.RequestException as e:
             Logger.error(f"Message sending error: {str(e)}")
             return False
+        except json.JSONDecodeError:
+            Logger.error("Failed to parse JSON response from server")
+            Logger.info(f"Raw response: {response.text[:200]}...")
+            return False
+        except Exception as e:
+            Logger.error(f"Unexpected error: {str(e)}")
+            Logger.error(traceback.format_exc())
+            return False
+    
+    def test_specific_nova_models(self):
+        """Test the sendMessage endpoint with specific Nova models"""
+        Logger.header("TESTING SPECIFIC NOVA MODELS (NON-STREAMING)")
+        
+        models_to_test = [
+            'amazon.nova-micro-v1:0',
+            'amazon.nova-lite-v1:0'
+        ]
+        
+        results = {}
+        
+        for model_id in models_to_test:
+            Logger.header(f"TESTING MODEL: {model_id}")
+            result = self.send_non_streaming_message(model_id)
+            results[model_id] = result
+            
+            # Add a small delay between requests to avoid rate limiting
+            time.sleep(3)
+        
+        # Print summary
+        Logger.header("NOVA MODELS TEST SUMMARY")
+        all_passed = True
+        for model_id, success in results.items():
+            status = "PASS" if success else "FAIL"
+            if success:
+                Logger.success(f"{status} - {model_id}")
+            else:
+                Logger.error(f"{status} - {model_id}")
+                all_passed = False
+        
+        return all_passed
     
     def send_streaming_message(self, model_id):
         """Send a streaming message with improved handling for race conditions"""
@@ -451,6 +577,25 @@ class MessagingTester:
         except requests.RequestException as e:
             Logger.error(f"Chat session deletion error: {str(e)}")
             return False
+    
+    def get_api_version(self):
+        """Get the API version from the /api/version endpoint"""
+        Logger.header("GETTING API VERSION")
+        
+        try:
+            response = self.session.get(f"{CHAT_SERVICE_URL}/version")
+            
+            if response.status_code == 200:
+                Logger.success(f"API version retrieved successfully")
+                Logger.info(f"API Version: {response.text}")
+                return response.text
+            else:
+                Logger.error(f"Failed to get API version: {response.status_code}, {response.text}")
+                return None
+                
+        except requests.RequestException as e:
+            Logger.error(f"API version retrieval error: {str(e)}")
+            return None
 
 def run_test():
     Logger.header("CHAT MESSAGE SENDING TEST SCRIPT")
@@ -471,8 +616,8 @@ def run_test():
     if not tester.authenticate_admin():
         Logger.warning("Admin authentication failed. Some tests may fail.")
     
-    # Allocate credits to test user
-    tester.allocate_credits()
+    # Allocate more credits specifically for non-streaming tests
+    tester.allocate_non_streaming_credits()
     
     # Create a new chat session
     if not tester.create_chat_session():
@@ -487,10 +632,14 @@ def run_test():
     
     Logger.info(f"Using model: {model_id} for testing")
     
-    # Run tests
+    # Test the specific Nova models as requested
+    nova_test_result = tester.test_specific_nova_models()
+    results.append(("Test Nova models (non-streaming)", nova_test_result))
+    
+    # Run the regular tests
     test_sequence = [
-        ("Send non-streaming message", lambda: tester.send_non_streaming_message(model_id)),
-        ("Send streaming message", lambda: tester.send_streaming_message(model_id))
+        ("Send non-streaming message with default model", lambda: tester.send_non_streaming_message(model_id)),
+        ("Send streaming message with default model", lambda: tester.send_streaming_message(model_id))
     ]
     
     # Execute tests
@@ -501,6 +650,9 @@ def run_test():
     
     # Clean up resources
     tester.delete_chat_session()
+    
+    # Get and display API version at the end
+    api_version = tester.get_api_version()
     
     # Print test results summary
     Logger.header("TEST RESULTS SUMMARY")
@@ -516,8 +668,63 @@ def run_test():
     
     Logger.header("OVERALL RESULT: " + ("PASSED" if all_passed else "FAILED"))
     
+    if api_version:
+        Logger.info(f"Chat Service API Version: {api_version}")
+    
     return all_passed
 
+def test_nova_models_only():
+    """Run only the Nova models test"""
+    Logger.header("NOVA MODELS TEST SCRIPT")
+    
+    tester = MessagingTester()
+    
+    # Check services health
+    if not tester.check_services_health():
+        Logger.error("Services check failed. Cannot continue with tests.")
+        sys.exit(1)
+    
+    # Authenticate
+    if not tester.authenticate():
+        Logger.error("Test user authentication failed. Cannot continue with tests.")
+        sys.exit(1)
+        
+    if not tester.authenticate_admin():
+        Logger.warning("Admin authentication failed. Some tests may fail.")
+    
+    # Allocate credits
+    tester.allocate_non_streaming_credits(30000)
+    
+    # Create session
+    if not tester.create_chat_session():
+        Logger.error("Failed to create chat session. Cannot continue with tests.")
+        sys.exit(1)
+    
+    # Run Nova models test
+    success = tester.test_specific_nova_models()
+    
+    # Clean up
+    tester.delete_chat_session()
+    
+    # Get and display API version at the end
+    api_version = tester.get_api_version()
+    
+    # Print result
+    if success:
+        Logger.success("NOVA MODELS TEST: PASSED")
+    else:
+        Logger.error("NOVA MODELS TEST: FAILED")
+    
+    if api_version:
+        Logger.info(f"Chat Service API Version: {api_version}")
+    
+    return success
+
 if __name__ == "__main__":
-    success = run_test()
+    # Check if we should run only the Nova models test
+    if len(sys.argv) > 1 and sys.argv[1] == "--nova-only":
+        success = test_nova_models_only()
+    else:
+        success = run_test()
+    
     sys.exit(0 if success else 1)

@@ -21,7 +21,8 @@ import logger from '../utils/logger';
 import config from '../config/config';
 import { 
   BedrockRuntimeClient, 
-  InvokeModelCommand
+  InvokeModelCommand,
+  InvokeModelCommandOutput
 } from '@aws-sdk/client-bedrock-runtime';
 
 // Define types for message content
@@ -100,7 +101,7 @@ export const createChatSession = async (req: Request, res: Response) => {
     // Create new session with metadata for tracking and analytics
     const session = new ChatSession({
       userId,
-      username, // Store the username for easier supervisor lookup
+      username: username, // Store the username for easier supervisor lookup
       title: title || 'New Chat',
       messages,
       modelId,
@@ -263,11 +264,14 @@ export const deleteChatSession = async (req: Request, res: Response) => {
  * @returns 200 with success message and AI response, error response otherwise
  */
 export const sendMessage = async (req: Request, res: Response) => {
+  // Define variables at function scope level so they're available in the catch block
+  const userId = req.user?.userId;
+  const sessionId = req.params.sessionId;
+  const modelId = req.body.modelId;
+  
   try {
-    const userId = req.user?.userId;
-    const sessionId = req.params.sessionId;
-    const { message, modelId } = req.body;
     const authHeader = req.headers.authorization || '';
+    const { message } = req.body;
     
     // Find chat session with ownership verification
     const session = await ChatSession.findOne({ _id: sessionId, userId });
@@ -341,35 +345,59 @@ export const sendMessage = async (req: Request, res: Response) => {
       };
     } else if (selectedModel.includes('amazon.nova')) {
       // Format for Amazon's Nova models
-      const formattedMessages = messageHistory.map(m => {
-        // Properly handle different types of content
-        let textContent: string;
-        if (typeof m.content === 'string') {
-          textContent = m.content;
-        } else if (m.content && typeof m.content === 'object') {
-          // Handle object or array content safely
-          const contentObj = m.content as any;
-          textContent = contentObj.text || 
-                       (contentObj.toString ? contentObj.toString() : JSON.stringify(contentObj));
-        } else {
-          textContent = String(m.content || '');
-        }
-        
-        return {
-          role: m.role,
-          content: [{
-            text: textContent
-          }]
-        };
-      });
+      // Nova models have strict format requirements:
+      // 1. Only accepts 'user' or 'assistant' roles in messages array
+      // 2. System messages should go in a separate 'system' field as strings
+      // 3. Content must be an array with objects containing 'text' property
+      
+      // Extract system messages for the system field
+      const systemPrompts = session.messages
+        .filter((m: ChatMessage) => m.role === 'system')
+        .map((m: ChatMessage) => {
+          // Convert content to string if it's not already
+          if (typeof m.content === 'string') {
+            return m.content;
+          } else if (m.content && typeof m.content === 'object') {
+            const contentObj = m.content as any;
+            return contentObj.text || 
+                  (contentObj.toString ? contentObj.toString() : JSON.stringify(contentObj));
+          } else {
+            return String(m.content || '');
+          }
+        });
+      
+      // Format user and assistant messages
+      const formattedMessages = session.messages
+        .filter((m: ChatMessage) => m.role === 'user' || m.role === 'assistant')
+        .map((m: ChatMessage) => {
+          // Handle different content types safely
+          let textContent: string;
+          if (typeof m.content === 'string') {
+            textContent = m.content;
+          } else if (m.content && typeof m.content === 'object') {
+            const contentObj = m.content as any;
+            textContent = contentObj.text || 
+                        (contentObj.toString ? contentObj.toString() : JSON.stringify(contentObj));
+          } else {
+            textContent = String(m.content || '');
+          }
+          
+          return {
+            role: m.role,  // Either 'user' or 'assistant'
+            content: [{ text: textContent }]  // Format as JSONArray with text property as required by Nova models
+          };
+        });
       
       promptBody = {
+        system: systemPrompts.length > 0 
+          ? systemPrompts.map(prompt => ({ text: prompt }))
+          : [{ text: "You are a helpful AI assistant." }],
+        messages: formattedMessages,
         inferenceConfig: {
-          max_new_tokens: 2000,
+          maxTokens: 2000,
           temperature: 0.7,
-          top_p: 0.9
-        },
-        messages: formattedMessages
+          topP: 0.9
+        }
       };
     } else if (selectedModel.includes('meta.llama')) {
       // Format for Meta's Llama models
@@ -390,41 +418,180 @@ export const sendMessage = async (req: Request, res: Response) => {
     
     logger.info(`Processing non-streaming request for user ${userId} with model ${selectedModel}`);
     
-    // Create the command to invoke the model
-    const command = new InvokeModelCommand({
-      modelId: selectedModel,
-      body: JSON.stringify(promptBody),
-      contentType: 'application/json',
-      accept: 'application/json'
-    });
+    // Implement retry mechanism for more resilient model invocation
+    const maxRetries = 2;
+    let retryCount = 0;
+    // Initialize with proper type to match AWS SDK return type
+    let bedrockResponse: InvokeModelCommandOutput | undefined;
+    let completionTime = 0;
+    let startTime = 0;
     
-    // Send the request to AWS Bedrock and wait for the complete response
-    const startTime = Date.now();
-    const bedrockResponse = await bedrockClient.send(command);
-    const completionTime = Date.now() - startTime;
+    while (retryCount <= maxRetries) {
+      try {
+        // Create the command to invoke the model
+        const command = new InvokeModelCommand({
+          modelId: selectedModel,
+          body: JSON.stringify(promptBody),
+          contentType: 'application/json',
+          accept: 'application/json'
+        });
+        
+        // Send the request to AWS Bedrock with timeout handling
+        startTime = Date.now();
+        logger.debug(`Sending request to Bedrock (attempt ${retryCount + 1}/${maxRetries + 1})`);
+        
+        // Create a controller for timeout handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, 30000); // 30 second timeout
+        
+        bedrockResponse = await bedrockClient.send(command, { 
+          abortSignal: controller.signal 
+        });
+        
+        // Clear the timeout since the request succeeded
+        clearTimeout(timeoutId);
+        
+        completionTime = Date.now() - startTime;
+        logger.debug(`Bedrock response received in ${completionTime}ms`);
+        
+        // If we got a response successfully, break out of the retry loop
+        break;
+        
+      } catch (error: any) {
+        // Check if it's a timeout or abort error
+        if (error.name === 'AbortError') {
+          logger.error(`Bedrock request timed out after ${Date.now() - startTime}ms`);
+          if (retryCount === maxRetries) {
+            return res.status(504).json({
+              message: 'AI model request timed out',
+              error: 'MODEL_TIMEOUT'
+            });
+          }
+        } 
+        // Handle specific AWS Bedrock errors
+        else if (error.$metadata?.httpStatusCode) {
+          logger.error(`Bedrock error: ${error.name} (${error.$metadata.httpStatusCode}) - ${error.message}`);
+          
+          // Return appropriate status codes based on the AWS error
+          if (error.$metadata.httpStatusCode === 400) {
+            return res.status(400).json({
+              message: 'Invalid request to AI model service',
+              error: error.message,
+              errorCode: 'MODEL_BAD_REQUEST'
+            });
+          } else if (error.$metadata.httpStatusCode === 401 || error.$metadata.httpStatusCode === 403) {
+            return res.status(503).json({
+              message: 'Authentication error with AI model service',
+              error: error.message,
+              errorCode: 'MODEL_AUTH_ERROR'
+            });
+          } else if (error.$metadata.httpStatusCode === 429) {
+            return res.status(429).json({
+              message: 'Rate limit exceeded on AI model service',
+              error: error.message,
+              errorCode: 'MODEL_RATE_LIMIT'
+            });
+          } else if (retryCount === maxRetries) {
+            return res.status(503).json({
+              message: 'AI model service error',
+              error: error.message,
+              errorCode: 'MODEL_SERVER_ERROR'
+            });
+          }
+        } else {
+          logger.error(`Unexpected error invoking model: ${error.name} - ${error.message}`);
+          if (retryCount === maxRetries) {
+            return res.status(500).json({
+              message: 'Error processing request',
+              error: error.message
+            });
+          }
+        }
+        
+        // Increment retry counter and add exponential backoff
+        retryCount++;
+        const backoffMs = Math.pow(2, retryCount) * 500; // 1000ms, 2000ms, 4000ms
+        logger.info(`Retrying in ${backoffMs}ms (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
     
     // Parse the response
     let responseContent = '';
     let tokensUsed = 0;
     
-    if (bedrockResponse.body) {
-      const responseBody = JSON.parse(
-        new TextDecoder().decode(bedrockResponse.body)
-      );
+    if (bedrockResponse && bedrockResponse?.body) {
+      // Add debugging to help diagnose the issue
+      const rawResponseText = new TextDecoder().decode(bedrockResponse.body);
+      logger.debug(`Raw Bedrock response for model ${selectedModel}: ${rawResponseText}`);
       
-      // Extract response content based on model
-      if (selectedModel.includes('anthropic')) {
-        responseContent = responseBody.content?.[0]?.text || '';
-      } else if (selectedModel.includes('amazon.titan')) {
-        responseContent = responseBody.results?.[0]?.outputText || '';
-      } else if (selectedModel.includes('amazon.nova')) {
-        responseContent = responseBody.results?.[0]?.outputText || '';
-      } else if (selectedModel.includes('meta.llama')) {
-        responseContent = responseBody.generation || '';
+      try {
+        const responseBody = JSON.parse(rawResponseText);
+        
+        logger.debug(`Parsed response structure: ${JSON.stringify(Object.keys(responseBody))}`);
+        
+        // More robust response parsing based on model type
+        if (selectedModel.includes('anthropic')) {
+          // Handle different versions of Anthropic Claude API responses
+          if (responseBody.content && Array.isArray(responseBody.content)) {
+            // Newer Claude API format
+            responseContent = responseBody.content[0]?.text || '';
+          } else if (responseBody.completion) {
+            // Older Claude API format
+            responseContent = responseBody.completion;
+          } else {
+            // Last resort fallback
+            responseContent = JSON.stringify(responseBody);
+          }
+        } else if (selectedModel.includes('amazon.titan')) {
+          // Handle different Titan response formats
+          responseContent = responseBody.results?.[0]?.outputText || 
+                           responseBody.outputText || 
+                           responseBody.output || 
+                           '';
+        } else if (selectedModel.includes('amazon.nova')) {
+          // Handle the newer Amazon Nova format
+          if (responseBody.outputs && Array.isArray(responseBody.outputs)) {
+            responseContent = responseBody.outputs[0]?.text || '';
+          } else if (responseBody.results && Array.isArray(responseBody.results)) {
+            responseContent = responseBody.results[0]?.outputText || '';
+          } else {
+            responseContent = responseBody.text || 
+                             responseBody.output || 
+                             '';
+          }
+        } else if (selectedModel.includes('meta.llama')) {
+          // Handle Meta's Llama models
+          responseContent = responseBody.generation || 
+                           responseBody.text || 
+                           '';
+        } else {
+          // Fallback for unknown/future models - try common patterns
+          responseContent = responseBody.content?.[0]?.text || 
+                           responseBody.completion || 
+                           responseBody.text ||
+                           responseBody.results?.[0]?.outputText || 
+                           responseBody.generation || 
+                           responseBody.output ||
+                           JSON.stringify(responseBody);
+        }
+        
+        // Log the extracted content for debugging
+        logger.debug(`Extracted response content: ${responseContent.substring(0, 100)}...`);
+        
+      } catch (parseError) {
+        logger.error('Error parsing AI model response:', parseError);
+        responseContent = 'Error processing model response. Please try again.';
+        // Don't throw here - we want to save the error message to the chat session
       }
       
       // Estimate token usage (actual tokens not available in non-streaming response)
       tokensUsed = Math.ceil((message.length + responseContent.length) / 4);
+    } else {
+      logger.error('Empty response body from Bedrock');
+      responseContent = 'Error: Received empty response from AI service.';
     }
     
     // Add AI response to the session
@@ -460,8 +627,39 @@ export const sendMessage = async (req: Request, res: Response) => {
       tokensUsed
     });
   } catch (error:any) {
-    logger.error('Error processing non-streaming message:', error);
-    return res.status(500).json({ message: 'Failed to process message', error: error.message });
+    // Enhanced error logging with more detail
+    logger.error(`Error processing non-streaming message for session ${sessionId}:`, error);
+    
+    // Log the request context for debugging
+    logger.debug(`Request context: userId=${userId}, sessionId=${sessionId}, selectedModel=${modelId || 'default'}`);
+    
+    // Provide more specific error responses based on error type
+    if (error.name === 'SyntaxError' && error.message.includes('JSON')) {
+      return res.status(502).json({ 
+        message: 'Failed to process model response',
+        error: 'Invalid response from AI service', 
+        errorCode: 'INVALID_MODEL_RESPONSE'
+      });
+    } else if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+      return res.status(504).json({ 
+        message: 'Request to AI service timed out', 
+        error: error.message,
+        errorCode: 'MODEL_TIMEOUT'
+      });
+    } else if (error.message?.includes('credit')) {
+      return res.status(402).json({ 
+        message: 'Insufficient credits to process message',
+        error: error.message,
+        errorCode: 'INSUFFICIENT_CREDITS'
+      });
+    }
+    
+    // General fallback error
+    return res.status(500).json({ 
+      message: 'Failed to process message', 
+      error: error.message || 'Unknown error',
+      errorCode: 'INTERNAL_SERVER_ERROR'
+    });
   }
 };
 
@@ -790,11 +988,12 @@ export const streamChatResponse = async (req: Request, res: Response) => {
  * @returns 200 with success message, error response otherwise
  */
 export const updateChatWithStreamResponse = async (req: Request, res: Response) => {
+  // Define these variables at the function scope level so they're available in the catch block
+  const userId = req.user?.userId;
+  const sessionId = req.params.sessionId;
+  const { completeResponse, streamingSessionId, tokensUsed } = req.body;
+  
   try {
-    const userId = req.user?.userId;
-    const sessionId = req.params.sessionId;
-    const { completeResponse, streamingSessionId, tokensUsed } = req.body;
-    
     // Add request debugging
     logger.debug(`Update request for session ${sessionId}:
       - userId: ${userId}

@@ -42,6 +42,16 @@ const router = express.Router();
 
 /**
  * Create a new chat session
+ * GET /api/version
+ * Get the version number of the code
+ */
+router.get('/version', (req, res) => {
+  res.send('version: 0.0.1');
+});
+
+
+/**
+ * Create a new chat session
  * POST /api/chat/sessions
  * 
  * Creates a new conversation session with specified parameters

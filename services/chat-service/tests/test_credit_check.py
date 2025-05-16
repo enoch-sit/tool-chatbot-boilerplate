@@ -3,6 +3,7 @@ import requests
 import json
 import sys
 import time
+from datetime import datetime
 from colorama import Fore, Style, init
 
 # Initialize colorama for colored terminal output
@@ -19,7 +20,8 @@ ADMIN_USER = {
     "password": "admin@admin",
 }
 
-SUPERVISOR_USERS = [ {
+SUPERVISOR_USERS = [
+    {
         "username": "supervisor1",
         "email": "supervisor1@example.com",
         "password": "Supervisor1@",
@@ -33,7 +35,8 @@ SUPERVISOR_USERS = [ {
     },
 ]
 
-REGULAR_USERS = [{
+REGULAR_USERS = [
+    {
         "username": "user1",
         "email": "user1@example.com",
         "password": "User1@123",
@@ -75,9 +78,12 @@ class Logger:
 
 class CreditTester:
     def __init__(self):
+        # Session reuse for better performance
         self.session = requests.Session()
+        # Store tokens
         self.user_token = None
         self.admin_token = None
+        # Headers with auth token
         self.headers = {}
     
     def check_services_health(self):
@@ -197,6 +203,11 @@ class CreditTester:
             Logger.error(f"Credit allocation error: {str(e)}")
             return False
     
+    def allocate_non_streaming_credits(self, amount=20000):
+        """Allocate higher amount of credits specifically for non-streaming testing"""
+        Logger.header("ALLOCATING CREDITS FOR NON-STREAMING TESTS")
+        return self.allocate_credits(amount)
+    
     def test_credit_check_endpoint(self):
         """Test the credit checking endpoint with retry mechanism"""
         Logger.header("TESTING CREDIT CHECK ENDPOINT")
@@ -213,7 +224,7 @@ class CreditTester:
                     f"{ACCOUNTING_SERVICE_URL}/credits/check",
                     headers=self.headers,
                     json={
-                        "requiredCredits": 100  # Corrected parameter name
+                        "requiredCredits": 100  # Parameter name to check required credits
                     }
                 )
                 
@@ -268,11 +279,62 @@ class CreditTester:
         except requests.RequestException as e:
             Logger.error(f"Credit balance check error: {str(e)}")
             return False
+            
+    def test_insufficient_credits(self):
+        """Test behavior when there are insufficient credits"""
+        Logger.header("TESTING INSUFFICIENT CREDITS SCENARIO")
+                
+        try:
+            # First, check current balance
+            try:
+                balance_response = self.session.get(
+                    f"{ACCOUNTING_SERVICE_URL}/credits/balance",
+                    headers=self.headers
+                )
+                
+                if balance_response.status_code != 200:
+                    Logger.error(f"Failed to check current balance: {balance_response.status_code}")
+                    return False
+                    
+                balance_data = balance_response.json()
+                current_balance = balance_data.get('totalCredits', 0)
+                Logger.info(f"Current balance: {current_balance} credits")
+            except Exception as e:
+                Logger.error(f"Error checking credit balance: {str(e)}")
+                return False
+            
+            # Request more credits than available to test insufficient credits scenario
+            Logger.info(f"Testing credit check with {current_balance + 1000} credits (more than available)")
+            response = self.session.post(
+                f"{ACCOUNTING_SERVICE_URL}/credits/check",
+                headers=self.headers,
+                json={
+                    "requiredCredits": current_balance + 1000  # Request more than available
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('sufficient') == False:
+                    Logger.success("Credit check correctly identified insufficient credits")
+                    Logger.info(json.dumps(data, indent=2))
+                    return True
+                else:
+                    Logger.error("Credit check incorrectly reported sufficient credits")
+                    return False
+            else:
+                Logger.error(f"Credit check failed: {response.status_code}, {response.text}")
+                return False
+                
+        except requests.RequestException as e:
+            Logger.error(f"Insufficient credits test error: {str(e)}")
+            return False
 
 def run_test():
     Logger.header("CREDIT SERVICE API TEST SCRIPT")
     
     tester = CreditTester()
+    results = []
     
     # Check services health
     if not tester.check_services_health():
@@ -290,11 +352,35 @@ def run_test():
     # Allocate credits to test user
     tester.allocate_credits()
     
-    # Check credit balance
-    tester.check_credit_balance()
+    # Run tests in sequence
+    test_sequence = [
+        ("Check credit balance", tester.check_credit_balance),
+        ("Test credit check endpoint", tester.test_credit_check_endpoint),
+        ("Test insufficient credits scenario", tester.test_insufficient_credits)
+    ]
     
-    # Test credit check endpoint with corrected parameters
-    tester.test_credit_check_endpoint()
+    # Execute tests
+    for test_name, test_func in test_sequence:
+        Logger.header(f"TEST: {test_name}")
+        success = test_func()
+        results.append((test_name, success))
+    
+    # Print test results summary
+    Logger.header("TEST RESULTS SUMMARY")
+    
+    all_passed = True
+    for test_name, success in results:
+        status = "PASS" if success else "FAIL"
+        if success:
+            Logger.success(f"{status} - {test_name}")
+        else:
+            Logger.error(f"{status} - {test_name}")
+        all_passed = all_passed and success
+    
+    Logger.header("OVERALL RESULT: " + ("PASSED" if all_passed else "FAILED"))
+    
+    return all_passed
 
 if __name__ == "__main__":
-    run_test()
+    success = run_test()
+    sys.exit(0 if success else 1)
