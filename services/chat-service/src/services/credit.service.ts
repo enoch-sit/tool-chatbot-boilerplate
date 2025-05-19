@@ -138,6 +138,12 @@ export const recordChatUsage = async (
     );
     
     const credits = response.data.credits;
+    logger.debug(`Calculated credits for usage recording: ${credits} (type: ${typeof credits}) for ${tokensUsed} tokens with model ${modelId}`);
+
+    if (typeof credits !== 'number' || credits < 0) { // Allow credits to be 0
+      logger.error(`Invalid credits calculated (${credits}) for user ${userId}, model ${modelId}, tokens ${tokensUsed}. Skipping usage recording.`);
+      return; 
+    }
     
     // Record the usage with the accounting service
     await axios.post(

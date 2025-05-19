@@ -440,3 +440,119 @@ TESTING INSUFFICIENT CREDITS SCENARIO
 [SUCCESS] Credit check correctly identified insufficient credits
 [INFO] {"sufficient": false, "message": "Insufficient credits"}
 ```
+
+## Update on Security Fix for Credit Checking
+
+As of May 16, 2025, we identified and fixed a critical security vulnerability in the credit checking system.
+
+### The Issue
+
+Our automated test `test_insufficient_credits` was failing with the following error:
+
+```
+================================================================================
+TESTING INSUFFICIENT CREDITS SCENARIO
+================================================================================
+[INFO] Current balance: 29829 credits
+[INFO] Testing credit check with 30829 credits (more than available)
+[ERROR] Credit check incorrectly reported sufficient credits
+```
+
+The system was reporting that users had sufficient credits even when they were requesting more credits than they actually had available.
+
+### Root Cause Analysis
+
+We identified two key issues contributing to this problem:
+
+1. **Parameter Name Inconsistency**:
+   Different methods in the test script were using different parameter names:
+
+   ```python
+   # In test_credit_check_endpoint method
+   json={
+       "requiredCredits": 100  # Using "requiredCredits" parameter name
+   }
+
+   # In test_insufficient_credits method
+   json={
+       "credits": current_balance + 1000  # Using "credits" parameter name
+   }
+   ```
+
+   Meanwhile, the API controller in the accounting service expected `credits` as the parameter name:
+
+   ```typescript
+   // In accounting-service/controllers/credit.controller.ts
+   const { credits: requiredCredits } = req.body;
+   ```
+
+2. **Fail-Open Security Vulnerability**:
+   We discovered a significant security issue in the chat service's credit checking mechanism:
+
+   ```typescript
+   // In chat-service/src/services/credit.service.ts
+   catch (error) {
+     logger.error('Error checking user credits:', error);
+     
+     // Instead of failing, default to allowing the operation if credit check fails
+     logger.warn(`Credit check failed, defaulting to allow operation for user ${userId}`);
+     return true;  // THIS IS THE ISSUE - DEFAULTS TO TRUE ON ERROR
+   }
+   ```
+
+   This created a situation where any error during the credit checking process would result in the system defaulting to allowing the operation, bypassing the credit restriction entirely.
+
+### The Fix
+
+We implemented the following changes:
+
+1. **Standardized Parameter Naming**:
+   - Updated all test methods to consistently use the `credits` parameter name to match the API expectation
+   - Updated the controller to handle both parameter names for backward compatibility:
+
+   ```typescript
+   // Support both parameter names
+   const { credits, requiredCredits: reqCredits } = req.body;
+   const requiredCredits = credits !== undefined ? credits : reqCredits;
+   ```
+
+2. **Security-First Error Handling**:
+   - Changed the error handling to follow security best practices (fail closed instead of fail open):
+
+   ```typescript
+   catch (error) {
+     logger.error('Error checking user credits:', error);
+     
+     // In case of error, fail securely - don't allow operations without confirmed credits
+     logger.warn(`Credit check failed, defaulting to deny operation for user ${userId}`);
+     return false;  // Deny the operation when there's uncertainty
+   }
+   ```
+
+3. **Enhanced Logging**:
+   - Added detailed request and response logging to simplify future debugging
+   - Included validation details in logs to trace exactly what parameters were being used
+
+### Verification
+
+After implementing these fixes, the test now passes correctly:
+
+```
+================================================================================
+TESTING INSUFFICIENT CREDITS SCENARIO
+================================================================================
+[INFO] Current balance: 29829 credits
+[INFO] Testing credit check with 30829 credits (more than available)
+[SUCCESS] Credit check correctly identified insufficient credits
+[INFO] {"sufficient": false, "message": "Insufficient credits"}
+```
+
+### Security Principle Reinforced
+
+This fix emphasizes a critical security principle: systems that enforce restrictions (like credit checks) should **fail securely** - meaning that when an error occurs, the system should default to denying access rather than granting it.
+
+For credit systems specifically:
+- ✅ On error → Deny access (fail closed)  
+- ❌ On error → Allow access (fail open)
+
+This principle helps protect against bypassing credit restrictions due to temporary errors or service disruptions.

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
+from datetime import datetime
 import requests
 import json
 import sys
 import time
-from datetime import datetime
 from colorama import Fore, Style, init
 
 # Initialize colorama for colored terminal output
@@ -220,27 +220,48 @@ class CreditTester:
                 if attempt > 0:
                     Logger.info(f"Retry attempt {attempt+1}/{max_retries}...")
                 
+                # Debug current request format
+                request_body = {"credits": 100}
+                Logger.info(f"Sending request with body: {json.dumps(request_body)}")
+                
                 response = self.session.post(
                     f"{ACCOUNTING_SERVICE_URL}/credits/check",
                     headers=self.headers,
-                    json={
-                        "requiredCredits": 100  # Parameter name to check required credits
-                    }
+                    json=request_body
                 )
+                
+                Logger.info(f"Response status: {response.status_code}")
+                Logger.info(f"Response body: {response.text}")
                 
                 if response.status_code == 200:
                     data = response.json()
-                    Logger.success(f"Credit check successful: Has sufficient credits = {data.get('sufficient', False)}")
+                    Logger.success(f"Credit check successful: Has sufficient credits = {data.get('hasSufficientCredits', False)}")
                     Logger.info(json.dumps(data, indent=2))
                     return True
+                # Special handling for validation errors
+                elif response.status_code == 400:
+                    Logger.warning(f"Validation error: {response.text}")
+                    
+                    # Try with a more complete request body for next attempt
+                    if attempt < max_retries - 1:
+                        Logger.info("Trying with alternative parameter format...")
+                        request_body = {
+                            "credits": 100,
+                            "userId": TEST_USER["username"],
+                            "modelId": "amazon.titan-text-express-v1:0"
+                        }
+                        time.sleep(1)
+                    else:
+                        Logger.error("All request formats failed")
+                        return False
                 # Handle specific error codes that might benefit from retry
                 elif response.status_code in [502, 503, 504]:  # Gateway errors, service unavailable
                     if attempt < max_retries - 1:
                         retry_delay = (attempt + 1) * 2  # Progressive backoff: 2s, 4s, 6s...
-                        Logger.warning(f"Service temporarily unavailable ({response.status_code}). Retrying in {retry_delay}s...")
+                        Logger.warning(f"Server error {response.status_code}. Retrying in {retry_delay}s...")
                         time.sleep(retry_delay)
                     else:
-                        Logger.error(f"Credit check failed after {max_retries} attempts: {response.status_code}")
+                        Logger.error(f"Server error persisted after {max_retries} attempts: {response.status_code}")
                         return False
                 else:
                     Logger.error(f"Credit check failed: {response.status_code}, {response.text}")
@@ -305,17 +326,19 @@ class CreditTester:
             
             # Request more credits than available to test insufficient credits scenario
             Logger.info(f"Testing credit check with {current_balance + 1000} credits (more than available)")
+            
+            # Update: Use "credits" parameter name to match what the server expects
             response = self.session.post(
                 f"{ACCOUNTING_SERVICE_URL}/credits/check",
                 headers=self.headers,
                 json={
-                    "requiredCredits": current_balance + 1000  # Request more than available
+                    "credits": current_balance + 1000  # Use "credits" instead of "requiredCredits"
                 }
             )
             
             if response.status_code == 200:
                 data = response.json()
-                if data.get('sufficient') == False:
+                if data.get('hasSufficientCredits') == False:
                     Logger.success("Credit check correctly identified insufficient credits")
                     Logger.info(json.dumps(data, indent=2))
                     return True

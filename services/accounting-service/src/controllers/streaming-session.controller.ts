@@ -100,7 +100,8 @@ export class StreamingSessionController {
     try {
       const { sessionId, actualTokens, success = true } = req.body;
       
-      if (!sessionId || !actualTokens) {
+      // Allow actualTokens to be 0, but not negative or non-numeric
+      if (!sessionId || typeof actualTokens !== 'number' || actualTokens < 0) {
         return res.status(400).json({ message: 'Missing required fields' });
       }
       
@@ -145,7 +146,8 @@ export class StreamingSessionController {
     try {
       const { sessionId, tokensGenerated = 0 } = req.body;
       
-      if (!sessionId) {
+      // Allow tokensGenerated to be 0, but not negative or non-numeric
+      if (!sessionId || typeof tokensGenerated !== 'number' || tokensGenerated < 0) {
         return res.status(400).json({ message: 'Missing required fields' });
       }
       

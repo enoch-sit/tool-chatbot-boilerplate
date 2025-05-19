@@ -46,7 +46,7 @@ const router = express.Router();
  * Get the version number of the code
  */
 router.get('/version', (req, res) => {
-  res.send('version: 0.0.1');
+  res.send('version: 0.0.2');
 });
 
 

@@ -219,12 +219,28 @@ export const streamResponse = async (
       };
     } else if (modelId.includes('amazon.nova')) {
       // Format for Amazon's Nova models
-      const formattedMessages = messages.map(m => ({
+      // Nova models might not support a 'system' role directly in the messages array.
+      // We'll filter out system messages and prepend its content to the first user message if it exists.
+      const systemMessage = messages.find(m => m.role === 'system');
+      const userAssistantMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant');
+
+      const formattedMessages = userAssistantMessages.map(m => ({
         role: m.role,
         content: [{
-          text: typeof m.content === 'string' ? m.content : m.content.text || m.content
+          text: typeof m.content === 'string' ? m.content : (m.content as any)?.text || JSON.stringify(m.content) // Handle potential object content
         }]
       }));
+
+      if (systemMessage && formattedMessages.length > 0 && formattedMessages[0].role === 'user') {
+        const systemText = typeof systemMessage.content === 'string' ? systemMessage.content : (systemMessage.content as any)?.text || JSON.stringify(systemMessage.content);
+        if (systemText) {
+            formattedMessages[0].content[0].text = systemText + "\n\n" + formattedMessages[0].content[0].text;
+        }
+      } else if (systemMessage && formattedMessages.length === 0) {
+        // If only a system message exists, Nova might not be able to process it.
+        // Log a warning. Depending on Nova's API, this might need to be an error or a specially formatted request.
+        logger.warn('System message provided for Nova model without subsequent user/assistant messages. System message may be ignored or cause an error.');
+      }
       
       promptBody = {
         inferenceConfig: {
@@ -232,7 +248,7 @@ export const streamResponse = async (
           temperature: 0.7,
           top_p: 0.9
         },
-        messages: formattedMessages
+        messages: formattedMessages // Send the filtered/modified messages
       };
     } else if (modelId.includes('meta.llama')) {
       // Format for Meta's Llama models
@@ -356,7 +372,7 @@ export const streamResponse = async (
           `${config.accountingApiUrl}/streaming-sessions/finalize`,
           {
             sessionId,
-            tokensUsed: totalTokensGenerated,
+            actualTokens: totalTokensGenerated, // Changed from tokensUsed
             responseContent
           },
           {

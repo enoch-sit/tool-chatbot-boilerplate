@@ -41,7 +41,8 @@ export class UsageController {
     try {
       const { service, operation, credits, metadata } = req.body;
       
-      if (!service || !operation || !credits || credits <= 0) {
+      // Allow credits to be 0, but not negative or non-numeric
+      if (!service || !operation || typeof credits !== 'number' || credits < 0) {
         return res.status(400).json({ message: 'Missing or invalid required fields' });
       }
       

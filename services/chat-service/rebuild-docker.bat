@@ -96,6 +96,10 @@ echo Stopping existing chat service containers...
 docker-compose down
 
 echo.
+echo Pruning Docker system to remove unused data, including build cache...
+docker system prune -af
+
+echo.
 set /p remove_volumes="Do you want to remove database volumes? This will delete all data (y/n): "
 if /i "%remove_volumes%"=="y" (
     echo Removing Docker volumes...
@@ -109,7 +113,8 @@ if /i "%remove_volumes%"=="y" (
 
 echo.
 echo Rebuilding and starting chat service containers...
-docker-compose up -d --build
+docker-compose build --no-cache
+docker-compose up -d
 
 echo.
 echo Waiting for services to start...

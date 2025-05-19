@@ -22,6 +22,7 @@ services:
       - ACCOUNTING_API_URL=${ACCOUNTING_API_URL:-http://accounting-service:3001/api}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-default-secret-key-for-dev}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - LOG_LEVEL=debug # Added for debugging raw Bedrock responses
     volumes:
       - ./logs:/app/logs
     networks:
