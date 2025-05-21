@@ -67,6 +67,8 @@ export interface IChatSession extends Document {
  */
 const ChatSessionSchema = new Schema({
   // User ID who owns this chat session (required, indexed for quick user-based queries)
+  // This field is mandatory. If not provided during session creation,
+  // a "ChatSession validation failed: userId: Path \`userId\` is required." error will occur.
   userId: { type: String, required: true, index: true },
   
   // Username for easier lookup by supervisors
@@ -81,6 +83,17 @@ const ChatSessionSchema = new Schema({
     role: { type: String, enum: ['user', 'assistant', 'system'], required: true },
     
     // Message content text
+    // DEBUG.MD_NOTE: MongoDB Validation Failure - Empty Content
+    // The debug.md report states: "ChatSession validation failed: messages.X.content: Path `content` is required."
+    // This schema definition `content: { type: String, required: true }` enforces that content must exist.
+    // If an empty string ("") is saved, it should pass this basic `required: true` validation, 
+    // as an empty string is still a string value. 
+    // However, if the application logic attempts to save `null` or `undefined` for content, 
+    // or if there's a custom validator (not shown here) that disallows empty strings, then the error would occur.
+    // The recommendation in debug.md to "Add validation to check if the streamed content is non-empty"
+    // in message.controller.ts (streamChatResponse, on 'end' event) is key to prevent this.
+    // If an empty string is truly not allowed for `content`, the schema could be updated, e.g.,
+    // `content: { type: String, required: true, minlength: 1 }` or a custom validator added.
     content: { type: String, required: true },
     
     // Timestamp when the message was sent

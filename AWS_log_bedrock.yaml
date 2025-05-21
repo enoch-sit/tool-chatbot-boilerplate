@@ -1,0 +1,370 @@
+openapi: 3.0.0
+info:
+  title: AWS Bedrock Model Invocation API
+  version: "1.0"
+  description: |
+    API definition for invoking AWS Bedrock foundation models,
+    covering both standard (InvokeModel) and streaming (InvokeModelWithResponseStream) operations.
+servers:
+  - url: https://bedrock-runtime.{region}.amazonaws.com # Replace {region} with your AWS region
+    description: AWS Bedrock Runtime Endpoint
+
+components:
+  schemas:
+    # --- Common Input Schemas ---
+    SystemPrompt:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The system prompt text.
+      required:
+        - text
+
+    MessageContentItem:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The text content of the message part.
+      required:
+        - text
+
+    Message:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+          description: The role of the message sender.
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageContentItem'
+          description: The content of the message.
+      required:
+        - role
+        - content
+
+    InferenceConfig:
+      type: object
+      properties:
+        maxTokens: # For InvokeModel
+          type: integer
+          description: Maximum number of tokens to generate in the response.
+          example: 2000
+        max_new_tokens: # Often used for InvokeModelWithResponseStream
+          type: integer
+          description: Maximum number of new tokens to generate in the streamed response.
+          example: 2000
+        temperature:
+          type: number
+          format: float
+          description: Controls randomness in generation. Higher values mean more random.
+          example: 0.7
+        topP:
+          type: number
+          format: float
+          description: Nucleus sampling parameter.
+          example: 0.9
+      # Note: Specific models might support different or additional inference parameters.
+
+    ModelInvocationInputBody:
+      type: object
+      properties:
+        system:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemPrompt'
+          description: Optional system prompt to guide the model.
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          description: Conversation history and current user prompt.
+        inferenceConfig:
+          $ref: '#/components/schemas/InferenceConfig'
+      required:
+        - messages
+        # inferenceConfig is often optional or has defaults
+
+    # --- Common Output/Usage Schemas ---
+    UsageStats:
+      type: object
+      properties:
+        inputTokens:
+          type: integer
+          description: Number of tokens in the input.
+        outputTokens:
+          type: integer
+          description: Number of tokens in the output.
+        totalTokens: # Typically for non-streaming
+          type: integer
+          description: Total tokens processed (input + output).
+        cacheReadInputTokenCount:
+          type: integer
+          description: Number of input tokens read from cache.
+        cacheWriteInputTokenCount:
+          type: integer
+          description: Number of input tokens written to cache.
+
+    # --- Non-Streaming Output Schemas (InvokeModel) ---
+    NonStreamingModelOutputMessage: # Represents the nested 'output.message' structure
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/Message' # The assistant's response
+      required:
+        - message
+
+    InvokeModelOutputBody:
+      type: object
+      description: The complete response body from a non-streaming model invocation.
+      properties:
+        output: # This key can vary based on the specific model (e.g., 'completion', 'generation')
+                # For Amazon Titan Text models, it's often 'results' (an array) or directly the text.
+                # The logs showed 'output' -> 'message' for 'amazon.nova-micro-v1:0'
+          $ref: '#/components/schemas/NonStreamingModelOutputMessage'
+        stopReason:
+          type: string
+          description: Reason why the model stopped generating.
+          example: "end_turn"
+        usage:
+          $ref: '#/components/schemas/UsageStats'
+      # required fields depend on the specific model's response structure
+
+    # --- Streaming Output Schemas (InvokeModelWithResponseStream) ---
+    MessageStartChunkPayload:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [assistant]
+      required:
+        - role
+
+    MessageStartChunk:
+      type: object
+      properties:
+        messageStart:
+          $ref: '#/components/schemas/MessageStartChunkPayload'
+      required:
+        - messageStart
+
+    ContentBlockDeltaPayload:
+      type: object
+      properties:
+        delta:
+          type: object
+          properties:
+            text:
+              type: string
+              description: A segment of the generated text.
+          required:
+            - text
+        contentBlockIndex:
+          type: integer
+          description: Index of the content block this delta belongs to.
+      required:
+        - delta
+        - contentBlockIndex
+
+    ContentBlockDeltaChunk:
+      type: object
+      properties:
+        contentBlockDelta:
+          $ref: '#/components/schemas/ContentBlockDeltaPayload'
+      required:
+        - contentBlockDelta
+
+    ContentBlockStopPayload:
+      type: object
+      properties:
+        contentBlockIndex:
+          type: integer
+      required:
+        - contentBlockIndex
+
+    ContentBlockStopChunk:
+      type: object
+      properties:
+        contentBlockStop:
+          $ref: '#/components/schemas/ContentBlockStopPayload'
+      required:
+        - contentBlockStop
+
+    MessageStopPayload:
+      type: object
+      properties:
+        stopReason:
+          type: string
+          description: Reason why the model stopped generating for this message.
+      required:
+        - stopReason
+
+    MessageStopChunk:
+      type: object
+      properties:
+        messageStop:
+          $ref: '#/components/schemas/MessageStopPayload'
+      required:
+        - messageStop
+
+    MetadataUsage: # Slightly different structure than top-level UsageStats for non-streaming
+      type: object
+      properties:
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        cacheReadInputTokenCount:
+          type: integer
+        cacheWriteInputTokenCount:
+          type: integer
+
+    MetadataPayload:
+      type: object
+      properties:
+        usage:
+          $ref: '#/components/schemas/MetadataUsage'
+        metrics:
+          type: object
+          description: Additional metrics.
+        trace:
+          type: object
+          description: Trace information.
+      required:
+        - usage
+
+    MetadataChunk:
+      type: object
+      properties:
+        metadata:
+          $ref: '#/components/schemas/MetadataPayload'
+      required:
+        - metadata
+
+    BedrockInvocationMetricsPayload:
+      type: object
+      properties:
+        inputTokenCount:
+          type: integer
+        outputTokenCount:
+          type: integer
+        invocationLatency:
+          type: integer
+          description: Total invocation latency in milliseconds.
+        firstByteLatency:
+          type: integer
+          description: Latency to the first byte of the response in milliseconds.
+        cacheReadInputTokenCount:
+          type: integer
+        cacheWriteInputTokenCount:
+          type: integer
+      required:
+        - inputTokenCount
+        - outputTokenCount
+        - invocationLatency
+        - firstByteLatency
+
+    BedrockInvocationMetricsChunk:
+      type: object
+      properties:
+        "amazon-bedrock-invocationMetrics": # Note: Hyphenated key
+          $ref: '#/components/schemas/BedrockInvocationMetricsPayload'
+      required:
+        - "amazon-bedrock-invocationMetrics"
+
+    StreamChunk:
+      type: object
+      description: |
+        A single chunk in a streamed response.
+        The actual content depends on the type of chunk.
+      oneOf:
+        - $ref: '#/components/schemas/MessageStartChunk'
+        - $ref: '#/components/schemas/ContentBlockDeltaChunk'
+        - $ref: '#/components/schemas/ContentBlockStopChunk'
+        - $ref: '#/components/schemas/MessageStopChunk'
+        - $ref: '#/components/schemas/MetadataChunk'
+        - $ref: '#/components/schemas/BedrockInvocationMetricsChunk'
+        # Note: Some models might introduce other chunk types.
+
+    InvokeModelWithResponseStreamOutputBody:
+      type: array
+      description: |
+        An array of chunks representing the streamed response.
+        The client application needs to process these chunks sequentially.
+        The actual response content is typically formed by concatenating 'text' from 'contentBlockDelta' chunks.
+      items:
+        $ref: '#/components/schemas/StreamChunk'
+
+  parameters:
+    ModelIdParameter:
+      name: modelId
+      in: path
+      required: true
+      description: The ID of the Bedrock model to invoke (e.g., amazon.titan-text-express-v1:0, amazon.nova-micro-v1:0).
+      schema:
+        type: string
+        example: "amazon.nova-micro-v1:0"
+
+paths:
+  /model/{modelId}/invoke:
+    post:
+      summary: Invoke Model (Non-Streaming)
+      description: Sends a request to a Bedrock model and receives the complete response at once.
+      operationId: invokeModel
+      parameters:
+        - $ref: '#/components/parameters/ModelIdParameter'
+      requestBody:
+        description: Input payload for the model invocation.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelInvocationInputBody'
+      responses:
+        '200':
+          description: Successful model invocation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvokeModelOutputBody'
+        '400':
+          description: Bad Request (e.g., invalid input, missing required fields).
+        '403':
+          description: Forbidden (e.g., insufficient permissions).
+        '500':
+          description: Internal Server Error.
+
+  /model/{modelId}/invoke-with-response-stream:
+    post:
+      summary: Invoke Model with Response Stream
+      description: Sends a request to a Bedrock model and receives the response as a stream of chunks.
+      operationId: invokeModelWithResponseStream
+      parameters:
+        - $ref: '#/components/parameters/ModelIdParameter'
+      requestBody:
+        description: Input payload for the model invocation.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelInvocationInputBody'
+      responses:
+        '200':
+          description: Successful model invocation, response is streamed.
+          content:
+            application/vnd.amazon.eventstream: # Bedrock uses this content type for streams
+              schema:
+                $ref: '#/components/schemas/InvokeModelWithResponseStreamOutputBody'
+                # Note: In practice, an event stream is not a simple JSON array.
+                # Each event/chunk is individually framed. This OpenAPI schema describes
+                # the conceptual JSON structure of the *payloads* within those events
+                # as if they were collected into an array.
+        '400':
+          description: Bad Request.
+        '403':
+          description: Forbidden.
+        '500':
+          description: Internal Server Error.

@@ -290,30 +290,32 @@ class StreamingTester:
                 Logger.error(f"Failed to start streaming: {streaming_response.status_code}, {streaming_response.text}")
                 return False
             
-            # Extract the streaming session ID directly from headers
-            # Hard-coded header name as this is known to work from the server implementation
-            exact_streaming_id = streaming_response.headers.get('X-Streaming-Session-Id')
-            
-            if exact_streaming_id:
-                self.streaming_session_id = exact_streaming_id
-                Logger.info(f"Found streaming ID: {exact_streaming_id}")
+            # Extract the streaming session ID from headers.
+            # requests.headers.get() is case-insensitive.
+            self.streaming_session_id = streaming_response.headers.get('X-Streaming-Session-Id')
+
+            if self.streaming_session_id:
+                Logger.info(f"Found streaming ID in 'X-Streaming-Session-Id' header: {self.streaming_session_id}")
             else:
-                # Backup extraction method - case insensitive search
-                found_header = False
-                for header, value in streaming_response.headers.items():
-                    if header.lower() == 'x-streaming-session-id'.lower():
-                        self.streaming_session_id = value
-                        Logger.info(f"Found streaming ID using case-insensitive match: {value}")
-                        found_header = True
-                        break
-                
-                # Emergency fallback - not recommended
-                if not found_header or not self.streaming_session_id:
+                Logger.warning("'X-Streaming-Session-Id' header not found. Trying known alternative header names...")
+                alternative_header_names = [
+                    "X-Stream-Id",
+                    # Add other plausible alternative names here if necessary in the future
+                ]
+                for alt_header_name in alternative_header_names:
+                    self.streaming_session_id = streaming_response.headers.get(alt_header_name)
+                    if self.streaming_session_id:
+                        Logger.info(f"Found streaming ID in alternative header '{alt_header_name}': {self.streaming_session_id}")
+                        break  # Found it, exit loop
+
+                if not self.streaming_session_id:
+                    # Emergency fallback if no expected or alternative header is found
                     import uuid
                     timestamp = int(time.time())
-                    random_uuid = str(uuid.uuid4()).split('-')[0]
-                    self.streaming_session_id = f"stream-{timestamp}-{random_uuid}"
-                    Logger.warning(f"No streaming session ID found. Using emergency fallback: {self.streaming_session_id}")
+                    # Fallback format should align with server's expected format if possible
+                    random_uuid_part = str(uuid.uuid4()).split('-')[0] 
+                    self.streaming_session_id = f"stream-{timestamp}-{random_uuid_part}"
+                    Logger.warning(f"No streaming session ID found in expected or alternative headers. Using emergency fallback: {self.streaming_session_id}")
             
             # Super detailed header debugging
             Logger.debug("==== ALL RESPONSE HEADERS ====")
@@ -365,7 +367,7 @@ class StreamingTester:
             time.sleep(2.0)  # Increased from 0.5 to 2.0 seconds
             
             # Implement retry mechanism for updating with streaming session ID
-            max_retries = 3
+            max_retries = 5 # Changed from 3 to 5
             for retry in range(max_retries):
                 Logger.header(f"UPDATING CHAT WITH STREAM RESPONSE (Attempt {retry + 1}/{max_retries})")
                 Logger.info(f"Using streaming session ID: {self.streaming_session_id}")
@@ -392,8 +394,10 @@ class StreamingTester:
                     
                     # Wait longer before retrying
                     if retry < max_retries - 1:
-                        Logger.info(f"Waiting before retry {retry + 2}...")
-                        time.sleep(2.0 * (retry + 1))  # Progressive backoff
+                        # Previous: time.sleep(2.0 * (retry + 1))
+                        wait_time = 1.0 * (2**retry)  # Exponential backoff: 1s, 2s, 4s, 8s for subsequent retries
+                        Logger.info(f"Waiting {wait_time}s before retry {retry + 2}/{max_retries}...")
+                        time.sleep(wait_time)
                 else:
                     Logger.error(f"Failed to update stream response: {update_response.status_code}, {update_response.text}")
                     # Log request details for debugging
@@ -448,36 +452,24 @@ class StreamingTester:
                 Logger.debug(f"HEADER: '{header_name}' = '{header_value}'")
             Logger.debug("==============================================")
             
-            # Try multiple header name variations (case-insensitive)
-            possible_headers = [
-                "X-Streaming-Session-Id",
-                "x-streaming-session-id",
-                "streaming-session-id",
-                "X-Stream-Id",
-                "x-stream-id"
-            ]
+            # Extract the actual streaming session ID from headers for logging purposes.
+            # requests.headers.get() is case-insensitive.
+            actual_streaming_id = streaming_response.headers.get('X-Streaming-Session-Id')
 
-            actual_streaming_id = None
-            for header in possible_headers:
-                header_value = None
-                # Check case-insensitively
-                for actual_header, value in streaming_response.headers.items():
-                    if actual_header.lower() == header.lower():
-                        header_value = value
-                        break
-                
-                if header_value:
-                    actual_streaming_id = header_value
-                    Logger.info(f"Found actual streaming ID in header: '{header}' = '{actual_streaming_id}'")
-                    break
-            
-            if not actual_streaming_id:
-                Logger.warning("No streaming session ID found in headers for incorrect ID test.")
-                import uuid
-                timestamp = int(time.time())
-                random_uuid = str(uuid.uuid4()).split('-')[0]
-                actual_streaming_id = f"stream-{timestamp}-{random_uuid}"
-                Logger.warning(f"Using generated ID for reference: {actual_streaming_id}")
+            if actual_streaming_id:
+                Logger.info(f"Found actual streaming ID in 'X-Streaming-Session-Id' header: {actual_streaming_id}")
+            else:
+                Logger.warning("Actual 'X-Streaming-Session-Id' header not found. Trying known alternative...")
+                actual_streaming_id = streaming_response.headers.get('X-Stream-Id')
+                if actual_streaming_id:
+                    Logger.info(f"Found actual streaming ID in alternative 'X-Stream-Id' header: {actual_streaming_id}")
+                else:
+                    # Fallback for logging if no relevant header is found
+                    import uuid
+                    timestamp = int(time.time())
+                    random_uuid_part = str(uuid.uuid4()).split('-')[0]
+                    actual_streaming_id = f"stream-{timestamp}-{random_uuid_part}" # Consistent fallback format
+                    Logger.warning(f"No actual streaming session ID found in headers for incorrect ID test. Using generated ID for reference: {actual_streaming_id}")
             
             # Collect some chunks
             client = sseclient.SSEClient(streaming_response)

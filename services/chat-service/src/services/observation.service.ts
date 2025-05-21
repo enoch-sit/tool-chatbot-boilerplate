@@ -167,7 +167,7 @@ export class ObservationManager {
      * to allow supervisors to observe recently completed sessions.
      */
     stream.on('end', () => {
-      logger.debug(`Stream ended for session ${sessionId}, keeping available for ${this.streamBufferTime}ms`);
+      //logger.debug(`Stream ended for session ${sessionId}, keeping available for ${this.streamBufferTime}ms`);
       
       // Notify any observers that the original stream has ended but observation continues
       this.eventEmitter.emit(`stream:${sessionId}`, `event: info\ndata: ${JSON.stringify({
@@ -191,7 +191,7 @@ export class ObservationManager {
       this.streamTimeouts.set(sessionId, timeout);
     });
     
-    logger.debug(`Stream registered for observation: ${sessionId}`);
+    //logger.debug(`Stream registered for observation: ${sessionId}`);
   }
   
   /**
@@ -221,7 +221,7 @@ export class ObservationManager {
       this.streamTimeouts.delete(sessionId);
     }
     
-    logger.debug(`Stream deregistered: ${sessionId}`);
+    //logger.debug(`Stream deregistered: ${sessionId}`);
   }
   
   /**
@@ -350,7 +350,7 @@ export class ObservationManager {
       })}\n\n`);
     }
     
-    logger.debug(`Observer ${observerId} added to session ${sessionId}`);
+    //logger.debug(`Observer ${observerId} added to session ${sessionId}`);
     
     /**
      * Return Unsubscribe Function
@@ -361,7 +361,7 @@ export class ObservationManager {
     return () => {
       sessionObservers.delete(observerId);
       this.eventEmitter.off(`stream:${sessionId}`, listener);
-      logger.debug(`Observer ${observerId} removed from session ${sessionId}`);
+      //logger.debug(`Observer ${observerId} removed from session ${sessionId}`);
     };
   }
   

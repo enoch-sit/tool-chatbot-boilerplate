@@ -31,13 +31,42 @@ export const checkUserCredits = async (
   authHeader: string
 ): Promise<boolean> => {
   try {
+    // SUGGESTION: The log "Checking if user ... has undefined credits available" indicates that this function
+    // was invoked with `requiredCredits` being undefined. This directly leads to the empty payload `"{}"`
+    // being sent to the accounting service.
+    // Add a strict check here to ensure `requiredCredits` is a valid number before proceeding.
+    // This serves as a safeguard within this function, complementing any checks in the calling code (e.g., message.controller.ts).
+    if (typeof requiredCredits !== 'number' || isNaN(requiredCredits) || requiredCredits < 0) {
+      // Note: If `requiredCredits = 0` is a valid scenario, adjust the condition (e.g., to `requiredCredits < 0`).
+      // The primary issue from the logs is `undefined`.
+      logger.error(`[checkUserCredits] Attempted to check credits with invalid requiredCredits value: ${requiredCredits} for user ${userId}.`);
+      // The original catch block defaults to 'return true'. For a direct invalid input like this,
+      // returning 'false' would be safer to prevent unintended operations.
+      // However, to maintain consistency with the existing broader error handling strategy shown in the catch block
+      // (which logs a warning and returns true), one might do the same here.
+      // Consider changing this to 'return false;' for stricter behavior.
+      logger.warn(`[checkUserCredits] Due to invalid requiredCredits (${requiredCredits}), defaulting to allow operation for user ${userId} (consistent with general error handling). This default behavior should be reviewed for safety.`);
+      return true; // SAFER ALTERNATIVE: return false;
+    }
+
     logger.info(`Checking if user ${userId} has ${requiredCredits} credits available`);
     
+    const payload: any = {
+      credits: requiredCredits
+      // SUGGESTION (For future consideration, based on debug.md):
+      // The accounting service's /api/credits/check endpoint currently expects only 'credits'.
+      // If the accounting service API were to evolve to require 'userId' or 'modelId' in the payload
+      // for this specific endpoint (as speculated in debug.md), this is where they would be added.
+      // Example:
+      // userId: userId, // This would be redundant if accounting service uses JWT for userId for its internal logic.
+      // modelId: modelId, // `modelId` would need to be passed into this `checkUserCredits` function if required.
+      // For the current issue, ensuring `credits` is present and valid is the priority.
+    };
+    logger.debug(`Payload for /api/credits/check: ${JSON.stringify(payload)}`);
+
     const response = await axios.post(
       `${config.accountingApiUrl}/credits/check`,
-      {
-        credits: requiredCredits  // Using correct parameter name to match accounting service expectation
-      },
+      payload, // Use the constructed payload
       {
         headers: {
           Authorization: authHeader
@@ -47,7 +76,7 @@ export const checkUserCredits = async (
     
     // Extract the hasSufficientCredits field from the response
     const hasSufficientCredits = response.data.hasSufficientCredits || response.data.sufficient;
-    logger.debug(`Credit check for user ${userId}: ${hasSufficientCredits ? 'Sufficient' : 'Insufficient'}`);
+    //logger.debug(`Credit check for user ${userId}: ${hasSufficientCredits ? 'Sufficient' : 'Insufficient'}`);
     
     return hasSufficientCredits;
   } catch (error) {
@@ -75,19 +104,44 @@ export const calculateRequiredCredits = async (
   message: string,
   modelId: string,
   authHeader: string
-): Promise<number> => {
+): Promise<number | undefined> => { // Explicitly allow undefined return for error cases
   try {
+    // DEBUG.MD_NOTE: Credit Service Integration Issues
+    // This function is called by `sendMessage` in `message.controller.ts` before `checkUserCredits`.
+    // If this function returns undefined or throws an unhandled error,
+    // `requiredCredits` in `sendMessage` will be undefined, leading to the
+    // "undefined credits available" log and the subsequent 400 error when `checkUserCredits`
+    // calls the accounting service with an empty payload.
+    //
+    // Investigation:
+    // - Log the inputs: message, modelId.
+    // - Log the estimatedTokens.
+    // - Log the payload sent to the accounting service's /credits/calculate endpoint.
+    // - Log the response received from the accounting service.
+    // - Ensure that if an error occurs during the Axios call, it's handled in a way that
+    //   either returns a clear error indicator (like undefined) or a default/fallback value,
+    //   and that the calling function (`sendMessage`) correctly handles this.
+    // - The current catch block returns `Math.ceil(message.length / 200)`, which is a number.
+    //   However, if an error occurs *before* this (e.g., `config.accountingApiUrl` is bad, or `axios.post` itself fails to be called),
+    //   it might still lead to issues. The primary concern is if `response.data.credits` is not a number.
+
+    logger.debug(`[calculateRequiredCredits] Inputs: modelId="${modelId}", messageLength=${message.length}`);
+
     // Estimate tokens - simple estimation using a character-to-token ratio of 4:1
     // plus a buffer for the expected response length
     const estimatedTokens = Math.ceil(message.length / 4) + 1000; // Simple estimation with buffer
+    logger.debug(`[calculateRequiredCredits] Estimated tokens: ${estimatedTokens}`);
+
+    const payload = {
+      modelId,
+      tokens: estimatedTokens
+    };
+    logger.debug(`[calculateRequiredCredits] Payload for POST ${config.accountingApiUrl}/credits/calculate: ${JSON.stringify(payload)}`);
     
     // Request credit calculation from accounting service
     const response = await axios.post(
       `${config.accountingApiUrl}/credits/calculate`,
-      {
-        modelId,
-        tokens: estimatedTokens
-      },
+      payload,
       {
         headers: {
           Authorization: authHeader
@@ -95,11 +149,24 @@ export const calculateRequiredCredits = async (
       }
     );
     
-    return response.data.credits;
-  } catch (error) {
-    logger.error('Error calculating required credits:', error);
-    // Return a safe default if calculation fails
-    return Math.ceil(message.length / 200); // Very conservative fallback
+    logger.debug(`[calculateRequiredCredits] Response from ${config.accountingApiUrl}/credits/calculate: Status ${response.status}, Data: ${JSON.stringify(response.data)}`);
+
+    const credits = response.data.credits;
+    if (typeof credits !== 'number' || isNaN(credits)) {
+      logger.error(`[calculateRequiredCredits] Invalid credits value received from accounting service: ${credits}. Returning undefined.`);
+      return undefined; // Explicitly return undefined for invalid credit values
+    }
+    
+    logger.info(`[calculateRequiredCredits] Calculated credits: ${credits} for model ${modelId} and ${estimatedTokens} tokens.`);
+    return credits;
+  } catch (error: any) {
+    logger.error('[calculateRequiredCredits] Error calculating required credits:', error.message);
+    if (axios.isAxiosError(error) && error.response) {
+      logger.error(`[calculateRequiredCredits] Axios error details: Status ${error.response.status}, Data: ${JSON.stringify(error.response.data)}`);
+    }
+    // Return undefined if calculation fails, to be handled by the caller
+    // The caller (`sendMessage`) already has a check for undefined/NaN `requiredCredits`.
+    return undefined; 
   }
 };
 
@@ -138,7 +205,7 @@ export const recordChatUsage = async (
     );
     
     const credits = response.data.credits;
-    logger.debug(`Calculated credits for usage recording: ${credits} (type: ${typeof credits}) for ${tokensUsed} tokens with model ${modelId}`);
+    //logger.debug(`Calculated credits for usage recording: ${credits} (type: ${typeof credits}) for ${tokensUsed} tokens with model ${modelId}`);
 
     if (typeof credits !== 'number' || credits < 0) { // Allow credits to be 0
       logger.error(`Invalid credits calculated (${credits}) for user ${userId}, model ${modelId}, tokens ${tokensUsed}. Skipping usage recording.`);
@@ -164,7 +231,7 @@ export const recordChatUsage = async (
       }
     );
     
-    logger.debug(`Successfully recorded ${credits} credits usage for user ${userId}`);
+    //logger.debug(`Successfully recorded ${credits} credits usage for user ${userId}`);
   } catch (error) {
     logger.error('Error recording chat usage:', error);
     // This is non-blocking - we log the error but don't fail the operation

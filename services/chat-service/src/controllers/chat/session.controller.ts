@@ -21,6 +21,7 @@ export const createChatSession = async (req: Request, res: Response) => {
       },
     ];
 
+    // If initialMessage is provided, add it to the messages array
     if (initialMessage) {
       messages.push({
         role: 'user',
@@ -29,6 +30,9 @@ export const createChatSession = async (req: Request, res: Response) => {
       });
     }
 
+    // The userId field is required by the ChatSession schema.
+    // If userId is undefined here (e.g., due to an authentication issue where req.user or req.user.userId is not set),
+    // the session.save() call below will trigger a Mongoose ValidationError: "Path `userId` is required."
     const session = new ChatSession({
       userId,
       username: username,

@@ -187,7 +187,7 @@ export const searchUsers = async (req: Request, res: Response) => {
       logger.info(`Supervisor ${req.user?.userId} performed a wildcard search (match all)`);
     } else {
       const safeQuery = escapeRegExp(query.toString());
-      logger.debug(`Original query: "${query}", escaped for regex: "${safeQuery}"`);
+      //logger.debug(`Original query: "${query}", escaped for regex: "${safeQuery}"`);
 
       const exactMatches = await ChatSession.aggregate([
         { $match: { userId: query.toString() } },

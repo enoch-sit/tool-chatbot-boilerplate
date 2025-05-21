@@ -189,7 +189,7 @@ export function recommendModel(
     }
   }
   
-  logger.debug(`Model recommendation: ${recommendedModelId} for task=${task}, priority=${priority}`);
+  //logger.debug(`Model recommendation: ${recommendedModelId} for task=${task}, priority=${priority}`);
   return { recommendedModel: recommendedModelId, reason };
 }
 

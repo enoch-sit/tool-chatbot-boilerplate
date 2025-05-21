@@ -6,6 +6,7 @@ import sys
 import asyncio
 import aiohttp
 import sseclient
+import uuid # Added uuid
 from datetime import datetime
 from colorama import Fore, Style, init
 
@@ -247,7 +248,8 @@ class ChatServiceTester:
                 f"{ACCOUNTING_SERVICE_URL}/credits/check",
                 headers=self.headers,
                 json={
-                    "credits": 100  # Request to check if user has 100 credits
+                    "userId": TEST_USER["username"], # ADDED userId
+                    "credits": 100
                 }
             )
             
@@ -419,6 +421,7 @@ class ChatServiceTester:
             return False
 
     def send_message(self, streaming=False):
+        import time # ADDED local import to resolve UnboundLocalError
         """Send a message to the chat session"""
         if not self.session_id:
             Logger.error("No active session ID. Create a session first.")
@@ -455,8 +458,8 @@ class ChatServiceTester:
                             
                     if not self.streaming_session_id:
                         Logger.warning("No streaming session ID found in headers. Using fallback.")
-                        import time, uuid
-                        self.streaming_session_id = f"stream-{int(time.time())}-{str(uuid.uuid4())[:8]}"
+                        # import time, uuid # Removed this line
+                        self.streaming_session_id = f"stream-{int(time.time())}-{str(uuid.uuid4())[:8]}" # uuid is now globally imported
                     
                     client = sseclient.SSEClient(response)
                     
@@ -470,12 +473,23 @@ class ChatServiceTester:
                         
                         if event.event == "chunk":
                             try:
+                                Logger.info(f"Raw chunk data: {event.data}") # Added this line
                                 data = json.loads(event.data)
                                 Logger.info(f"Chunk: {data.get('text', '')}")
                                 full_response += data.get('text', '')
                                 chunks += 1
-                            except:
-                                pass
+                            except Exception as e: # Catch specific exception
+                                Logger.warning(f"Failed to parse chunk: {event.data}, Error: {str(e)}")
+                        elif event.event == "error": # Handle error events
+                            try:
+                                Logger.error(f"Received stream error event: {event.data}")
+                            except Exception as e:
+                                Logger.error(f"Failed to parse error event: {str(e)}")
+                        elif event.event == "done": # Handle done event
+                            try:
+                                Logger.info(f"Received stream done event: {event.data}")
+                            except Exception as e:
+                                Logger.warning(f"Failed to parse done event: {str(e)}")
                     
                     # Add delay to prevent race conditions - allow server to process streaming session
                     Logger.info("Adding delay to allow server processing...")
@@ -526,7 +540,7 @@ class ChatServiceTester:
                 response = self.session.post(
                     f"{CHAT_SERVICE_URL}/chat/sessions/{self.session_id}/{endpoint}",
                     headers=self.headers,
-                    json={"message": "Tell me about machine learning", "modelId": "amazon.titan-text-express-v1:0"}
+                    json={"message": "Tell me about machine learning", "modelId": "amazon.titan-text-express-v1"} # CORRECTED modelId
                 )
                 
                 if response.status_code == 200:

@@ -112,12 +112,61 @@ export class CreditController {
         return res.status(401).json({ message: 'User not authenticated' });
       }
       
-      const { credits: requiredCredits } = req.body;
+      // DEBUG.MD_NOTE: Credit Service Integration Issues
+      // This is the receiving endpoint for the /api/credits/check call from chat-service.
+      // The chat-service logs (AWScloudlogfor_test_send_messages.py.json) show it sends an empty JSON object '{}'
+      // and receives a 400 error with "Missing or invalid required fields".
+      //
+      // This controller expects 'credits' in the request body.
+      // const { credits: requiredCredits } = req.body;
+      //
+      // If req.body is an empty object `{}`, then `requiredCredits` will be undefined.
+      // The validation `typeof requiredCredits !== 'number' || requiredCredits <= 0` will then be true,
+      // leading to the 400 error with message 'Valid credits amount required'.
+      //
+      // Investigation:
+      // - The primary issue seems to be that chat-service is sending an empty payload.
+      // - This controller correctly identifies that the 'credits' field is missing or invalid if the payload is empty.
+      // - Consider if other fields like 'userId' or 'modelId' should also be expected here,
+      //   as suggested by debug.md for robustness, although the current code only strictly requires 'credits'.
+      //   If 'userId' from the request body is needed, it should be extracted and validated.
+      //   However, `req.user.userId` (from the JWT token) is already used for `CreditService.checkUserCredits`.
+
+      const { 
+        credits: requiredCredits, 
+        //userId: bodyUserId, 
+        //modelId: bodyModelId 
+      } = req.body;
       
+      console.log(`Received /api/credits/check request with body: ${JSON.stringify(req.body)} for user ${req.user.userId}`);
+
+      // SUGGESTION: The current validation for `requiredCredits` below is appropriate.
+      // It correctly handles the scenario where chat-service sends an empty or invalid payload,
+      // by returning a 400 error. No changes are strictly needed in this validation logic
+      // to address the root cause of the error (which lies in chat-service).
       if (typeof requiredCredits !== 'number' || requiredCredits <= 0) {
         return res.status(400).json({ message: 'Valid credits amount required' });
       }
       
+      // SUGGESTION (Optional Enhancement based on Investigation Point 3):
+      // The comment mentions considering if 'userId' or 'modelId' from the request body should be used.
+      // 1. For 'userId':
+      //    - `req.user.userId` (from JWT) is already used by `CreditService.checkUserCredits`, which is secure.
+      //    - If `bodyUserId` were to be used, it should ideally be validated against `req.user.userId`:
+      //      Example:
+      //      if (bodyUserId && bodyUserId !== req.user.userId) {
+      //        console.warn(`[CreditController.checkCredits] Mismatch: body userId (${bodyUserId}), JWT userId (${req.user.userId}).`);
+      //        return res.status(403).json({ message: 'User ID mismatch in request.' });
+      //      }
+      //    - However, this is optional and adds redundancy if the JWT is the source of truth.
+      // 2. For 'modelId':
+      //    - If `requiredCredits` is already calculated (e.g., by chat-service calling this service's 
+      //      `/api/credits/calculate` endpoint, which *does* use `modelId`), then `modelId` might be
+      //      redundant for this `/api/credits/check` endpoint. The check is primarily "does the user have X credits?".
+      //    - If `modelId` were to be used here, its purpose would need to be clearly defined (e.g., for more granular logging
+      //      or if the credit check logic itself becomes model-dependent beyond the pre-calculated `requiredCredits`).
+      // For now, the existing logic using `req.user.userId` from JWT for the service call is standard.
+
       const sufficient = await CreditService.checkUserCredits(req.user.userId, requiredCredits);
       
       // Get the user's current balance to include in the response
@@ -165,17 +214,36 @@ export class CreditController {
         return res.status(401).json({ message: 'User not authenticated' });
       }
       
+      // DEBUG.MD_NOTE: Credit Service Integration Issues
+      // This is the receiving endpoint for the /api/credits/calculate call from chat-service's `calculateRequiredCredits` function.
+      //
+      // Investigation:
+      // - Log the received request body (modelId, tokens).
+      // - Ensure `CreditService.calculateCreditsForTokens` behaves as expected and returns a valid number.
+      // - If this endpoint fails or returns an unexpected response structure,
+      //   `calculateRequiredCredits` in chat-service might return undefined or an invalid value,
+      //   propagating the error.
+
       const { modelId, tokens } = req.body;
+      console.log(`[CreditController.calculateCredits] Received request: user=${req.user.userId}, modelId=${modelId}, tokens=${tokens}`);
       
       if (!modelId || typeof tokens !== 'number' || tokens < 0) {
+        console.warn(`[CreditController.calculateCredits] Invalid request body: modelId=${modelId}, tokens=${tokens}`);
         return res.status(400).json({ message: 'Valid modelId and tokens required' });
       }
       
       const credits = await CreditService.calculateCreditsForTokens(modelId, tokens);
+      console.log(`[CreditController.calculateCredits] Calculated credits: ${credits} for modelId=${modelId}, tokens=${tokens}`);
       
+      // Ensure the response structure is { credits: number }
+      if (typeof credits !== 'number' || isNaN(credits)) {
+        console.error(`[CreditController.calculateCredits] CreditService.calculateCreditsForTokens returned invalid value: ${credits}. Responding with 500.`);
+        return res.status(500).json({ message: 'Failed to calculate credits due to internal error' });
+      }
+
       return res.status(200).json({ credits });
-    } catch (error) {
-      console.error('Error calculating credits:', error);
+    } catch (error: any) {
+      console.error('[CreditController.calculateCredits] Error calculating credits:', error.message);
       return res.status(500).json({ message: 'Failed to calculate credits' });
     }
   }

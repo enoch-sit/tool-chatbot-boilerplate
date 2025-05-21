@@ -25,6 +25,103 @@ import logger from '../utils/logger';
 import config from '../config/config';
 
 /**
+ * Helper function to format the prompt body based on the modelId.
+ */
+const formatPromptBody = (modelId: string, messages: any[]): any => {
+  let promptBody;
+  if (modelId.includes('anthropic')) {
+    promptBody = {
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: 2000,
+      messages: messages
+    };
+  } else if (modelId.includes('amazon.titan')) {
+    promptBody = {
+      inputText: messages.map(m => `${m.role}: ${m.content}`).join('\\\\n'),
+      textGenerationConfig: {
+        maxTokenCount: 2000,
+        temperature: 0.7,
+        topP: 0.9
+      }
+    };
+  } else if (modelId.includes('amazon.nova')) {
+    const systemMessage = messages.find(m => m.role === 'system');
+    const userAssistantMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant');
+    const formattedMessages = userAssistantMessages.map(m => ({
+      role: m.role,
+      content: [{
+        text: typeof m.content === 'string' ? m.content : (m.content as any)?.text || JSON.stringify(m.content)
+      }]
+    }));
+    if (systemMessage && formattedMessages.length > 0 && formattedMessages[0].role === 'user') {
+      const systemText = typeof systemMessage.content === 'string' ? systemMessage.content : (systemMessage.content as any)?.text || JSON.stringify(systemMessage.content);
+      if (systemText) {
+        formattedMessages[0].content[0].text = systemText + "\\\\n\\\\n" + formattedMessages[0].content[0].text;
+      }
+    } else if (systemMessage && formattedMessages.length === 0) {
+      logger.warn('System message provided for Nova model without subsequent user/assistant messages. System message may be ignored or cause an error.');
+    }
+    promptBody = {
+      inferenceConfig: {
+        max_new_tokens: 2000,
+        temperature: 0.7,
+        top_p: 0.9
+      },
+      messages: formattedMessages
+    };
+  } else if (modelId.includes('meta.llama')) {
+    promptBody = {
+      prompt: messages.map(m => `${m.role}: ${m.content}`).join('\\\\n'),
+      temperature: 0.7,
+      top_p: 0.9,
+      max_gen_len: 2000
+    };
+  } else {
+    // Default format (Anthropic Claude compatible)
+    promptBody = {
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: 2000,
+      messages: messages
+    };
+  }
+  return promptBody;
+};
+
+/**
+ * Extracts the text content from a streaming chunk received from the AI model.
+ * This function handles different response structures from various models.
+ *
+ * @param chunkData - The parsed JSON data of the chunk.
+ * @param modelId - The ID of the model that generated the chunk.
+ * @returns The extracted text content, or an empty string if not found.
+ */
+export const extractTextFromChunk = (chunkData: any, modelId: string): string => {
+  // DEBUG.MD_NOTE: Nova Response Format Issue & User Provided Log
+  // The debug.md report and user-provided logs confirm that Amazon Nova models
+  // use a specific format: `contentBlockDelta.delta.text`.
+  // User log example of a raw chunk from Nova:
+  // 2025-05-20 17:09:30 {"level":"debug","message":"Received chunk data for amazon.nova-micro-v1:0: {\\"contentBlockDelta\\":{\\"delta\\":{\\"text\\":\\"Artificial\\"},\\"contentBlockIndex\\":0}}","service":"chat-service","timestamp":"2025-05-20T09:09:30.796Z"}
+  // The JSON part `{\\"contentBlockDelta\\":{\\"delta\\":{\\"text\\":\\"Artificial\\"},\\"contentBlockIndex\\":0}}`
+  // should be correctly parsed by the logic below, extracting "Artificial".
+
+  if (modelId.includes('amazon.nova')) {
+    // Handle Amazon Nova's specific format
+    return chunkData.contentBlockDelta?.delta?.text || '';
+  } else if (modelId.includes('anthropic.claude-3')) {
+    return chunkData.delta?.text || '';
+  } else if (modelId.includes('amazon.titan')) {
+    return chunkData.completion || chunkData.outputText || '';
+  } else if (modelId.includes('meta.llama')) {
+    return chunkData.text || chunkData.generation || '';
+  } else if (modelId.includes('cohere')) {
+    return chunkData.text || chunkData.generation || '';
+  } else if (modelId.includes('mistral')) {
+    return chunkData.text || '';
+  }
+  return '';
+};
+
+/**
  * AWS Bedrock Client Configuration
  * 
  * Initialize the Bedrock client with region and authentication
@@ -84,6 +181,9 @@ export const initializeStreamingSession = async (
      * This reserves credits for the streaming session and ensures
      * the user has sufficient balance before starting the stream.
      */
+    // POTENTIAL ERROR SOURCE: If the accounting service at config.accountingApiUrl (e.g., http://localhost:3001)
+    // is not running or is inaccessible, this axios.post call will fail.
+    // This can result in an 'ECONNREFUSED' error, as seen in logs when attempting to connect to port 3001.
     const response = await axios.post(
       `${config.accountingApiUrl}/streaming-sessions/initialize`,
       {
@@ -145,265 +245,201 @@ export const streamResponse = async (
   modelId: string,
   authHeader: string
 ) => {
-  /**
-   * Create a PassThrough stream for SSE
-   * 
-   * This stream allows us to push events to the client in real-time
-   * as they arrive from AWS Bedrock.
-   */
+  // Create a PassThrough stream. This is a special kind of stream that can be used to
+  // pipe data from a source (AWS Bedrock in this case) to a destination (the client's browser).
+  // It acts like a "pipe" where data flows through.
   const stream = new PassThrough();
+  // Initialize a counter for the total number of tokens generated in this streaming session.
+  // Tokens are units of text (like words or parts of words) that AI models process.
   let totalTokensGenerated = 0;
   
-  /**
-   * Stream Timeout Handler
-   * 
-   * Sets a maximum duration for streaming to prevent runaway
-   * sessions that could consume excessive resources or credits.
-   * If the timeout is reached, the stream is closed and the
-   * session is aborted.
-   */
+  // --- Stream Timeout Handler ---
+  // This sets up a safety net. If the streaming takes too long (defined by config.maxStreamingDuration),
+  // we want to stop it to prevent it from running forever and consuming resources.
   const timeout = setTimeout(() => {
+    // Log a warning that the timeout was reached.
     logger.warn(`Stream timeout reached for session ${sessionId}`);
     
-    // Send error event to the client
-    stream.write(`event: error\ndata: ${JSON.stringify({ 
+    // Send an 'error' event to the client through the Server-Sent Events (SSE) stream.
+    // This tells the client's browser that something went wrong.
+    stream.write(`event: error\\ndata: ${JSON.stringify({ 
       error: 'Stream timeout reached', 
       code: 'STREAM_TIMEOUT' 
-    })}\n\n`);
+    })}\\n\\n`);
+    // End the stream, signaling that no more data will be sent.
     stream.end();
     
-    // Attempt to finalize the session with a timeout status
+    // Attempt to inform the accounting service that this session was aborted due to a timeout.
+    // This is important for correct billing and resource management.
+    // POTENTIAL ERROR SOURCE: If the accounting service is down, this call to abort the session
+    // will also fail, potentially with an 'ECONNREFUSED' error.
     try {
       axios.post(
-        `${config.accountingApiUrl}/streaming-sessions/abort`,
+        `${config.accountingApiUrl}/streaming-sessions/abort`, // Endpoint in the accounting service
         {
-          sessionId
+          sessionId // The ID of the session that timed out
         },
         {
           headers: {
-            Authorization: authHeader
+            Authorization: authHeader // Authentication token for the accounting service
           }
         }
-      );
+      ).catch(abortError => {
+        // If there's an error while trying to abort the session with the accounting service, log it.
+        logger.error('Error aborting timed-out session with accounting service:', abortError);
+      });
     } catch (error) {
       logger.error('Error finalizing timed-out session:', error);
     }
-  }, config.maxStreamingDuration);
+  }, config.maxStreamingDuration); // The maximum duration is set in the application's configuration.
   
   try {
-    /**
-     * Model-specific Prompt Formatting
-     * 
-     * Different AI models require different input formats.
-     * This section detects the model type and formats the messages
-     * appropriately for the specific model API.
-     */
-    let promptBody;
+    // --- Model-specific Prompt Formatting ---
+    const promptBody = formatPromptBody(modelId, messages);
     
-    if (modelId.includes('anthropic')) {
-      // Format for Anthropic Claude models
-      promptBody = {
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 2000,
-        messages: messages
-      };
-    } else if (modelId.includes('amazon.titan')) {
-      // Format for Amazon's Titan models
-      promptBody = {
-        inputText: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
-        textGenerationConfig: {
-          maxTokenCount: 2000,
-          temperature: 0.7,
-          topP: 0.9
-        }
-      };
-    } else if (modelId.includes('amazon.nova')) {
-      // Format for Amazon's Nova models
-      // Nova models might not support a 'system' role directly in the messages array.
-      // We'll filter out system messages and prepend its content to the first user message if it exists.
-      const systemMessage = messages.find(m => m.role === 'system');
-      const userAssistantMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant');
-
-      const formattedMessages = userAssistantMessages.map(m => ({
-        role: m.role,
-        content: [{
-          text: typeof m.content === 'string' ? m.content : (m.content as any)?.text || JSON.stringify(m.content) // Handle potential object content
-        }]
-      }));
-
-      if (systemMessage && formattedMessages.length > 0 && formattedMessages[0].role === 'user') {
-        const systemText = typeof systemMessage.content === 'string' ? systemMessage.content : (systemMessage.content as any)?.text || JSON.stringify(systemMessage.content);
-        if (systemText) {
-            formattedMessages[0].content[0].text = systemText + "\n\n" + formattedMessages[0].content[0].text;
-        }
-      } else if (systemMessage && formattedMessages.length === 0) {
-        // If only a system message exists, Nova might not be able to process it.
-        // Log a warning. Depending on Nova's API, this might need to be an error or a specially formatted request.
-        logger.warn('System message provided for Nova model without subsequent user/assistant messages. System message may be ignored or cause an error.');
-      }
-      
-      promptBody = {
-        inferenceConfig: {
-          max_new_tokens: 2000,
-          temperature: 0.7,
-          top_p: 0.9
-        },
-        messages: formattedMessages // Send the filtered/modified messages
-      };
-    } else if (modelId.includes('meta.llama')) {
-      // Format for Meta's Llama models
-      promptBody = {
-        prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
-        temperature: 0.7,
-        top_p: 0.9,
-        max_gen_len: 2000
-      };
-    } else {
-      // Default format (Claude-compatible)
-      promptBody = {
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 2000,
-        messages: messages
-      };
-    }
-    
-    /**
-     * Create AWS Bedrock Streaming Command
-     * 
-     * Prepares the API request for AWS Bedrock with the properly
-     * formatted prompt and streaming configuration.
-     */
+    // --- Create AWS Bedrock Streaming Command ---
+    // This prepares the actual request to be sent to AWS Bedrock.
     const command = new InvokeModelWithResponseStreamCommand({
-      modelId: modelId,
-      body: JSON.stringify(promptBody),
-      contentType: 'application/json',
-      accept: 'application/json'
+      modelId: modelId, // The ID of the AI model to use
+      body: JSON.stringify(promptBody), // The formatted prompt, converted to a JSON string
+      contentType: 'application/json', // Tells Bedrock the body is JSON
+      accept: 'application/json' // Tells Bedrock we want a JSON response (for streaming metadata)
     });
     
-    // Send streaming request to AWS Bedrock
+    // Log that we're about to send the request to Bedrock.
     logger.debug(`Sending streaming request to Bedrock: ${modelId}`);
+    // Send the command to Bedrock and wait for the initial response.
+    // This response will contain the stream of data.
     const response = await bedrockClient.send(command);
     
-    // Process the streaming response
+    // Check if the response body (the stream) exists.
     if (response.body) {
-      // Track performance metrics
+      // --- Process the Streaming Response ---
+      // Record the start time to measure how long streaming takes.
       const startTime = Date.now();
-      let lastChunkTime = startTime;
-      let responseContent = ''; // Collect the complete response
+      // Keep track of when the last chunk of data was received.
+      // let lastChunkTime = startTime; // This variable is declared but not used later, could be removed or used for inactivity timeouts.
+      // Accumulate the full response text as chunks arrive.
+      let responseContent = ''; 
       
-      /**
-       * Process Streaming Response Chunks
-       * 
-       * Iterates through the chunks of data as they arrive from AWS Bedrock,
-       * extracts the text content, and forwards them to the client as SSE events.
-       */
+      // This loop iterates over the chunks of data as they arrive from AWS Bedrock.
+      // 'for await...of' is used for asynchronously iterating over the stream.
       for await (const chunk of response.body) {
-        lastChunkTime = Date.now();
+        // lastChunkTime = Date.now(); // Update the time of the last received chunk. (If used for inactivity)
         
+        // Each 'chunk' can contain different types of information.
+        // We are interested in 'chunk.chunk.bytes', which holds the actual data payload.
         if (chunk.chunk?.bytes) {
           try {
-            // Parse the binary chunk data as JSON
-            const chunkData = JSON.parse(
-              Buffer.from(chunk.chunk.bytes).toString('utf-8')
-            );
+            // The data in 'bytes' is usually a binary buffer. We need to convert it to a UTF-8 string
+            // and then parse it as JSON, as Bedrock sends structured data in chunks.
+            const chunkDataString = Buffer.from(chunk.chunk.bytes).toString('utf-8');
+            const chunkData = JSON.parse(chunkDataString);
             
-            /**
-             * Model-specific Text Extraction
-             * 
-             * Different models return text in different JSON structures.
-             * This section extracts the text content based on the model type.
-             */
-            let chunkText = '';
-            if (modelId.includes('anthropic')) {
-              chunkText = chunkData.delta?.text || '';
-            } else if (modelId.includes('amazon.titan')) {
-              chunkText = chunkData.outputText || '';
-            } else if (modelId.includes('amazon.nova')) {
-              chunkText = chunkData.generatedText || '';
-            } else if (modelId.includes('meta.llama')) {
-              chunkText = chunkData.generation || '';
-            }
+            // ***** PLACE TO ADD MORE LOGGING FOR EACH CHUNK *****
+            // The line below already logs the entire parsed chunk.
+            // You can add more specific logging here if needed, for example,
+            // to log only specific parts of chunkData or to log it in a different format.
+            // Example: logger.info(`STREAMING CHUNK DETAILS: Text part - ${chunkData.delta?.text || chunkData.outputText || 'N/A'}`);
+            logger.debug(`Received chunk data for ${modelId}: ${JSON.stringify(chunkData)}`);
             
-            // Process the text chunk if we got valid content
+            // --- Model-specific Text Extraction from Chunk ---
+            const chunkText = extractTextFromChunk(chunkData, modelId);
+            
+            // How to log the chunk text?
+            // Log the extracted text from this chunk at debug level
             if (chunkText) {
-              // Estimate token count for billing
-              // This is a rough approximation; a proper tokenizer would be more accurate
-              const tokenEstimate = Math.ceil(chunkText.length / 4);
-              totalTokensGenerated += tokenEstimate;
-              responseContent += chunkText; // Accumulate the full response
+              logger.debug(`Session ${sessionId}, Model ${modelId} - Chunk text: ${chunkText.substring(0, 100)}${chunkText.length > 100 ? '...' : ''}`);
+            }
+            // If we successfully extracted text from the chunk:
+            if (chunkText) {
+              // Estimate the number of tokens in this chunk. This is a rough estimate.
+              // For accurate billing, a proper tokenizer library for the specific model is better.
+              const tokenEstimate = Math.ceil(chunkText.length / 4); // Simple char/4 ratio
+              totalTokensGenerated += tokenEstimate; // Add to the session's total
+              responseContent += chunkText; // Append the text to the full response being built
+
+              // Construct the payload for the SSE 'chunk' event.
+              // This object structure { text: chunkText } is expected by the client-side parser
+              // (see message.controller.ts, streamChatResponse data handler)
+              // and helps address SSE parsing issues noted in DEBUG.MD.
+              const sseEventPayload = { text: chunkText };
               
-              // Send the chunk to the client as an SSE event
-              stream.write(`event: chunk\ndata: ${JSON.stringify({
-                text: chunkText,
-                tokens: tokenEstimate,
-                totalTokens: totalTokensGenerated
-              })}\n\n`);
+              // DEBUG.MD_NOTE: SSE Parsing Errors
+              // The debug.md report mentions "Error parsing SSE chunk: Unexpected token \\\\ in JSON at position XX".
+              // This was due to sending malformed JSON or JSON with unescaped characters.
+              // By defining `sseEventPayload` as an object `{ text: chunkText }` and then stringifying it,
+              // we ensure a correctly formatted JSON string is sent as the SSE data.
+              // The client (message.controller.ts) expects this structure.
+              stream.write(`event: chunk\\ndata: ${JSON.stringify(sseEventPayload)}\\n\\n`); // SSE messages end with two newlines.
             }
           } catch (parseError) {
+            // If there's an error parsing a chunk (e.g., it's not valid JSON), log it.
             logger.error('Error parsing chunk data:', parseError);
+            // Consider if you want to send an error to the client here or try to continue.
           }
         }
       }
       
-      /**
-       * Send Completion Event
-       * 
-       * Signals to the client that the streaming response is complete
-       * and provides final statistics.
-       */
-      stream.write(`event: complete\ndata: ${JSON.stringify({
+      // --- Send Completion Event ---
+      // After all chunks have been processed, send a 'complete' event to the client.
+      stream.write(`event: complete\\ndata: ${JSON.stringify({
         status: 'complete',
-        tokens: totalTokensGenerated,
+        tokens: totalTokensGenerated, // Final total tokens for the session
         sessionId
-      })}\n\n`);
+      })}\\n\\n`);
       
-      // Log completion metrics
+      // Log how long the streaming took and how many tokens were generated.
       const completionTime = Date.now() - startTime;
       logger.debug(`Streaming completed in ${completionTime}ms, generated ${totalTokensGenerated} tokens`);
       
-      /**
-       * Finalize Streaming Session with Accounting
-       * 
-       * Records the actual token usage with the accounting service
-       * to ensure proper billing and credit deduction.
-       */
+      // --- Finalize Streaming Session with Accounting ---
+      // Inform the accounting service that the stream is complete and provide the actual token usage.
+      // POTENTIAL ERROR SOURCE: If the accounting service is down, this call to finalize the session
+      // will fail, potentially with an 'ECONNREFUSED' error.
       try {
         await axios.post(
-          `${config.accountingApiUrl}/streaming-sessions/finalize`,
+          `${config.accountingApiUrl}/streaming-sessions/finalize`, // Endpoint in accounting service
           {
             sessionId,
-            actualTokens: totalTokensGenerated, // Changed from tokensUsed
-            responseContent
+            actualTokens: totalTokensGenerated, // The actual tokens used
+            responseContent // The full response text (optional, for logging or auditing)
           },
           {
             headers: {
-              Authorization: authHeader
+              Authorization: authHeader // Authentication for the accounting service
             }
           }
-        );
+        ).catch(finalizationError => {
+          // If there's an error during finalization with the accounting service, log it.
+          logger.error('Error finalizing streaming session with accounting service:', finalizationError);
+        });
         logger.info(`Successfully finalized streaming session ${sessionId}`);
       } catch (finalizationError) {
+        // If there's an error during finalization with the accounting service, log it.
         logger.error('Error finalizing streaming session:', finalizationError);
       }
     }
     
-    // Clean up and end the stream
+    // --- Clean Up ---
+    // Clear the timeout that we set up at the beginning, as the stream completed successfully.
     clearTimeout(timeout);
+    // End the stream to the client, signaling that no more data will be sent.
     stream.end();
     
   } catch (error:any) {
+    // --- Error Handling for the Entire Streaming Process ---
+    // If any error occurs in the `try` block above (e.g., Bedrock connection issue,
+    // unexpected error during prompt formatting), it will be caught here.
     logger.error('Error in stream processing:', error);
     
-    // Clean up timeout to prevent memory leaks
+    // Important: Clear the timeout to prevent it from running if it hasn't already.
     clearTimeout(timeout);
     
-    /**
-     * Error Recovery: Abort Streaming Session
-     * 
-     * In case of errors during streaming, attempt to properly
-     * abort the session with the accounting service to ensure
-     * accurate credit tracking.
-     */
+    // --- Error Recovery: Abort Streaming Session with Accounting ---
+    // Try to inform the accounting service that the session was aborted due to an error.
+    // POTENTIAL ERROR SOURCE: If the accounting service is down, this call to abort the session
+    // will also fail, potentially with an 'ECONNREFUSED' error.
     try {
       await axios.post(
         `${config.accountingApiUrl}/streaming-sessions/abort`,
@@ -415,21 +451,26 @@ export const streamResponse = async (
             Authorization: authHeader
           }
         }
-      );
-      
+      ).catch(abortError => {
+        // If aborting also fails, log that error too.
+        logger.error('Error aborting streaming session with accounting service after main error:', abortError);
+      });
       logger.info(`Aborted streaming session ${sessionId} due to error`);
     } catch (abortError) {
+      // If aborting also fails, log that error too.
       logger.error('Error aborting streaming session:', abortError);
     }
     
-    // Send error event to the client
-    stream.write(`event: error\ndata: ${JSON.stringify({ 
-      error: error.message || 'Stream processing error',
-      code: error.code || 'STREAM_ERROR'
-    })}\n\n`);
+    // Send an 'error' event to the client through the SSE stream.
+    stream.write(`event: error\\ndata: ${JSON.stringify({ 
+      error: error.message || 'Stream processing error', // The error message
+      code: error.code || 'STREAM_ERROR' // An error code, if available
+    })}\\n\\n`);
+    // End the stream.
     stream.end();
   }
   
-  // Return the stream for the controller to pipe to the HTTP response
+  // Return the PassThrough stream. The controller that called this function will
+  // then pipe this stream to the client's HTTP response.
   return stream;
 };
