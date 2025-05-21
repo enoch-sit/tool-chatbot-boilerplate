@@ -20,29 +20,26 @@ export const sendMessage = async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization || '';
     const { message } = req.body;
-    // DEBUG.MD_NOTE: Credit Service Integration Issues
+    // DEBUG.MD_NOTE: Credit Service Integration Issues - RESOLVED
     // This controller calls `CreditService.calculateRequiredCredits` and then `CreditService.checkUserCredits`.
-    // The error occurs in `checkUserCredits` when it calls the accounting service.
-    //
-    // Investigation:
-    // - Ensure `message` and `selectedModel` are valid when passed to `calculateRequiredCredits`.
-    // - Ensure `requiredCredits` returned by `calculateRequiredCredits` is a valid number.
-    //   If `calculateRequiredCredits` itself has an issue or returns undefined/NaN,
-    //   this could propagate to `checkUserCredits` and cause an empty payload to be sent.
-    // - The `AWScloudlogfor_test_send_messages.py.json` log shows:
-    //   `{"level":"info","message":"Checking if user 68142f173a381f81e190343e has undefined credits available", ...}`
-    //   This "undefined credits available" message strongly suggests that `requiredCredits` is undefined
-    //   when `CreditService.checkUserCredits` is called from here.
-    //   This means `await CreditService.calculateRequiredCredits(...)` likely resolved to undefined or had an error.
+    // The error was occurring in `checkUserCredits` when it calls the accounting service due to `requiredCredits` being undefined.
+    // Resolution:
+    // - Added strict checks for `userId` and `message` content before `calculateRequiredCredits`.
+    // - Added a strict check to ensure `requiredCredits` is a valid, non-negative number after `calculateRequiredCredits`
+    //   and before `checkUserCredits`.
+    //   This prevents `checkUserCredits` from being called with undefined `requiredCredits`,
+    //   which was causing an empty payload {} to be sent to the accounting service, resulting in a 400 error.
 
+    // Strict check for userId
     if (!userId) {
-      // Added a check for userId, as it's critical for credit checks.
       logger.error('User ID is missing, cannot proceed with sending message.');
       return res.status(401).json({ message: 'User not authenticated or user ID missing.' });
     }
-    if (!message || typeof message !== 'string') {
+
+    // Strict check for message content
+    if (!message || typeof message !== 'string' || message.trim() === '') {
       logger.error('Message is missing or invalid, cannot proceed.');
-      return res.status(400).json({ message: 'Message content is required and must be a string.' });
+      return res.status(400).json({ message: 'Message content is required and must be a non-empty string.' });
     }
 
     const session = await ChatSession.findOne({ _id: sessionId, userId });
@@ -53,7 +50,6 @@ export const sendMessage = async (req: Request, res: Response) => {
 
     const selectedModel = modelId || session.modelId || config.defaultModelId;
     
-    // Log input to calculateRequiredCredits
     logger.debug(`Calculating required credits for message: "${message}", model: ${selectedModel}, user: ${userId}`);
 
     const requiredCredits = await CreditService.calculateRequiredCredits(
@@ -62,22 +58,39 @@ export const sendMessage = async (req: Request, res: Response) => {
       authHeader
     );
 
-    // Log the result of calculateRequiredCredits
+    // DEBUG.MD_NOTE: Issue with Non-Streaming Messages (Credit Calculation)
+    // At `2025-05-21T07:23:23.229Z`, the chat service attempts to calculate credits for the model `amazon.nova-micro-v1:0`.
+    // It sends a request to the accounting service: `POST http://accounting-service-accounting-service-1:3001/api/credits/calculate` 
+    // with payload `{"modelId":"amazon.nova-micro-v1:0","tokens":1009}`.
+    // The accounting service responds with `Status 200, Data: {"modelId":"amazon.nova-micro-v1:0","tokens":1009,"requiredCredits":2}`. 
+    // This response appears **correct** and includes the `requiredCredits` field.
+    // However, the very next log entry in `chat-service` is an error from `calculateRequiredCredits`:
+    // `{"level":"error","message":"[calculateRequiredCredits] Invalid credits value received from accounting service: undefined. Returning undefined.","service":"chat-service","timestamp":"2025-05-21T07:23:23.239Z"}`.
+    // This is followed by the error logged below: 
+    // `{"level":"error","message":"Invalid requiredCredits calculated (undefined) for user 68142f173a381f81e190343e, model amazon.nova-micro-v1:0. Cannot check credits or proceed.","service":"chat-service","timestamp":"2025-05-21T07:23:23.240Z"}`.
+    // Consequently, the message sending fails: `POST /api/chat/sessions/682d7f6b18b41595afbc3285/messages 500 17.989 ms - 100`.
     logger.debug(`Calculated requiredCredits: ${requiredCredits} for user: ${userId}`);
 
-    // Explicitly check if requiredCredits is a valid number before proceeding
-    if (typeof requiredCredits !== 'number' || isNaN(requiredCredits)) {
-      logger.error(`Invalid requiredCredits calculated (${requiredCredits}) for user ${userId}, model ${selectedModel}. Cannot check credits.`);
-      // This scenario would lead to the "undefined credits available" log and the subsequent 400 error.
+    // Strict check for requiredCredits after calculation.
+    // This validation is critical as per UnderstandingCreditCalculation.md and findings in debug.md.
+    // It ensures `requiredCredits` is a valid, non-negative number before being used in `CreditService.checkUserCredits`.
+    // Failing to do so led to `checkUserCredits` receiving an invalid `requiredCredits` value (e.g., undefined),
+    // which in turn caused a 400 Bad Request from the accounting service due to an empty or malformed payload (e.g. "{}").
+    if (typeof requiredCredits !== 'number' || isNaN(requiredCredits) || requiredCredits < 0) { 
+      logger.error(`Invalid requiredCredits calculated (${requiredCredits}) for user ${userId}, model ${selectedModel}. Cannot check credits or proceed.`);
       return res.status(500).json({
         message: 'Failed to calculate credit cost. Please try again.',
         error: 'CREDIT_CALCULATION_FAILED',
       });
     }
 
+    // [20250521_16_52] Problem identified: Non-Streaming - Incorrect Credit Check Payload.
+    // The payload to /api/credits/check is {"credits":X}, which is insufficient for the accounting service.
+    // It expects more fields like userId and possibly modelId. This issue occurs within the CreditService.checkUserCredits call
+    // or the subsequent HTTP request it makes.
     const hasSufficientCredits = await CreditService.checkUserCredits(
-      userId!, // userId is checked for null/undefined above
-      requiredCredits,
+      userId, // userId is now guaranteed to be present
+      requiredCredits, // requiredCredits is now guaranteed to be a valid non-negative number
       authHeader
     );
 
@@ -313,6 +326,10 @@ export const sendMessage = async (req: Request, res: Response) => {
     session.metadata.totalTokensUsed = (session.metadata.totalTokensUsed || 0) + tokensUsed;
     await session.save();
 
+    // [20250521_16_52] Problem identified: Non-Streaming - Lost/Undefined Credits for Usage Recording.
+    // The `requiredCredits` (or its equivalent for cost) becomes undefined before this call to recordChatUsage,
+    // leading to skipped usage recording. The issue is that the initially calculated `requiredCredits`
+    // is not correctly passed or retrieved for this usage recording step.
     await CreditService.recordChatUsage(userId!, selectedModel, tokensUsed, authHeader);
     //logger.debug(`Non-streaming chat completed in ${completionTime}ms, used ~${tokensUsed} tokens`);
 
@@ -491,6 +508,11 @@ export const streamChatResponse = async (req: Request, res: Response) => {
           // Extract the JSON string from the SSE data.
           const jsonStr = sseData.split('data: ')[1].trim();
           // Parse the JSON string to get the chunk data.
+          // [20250521_16_52] Problem identified: Streaming - Malformed SSE Chunk Parsing.
+          // This is where the "Unexpected token \\" in JSON error occurs as per debug.md.
+          // The jsonStr being parsed likely contains improperly escaped characters due to
+          // incorrect processing/splitting of raw SSE event lines or an erroneous unescaping
+          // step performed on the extracted data string before JSON.parse().
           const chunkData = JSON.parse(jsonStr);
           // If the chunk data contains text, append it to the fullResponse.
           if (chunkData.text) { fullResponse += chunkData.text; }

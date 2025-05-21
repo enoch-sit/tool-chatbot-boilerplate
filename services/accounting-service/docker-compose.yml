@@ -48,7 +48,8 @@ networks:
   accounting-network:
     driver: bridge
   chatbot-shared-network:
-    external: true
+    name: chatbot-shared-network
+    driver: bridge
 
 volumes:
   postgres-data:

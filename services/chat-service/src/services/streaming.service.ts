@@ -345,6 +345,7 @@ export const streamResponse = async (
             
             // --- Model-specific Text Extraction from Chunk ---
             const chunkText = extractTextFromChunk(chunkData, modelId);
+            logger.debug(`Raw chunkText for session ${sessionId}, model ${modelId}: [${chunkText}]`);
             
             // How to log the chunk text?
             // Log the extracted text from this chunk at debug level
@@ -366,12 +367,19 @@ export const streamResponse = async (
               const sseEventPayload = { text: chunkText };
               
               // DEBUG.MD_NOTE: SSE Parsing Errors
-              // The debug.md report mentions "Error parsing SSE chunk: Unexpected token \\\\ in JSON at position XX".
-              // This was due to sending malformed JSON or JSON with unescaped characters.
-              // By defining `sseEventPayload` as an object `{ text: chunkText }` and then stringifying it,
-              // we ensure a correctly formatted JSON string is sent as the SSE data.
-              // The client (message.controller.ts) expects this structure.
-              stream.write(`event: chunk\\ndata: ${JSON.stringify(sseEventPayload)}\\n\\n`); // SSE messages end with two newlines.
+              // The chat-service might be generating invalid JSON data for Server-Sent Events.
+              // This can be due to issues with character escaping (e.g., unescaped backslashes
+              // or other special characters) within the JSON strings constructed for SSE data.
+              // This leads to "Error parsing SSE chunk: Unexpected token \\ in JSON at position XX"
+              // errors, indicating data sent doesn't conform to JSON standards for SSE events.
+              // (debug.md, 2025-05-21)
+              
+              // The following line sends the correctly formatted JSON string as the SSE data.
+              const jsonPayloadString = JSON.stringify(sseEventPayload);
+              logger.debug(`SSE JSON Payload String for session ${sessionId}: [${jsonPayloadString}]`); // Log with delimiters
+              // [20250521_16_52] Problem identified: Streaming - Malformed SSE Chunk Parsing. message.controller.js is failing to parse JSON strings from this service. The "Unexpected token \\\\" error indicates improperly escaped characters when JSON.parse() is called in message.controller.js.
+              stream.write(`event: chunk\\\\ndata: ${jsonPayloadString}\\\\n\\\\n`); // SSE messages end with two newlines.
+              //stream.write(`event: chunk\\\\ndata: ${JSON.stringify(sseEventPayload)}\\\\n\\\\n`); 
             }
           } catch (parseError) {
             // If there's an error parsing a chunk (e.g., it's not valid JSON), log it.
@@ -474,3 +482,13 @@ export const streamResponse = async (
   // then pipe this stream to the client's HTTP response.
   return stream;
 };
+
+// DEBUG.MD_NOTE: Malformed SSE Chunk Generation (Streaming Messages)
+// [20250521_16_52] Problem identified: Streaming - Malformed SSE Chunk Parsing. message.controller.js is failing to parse JSON strings from this service. The "Unexpected token \\\\" error indicates improperly escaped characters when JSON.parse() is called in message.controller.js. (General note for the issue)
+// The chat-service is generating invalid JSON data for the Server-Sent Events it streams to the client.
+// This is likely due to character escaping issues (e.g., unescaped backslashes or other special characters)
+// within the JSON strings being constructed for the SSE `data` field, leading to parsing errors on the client and in chat-service logs.
+// Root Cause: The chat-service is generating invalid JSON data for the Server-Sent Events it streams to the client.
+// The "Unexpected token \\\\\\\\" error typically points to issues with character escaping
+// (e.g., unescaped backslashes or other special characters) within the JSON strings being constructed for the SSE data field.
+// This means the chat-service is sending data that doesn\\\'t conform to the JSON standard for SSE events.

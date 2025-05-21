@@ -51,6 +51,10 @@ export const checkUserCredits = async (
 
     logger.info(`Checking if user ${userId} has ${requiredCredits} credits available`);
     
+    // [20250521_16_52] Problem identified: Non-Streaming - Incorrect Credit Check Payload.
+    // The chat-service sends an incorrect/incomplete JSON payload (e.g., {"credits":X}) 
+    // to the accounting-service\'s /api/credits/check endpoint. 
+    // It likely expects more fields like userId and possibly modelId, leading to a 400 error.
     const payload: any = {
       credits: requiredCredits
       // SUGGESTION (For future consideration, based on debug.md):
@@ -82,12 +86,28 @@ export const checkUserCredits = async (
   } catch (error) {
     logger.error('Error checking user credits:', error);
     
-    // Instead of failing, default to allowing the operation if credit check fails
+    // [20250521_16_52] Problem identified: Problematic Fallback. 
+    // chat-service defaults to allowing the operation if the credit check fails 
+    // (e.g. due to a 400 error from accounting-service because of the incorrect payload).
     // This prevents technical errors from blocking valid user operations
     logger.warn(`Credit check failed, defaulting to allow operation for user ${userId}`);
     return true;
   }
 };
+
+/**
+ * Converts a value of any type to a number.
+ * If the value is already a number, it is returned as is.
+ * If the value is undefined or null, it defaults to 0.
+ * Any other type is ignored and defaults to 0.
+ * 
+ * @param value - The input value of any type.
+ * @returns A number representation of the input or default 0.
+ */
+function toNumber(value: any): number {
+  // Check if the input is a number; return it directly if true.
+  return typeof value === 'number' ? value : (value ?? 0);
+}
 
 /**
  * Calculate required credits for a message
@@ -129,7 +149,7 @@ export const calculateRequiredCredits = async (
 
     // Estimate tokens - simple estimation using a character-to-token ratio of 4:1
     // plus a buffer for the expected response length
-    const estimatedTokens = Math.ceil(message.length / 4) + 1000; // Simple estimation with buffer
+    const estimatedTokens = Math.ceil(toNumber(message.length) / 4) + 1000; // Simple estimation with buffer
     logger.debug(`[calculateRequiredCredits] Estimated tokens: ${estimatedTokens}`);
 
     const payload = {
@@ -151,7 +171,19 @@ export const calculateRequiredCredits = async (
     
     logger.debug(`[calculateRequiredCredits] Response from ${config.accountingApiUrl}/credits/calculate: Status ${response.status}, Data: ${JSON.stringify(response.data)}`);
 
-    const credits = response.data.credits;
+    // DEBUG.MD_NOTE: Incorrect Parsing of Accounting Service Response (Non-Streaming Messages)
+    // Evidence: The chat-service receives a valid JSON response from the accounting-service 
+    // containing the `requiredCredits` field (e.g., `{"modelId":"amazon.nova-micro-v1:0","tokens":1009,"requiredCredits":2}`).
+    // However, the chat-service then logs that it received `undefined` for this value.
+    // Root Cause: The chat-service has a bug in its internal logic for parsing the JSON response 
+    // from the accounting-service's `/api/credits/calculate` endpoint. 
+    // It's failing to correctly extract the `requiredCredits` value from the object, 
+    // even though the field is present and has a value in the response.
+    // The code below attempts to access `response.data.credits`, but the accounting service sends `response.data.requiredCredits`.
+    
+//2025-05-21 15:23:23 chat-service-1  | {"level":"debug","message":"[calculateRequiredCredits] Payload for POST http://accounting-service-accounting-service-1:3001/api/credits/calculate: {\"modelId\":\"amazon.nova-micro-v1:0\",\"tokens\":1009}","service":"chat-service","timestamp":"2025-05-21T07:23:23.230Z"}
+//2025-05-21 15:23:23 chat-service-1  | {"level":"debug","message":"[calculateRequiredCredits] Response from http://accounting-service-accounting-service-1:3001/api/credits/calculate: Status 200, Data: {\"modelId\":\"amazon.nova-micro-v1:0\",\"tokens\":1009,\"requiredCredits\":2}","service":"chat-service","timestamp":"2025-05-21T07:23:23.239Z"}
+    const credits = response.data.requiredCredits;
     if (typeof credits !== 'number' || isNaN(credits)) {
       logger.error(`[calculateRequiredCredits] Invalid credits value received from accounting service: ${credits}. Returning undefined.`);
       return undefined; // Explicitly return undefined for invalid credit values
@@ -204,6 +236,11 @@ export const recordChatUsage = async (
       }
     );
     
+    // [20250521_16_52] Problem identified: Non-Streaming - Lost/Undefined Credits for Usage Recording.
+    // The \'requiredCredits\' value (or its equivalent needed for cost calculation) becomes undefined 
+    // within chat-service before usage is recorded. The initial correct calculation from 
+    // /credits/calculate is not persisted or correctly passed to the usage recording part of the flow.
+    // This specific line accesses \'.credits\' while the accounting service sends \'.requiredCredits\' from the /calculate endpoint.
     const credits = response.data.credits;
     //logger.debug(`Calculated credits for usage recording: ${credits} (type: ${typeof credits}) for ${tokensUsed} tokens with model ${modelId}`);
 

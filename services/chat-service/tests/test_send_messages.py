@@ -477,12 +477,10 @@ class MessagingTester:
                         try:
                             Logger.info(f"Raw chunk data: {event.data}") # Log raw event data
                             # DEBUG.MD_NOTE: SSE Parsing Errors
-                            # The debug.md mentions "Error parsing SSE chunk: Unexpected token \\\\ in JSON at position XX".
-                            # This suggests that the JSON strings being sent in the SSE stream from the server
+                            # "Error parsing SSE chunk: Unexpected token \\ in JSON at position XX". 
+                            # This suggests that the JSON strings being sent in the SSE stream from the server 
                             # might contain unescaped characters or be malformed.
-                            # If such errors occur, the issue is likely in the server-side SSE generation
-                            # (chat-service) which needs to ensure valid JSON is sent for each chunk.
-                            # This client-side code (json.loads(event.data)) assumes valid JSON per chunk.
+                            # This points to a server-side issue in the chat-service when generating SSE chunks.
                             data = json.loads(event.data)
                             text = data.get('text', '')
                             full_response += text

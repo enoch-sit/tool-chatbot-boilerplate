@@ -85,5 +85,4 @@ networks:
   chatbot-network:
     driver: bridge
   chatbot-shared-network:
-    name: chatbot-shared-network
-    driver: bridge
+    external: true      # Change from defining name and driver
