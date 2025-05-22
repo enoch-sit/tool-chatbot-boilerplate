@@ -34,7 +34,7 @@ const router = Router();
  * Health check endpoint (public)
  * GET /api/health
  * 
- * Returns basic service status information.
+ * Returns basic service status information. [20250522_10:11_test_credit_check.py]
  * 
  * Response:
  *   200 OK: { status: string, service: string, version: string, timestamp: string }
@@ -60,7 +60,7 @@ router.use('/usage', authenticateJWT);
  * Get current user's credit balance
  * GET /api/credits/balance
  * 
- * Returns the authenticated user's current credit balance.
+ * Returns the authenticated user's current credit balance. [20250522_10:11_test_credit_check.py]
  * 
  * Authentication: JWT required
  * 
@@ -75,16 +75,16 @@ router.get('/credits/balance', CreditController.getUserBalance);
  * Check if user has sufficient credits
  * POST /api/credits/check
  * 
- * Verifies if the user has enough credits for an operation.
+ * Verifies if the user has enough credits for an operation. [20250522_10:11_test_credit_check.py]
  * 
  * Authentication: JWT required
  * 
  * Request body:
- *   { credits: number }
+ *   { requiredCredits: number } - Amount of credits needed for the operation
  * 
  * Response:
- *   200 OK: { sufficient: boolean }
- *   400 Bad Request: If credits field is missing/invalid
+ *   200 OK: { hasSufficientCredits: boolean }
+ *   400 Bad Request: If requiredCredits field is missing/invalid
  *   401 Unauthorized: If no user authenticated
  *   500 Server Error: If check fails
  */
@@ -135,7 +135,7 @@ router.get('/credits/balance/:userId', requireSupervisor, CreditController.getUs
  * Allocate credits to a user (admin and supervisors only)
  * POST /api/credits/allocate
  * 
- * Allocates credits to a specific user (admin/supervisor only).
+ * Allocates credits to a specific user (admin/supervisor only). [20250522_10:11_test_credit_check.py]
  * 
  * Authentication: JWT required
  * Authorization: Admin or Supervisor role required

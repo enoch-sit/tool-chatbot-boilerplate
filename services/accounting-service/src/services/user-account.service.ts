@@ -67,6 +67,23 @@ export class UserAccountService {
       return false;
     }
   }
+
+  /**
+   * Find a user account by username
+   * 
+   * @param {string} username - The username to search for
+   * @returns {Promise<UserAccount | null>} - The user account if found, otherwise null
+   */
+  async findByUsername(username: string): Promise<UserAccount | null> {
+    try {
+      const user = await UserAccount.findOne({ where: { username } });
+      return user;
+    } catch (error) {
+      console.error('Error finding user by username:', error);
+      // Optionally, rethrow or handle as per application's error strategy
+      return null;
+    }
+  }
 }
 
 export default new UserAccountService();

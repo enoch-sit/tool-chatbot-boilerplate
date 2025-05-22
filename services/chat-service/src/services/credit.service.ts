@@ -50,27 +50,29 @@ export const checkUserCredits = async (
     }
 
     logger.info(`Checking if user ${userId} has ${requiredCredits} credits available`);
-    
-    // [20250521_16_52] Problem identified: Non-Streaming - Incorrect Credit Check Payload.
-    // The chat-service sends an incorrect/incomplete JSON payload (e.g., {"credits":X}) 
-    // to the accounting-service\'s /api/credits/check endpoint. 
-    // It likely expects more fields like userId and possibly modelId, leading to a 400 error.
-    const payload: any = {
-      credits: requiredCredits
-      // SUGGESTION (For future consideration, based on debug.md):
-      // The accounting service's /api/credits/check endpoint currently expects only 'credits'.
-      // If the accounting service API were to evolve to require 'userId' or 'modelId' in the payload
-      // for this specific endpoint (as speculated in debug.md), this is where they would be added.
-      // Example:
-      // userId: userId, // This would be redundant if accounting service uses JWT for userId for its internal logic.
-      // modelId: modelId, // `modelId` would need to be passed into this `checkUserCredits` function if required.
-      // For the current issue, ensuring `credits` is present and valid is the priority.
-    };
-    logger.debug(`Payload for /api/credits/check: ${JSON.stringify(payload)}`);
+  } catch (error: any) {
+    logger.error('[checkUserCredits] Error checking user credits:', error.message);
+    // DEBUG.MD_NOTE: Credit Service Integration Issues - RESOLVED in part by stricter validation in message.controller.ts
+    // However, the fallback behavior noted below is still a concern.
 
+    // [20250521_16_52] Problem identified: Non-Streaming - Problematic Fallback.
+    // If the credit check fails (e.g. due to the incorrect payload causing a 400 error from accounting-service),
+    // the system defaults to allowing the operation. This masks the error and allows operations without confirmed credits.
+    logger.warn(`[checkUserCredits] Credit check failed for user ${userId}, defaulting to DENY operation.`);
+    return false; // Changed to false: Deny operation if credit check fails
+  }
+
+  logger.info(`Checking if user ${userId} has ${requiredCredits} credits available`);
+  try {
+    // [20250521_16_52] Problem identified: Non-Streaming - Incorrect Credit Check Payload.
+    // The payload constructed here (implicitly or explicitly) and sent to the accounting service's /api/credits/check 
+    // endpoint is insufficient (e.g. sending only {"credits":X}). It likely needs more fields like userId and/or modelId.
     const response = await axios.post(
-      `${config.accountingApiUrl}/credits/check`,
-      payload, // Use the constructed payload
+      `${config.accountingApiUrl}/credits/check`, // Corrected: accountingApiUrl
+      {
+        userId: userId, // Added userId
+        requiredCredits: requiredCredits // Ensured field name consistency
+      },
       {
         headers: {
           Authorization: authHeader
@@ -83,15 +85,16 @@ export const checkUserCredits = async (
     //logger.debug(`Credit check for user ${userId}: ${hasSufficientCredits ? 'Sufficient' : 'Insufficient'}`);
     
     return hasSufficientCredits;
-  } catch (error) {
-    logger.error('Error checking user credits:', error);
-    
-    // [20250521_16_52] Problem identified: Problematic Fallback. 
-    // chat-service defaults to allowing the operation if the credit check fails 
-    // (e.g. due to a 400 error from accounting-service because of the incorrect payload).
-    // This prevents technical errors from blocking valid user operations
-    logger.warn(`Credit check failed, defaulting to allow operation for user ${userId}`);
-    return true;
+  } catch (error: any) {
+    logger.error('[checkUserCredits] Error checking user credits:', error.message);
+    // DEBUG.MD_NOTE: Credit Service Integration Issues - RESOLVED in part by stricter validation in message.controller.ts
+    // However, the fallback behavior noted below is still a concern.
+
+    // [20250521_16_52] Problem identified: Non-Streaming - Problematic Fallback.
+    // If the credit check fails (e.g. due to the incorrect payload causing a 400 error from accounting-service),
+    // the system defaults to allowing the operation. This masks the error and allows operations without confirmed credits.
+    logger.warn(`[checkUserCredits] Credit check failed for user ${userId}, defaulting to DENY operation.`);
+    return false; // Changed to false: Deny operation if credit check fails
   }
 };
 
@@ -154,36 +157,29 @@ export const calculateRequiredCredits = async (
 
     const payload = {
       modelId,
-      tokens: estimatedTokens
+      tokens: estimatedTokens,
     };
-    logger.debug(`[calculateRequiredCredits] Payload for POST ${config.accountingApiUrl}/credits/calculate: ${JSON.stringify(payload)}`);
-    
-    // Request credit calculation from accounting service
+    logger.debug(`[calculateRequiredCredits] Payload for ${config.accountingApiUrl}/credits/calculate: ${JSON.stringify(payload)}`); // Corrected: accountingApiUrl
+
     const response = await axios.post(
-      `${config.accountingApiUrl}/credits/calculate`,
+      `${config.accountingApiUrl}/credits/calculate`, // Corrected: accountingApiUrl
       payload,
       {
         headers: {
-          Authorization: authHeader
-        }
+          Authorization: authHeader,
+          'Content-Type': 'application/json',
+        },
+        timeout: 5000, // 5 second timeout
       }
     );
-    
-    logger.debug(`[calculateRequiredCredits] Response from ${config.accountingApiUrl}/credits/calculate: Status ${response.status}, Data: ${JSON.stringify(response.data)}`);
 
-    // DEBUG.MD_NOTE: Incorrect Parsing of Accounting Service Response (Non-Streaming Messages)
-    // Evidence: The chat-service receives a valid JSON response from the accounting-service 
-    // containing the `requiredCredits` field (e.g., `{"modelId":"amazon.nova-micro-v1:0","tokens":1009,"requiredCredits":2}`).
-    // However, the chat-service then logs that it received `undefined` for this value.
-    // Root Cause: The chat-service has a bug in its internal logic for parsing the JSON response 
-    // from the accounting-service's `/api/credits/calculate` endpoint. 
-    // It's failing to correctly extract the `requiredCredits` value from the object, 
-    // even though the field is present and has a value in the response.
-    // The code below attempts to access `response.data.credits`, but the accounting service sends `response.data.requiredCredits`.
-    
-//2025-05-21 15:23:23 chat-service-1  | {"level":"debug","message":"[calculateRequiredCredits] Payload for POST http://accounting-service-accounting-service-1:3001/api/credits/calculate: {\"modelId\":\"amazon.nova-micro-v1:0\",\"tokens\":1009}","service":"chat-service","timestamp":"2025-05-21T07:23:23.230Z"}
-//2025-05-21 15:23:23 chat-service-1  | {"level":"debug","message":"[calculateRequiredCredits] Response from http://accounting-service-accounting-service-1:3001/api/credits/calculate: Status 200, Data: {\"modelId\":\"amazon.nova-micro-v1:0\",\"tokens\":1009,\"requiredCredits\":2}","service":"chat-service","timestamp":"2025-05-21T07:23:23.239Z"}
-    const credits = response.data.requiredCredits;
+    logger.debug(`[calculateRequiredCredits] Response from ${config.accountingApiUrl}/credits/calculate: Status ${response.status}, Data: ${JSON.stringify(response.data)}`); // Corrected: accountingApiUrl
+    // [20250521_16_52] Problem identified: Non-Streaming - Lost/Undefined Credits for Usage Recording.
+    // The original debug.md mentioned that `requiredCredits` becomes undefined for usage recording.
+    // This specific function `calculateRequiredCredits` is called to get the cost. If it returns undefined
+    // due to an error or invalid response from accounting, the caller (`message.controller.ts` or `recordChatUsage`)
+    // might end up with undefined credits. The issue might also be in how `recordChatUsage` (below) handles this.
+    const credits = response.data.requiredCredits; // Correctly accessing requiredCredits here as per logs.
     if (typeof credits !== 'number' || isNaN(credits)) {
       logger.error(`[calculateRequiredCredits] Invalid credits value received from accounting service: ${credits}. Returning undefined.`);
       return undefined; // Explicitly return undefined for invalid credit values
@@ -220,32 +216,39 @@ export const recordChatUsage = async (
   authHeader: string
 ): Promise<void> => {
   try {
-    logger.info(`Recording chat usage for user ${userId}: ${tokensUsed} tokens with model ${modelId}`);
+    // Calculate the credits to be recorded based on tokens used.
+    // This mirrors the logic in `calculateRequiredCredits` but is specific to recording actual usage.
+    const payload = {
+      modelId,
+      tokens: tokensUsed,
+    };
+    logger.debug(`[recordChatUsage] Payload for ${config.accountingApiUrl}/credits/calculate (for usage recording): ${JSON.stringify(payload)}`); // Corrected: accountingApiUrl
     
-    // Calculate credits from tokens
     const response = await axios.post(
-      `${config.accountingApiUrl}/credits/calculate`,
-      {
-        modelId,
-        tokens: tokensUsed
-      },
+      `${config.accountingApiUrl}/credits/calculate`, // Corrected: accountingApiUrl
+      payload,
       {
         headers: {
-          Authorization: authHeader
-        }
+          Authorization: authHeader,
+          'Content-Type': 'application/json',
+        },
+        timeout: 5000,
       }
     );
-    
-    // [20250521_16_52] Problem identified: Non-Streaming - Lost/Undefined Credits for Usage Recording.
-    // The \'requiredCredits\' value (or its equivalent needed for cost calculation) becomes undefined 
-    // within chat-service before usage is recorded. The initial correct calculation from 
-    // /credits/calculate is not persisted or correctly passed to the usage recording part of the flow.
-    // This specific line accesses \'.credits\' while the accounting service sends \'.requiredCredits\' from the /calculate endpoint.
-    const credits = response.data.credits;
-    //logger.debug(`Calculated credits for usage recording: ${credits} (type: ${typeof credits}) for ${tokensUsed} tokens with model ${modelId}`);
+    logger.debug(`[recordChatUsage] Response from ${config.accountingApiUrl}/credits/calculate (for usage recording): Status ${response.status}, Data: ${JSON.stringify(response.data)}`); // Corrected: accountingApiUrl
 
-    if (typeof credits !== 'number' || credits < 0) { // Allow credits to be 0
-      logger.error(`Invalid credits calculated (${credits}) for user ${userId}, model ${modelId}, tokens ${tokensUsed}. Skipping usage recording.`);
+    // [20250521_16_52] Problem identified: Non-Streaming - Lost/Undefined Credits for Usage Recording.
+    // The debug.md log shows "Invalid credits calculated (undefined) for user ..., model ..., tokens .... Skipping usage recording."
+    // This indicates that `creditsToRecord` becomes undefined. The line below was previously `response.data.credits`
+    // which would be undefined if accounting returns `requiredCredits`. It should be `response.data.requiredCredits`.
+    // Even if `calculateRequiredCredits` (called before message sending) gets the correct value, this separate call
+    // for usage recording needs to correctly extract the credit amount.
+    const creditsToRecord = response.data.requiredCredits; 
+
+    if (typeof creditsToRecord !== 'number' || isNaN(creditsToRecord) || creditsToRecord < 0) {
+      logger.error(
+        `[recordChatUsage] Invalid credits calculated (${creditsToRecord}) for user ${userId}, model ${modelId}, tokens ${tokensUsed}. Skipping usage recording.`
+      );
       return; 
     }
     
@@ -255,7 +258,7 @@ export const recordChatUsage = async (
       {
         service: 'chat',
         operation: modelId,
-        credits: credits,
+        credits: creditsToRecord,
         metadata: {
           tokens: tokensUsed,
           timestamp: new Date().toISOString()
@@ -269,8 +272,8 @@ export const recordChatUsage = async (
     );
     
     //logger.debug(`Successfully recorded ${credits} credits usage for user ${userId}`);
-  } catch (error) {
-    logger.error('Error recording chat usage:', error);
+  } catch (error: any) {
+    logger.error('Error recording chat usage:', error.message);
     // This is non-blocking - we log the error but don't fail the operation
   }
 };

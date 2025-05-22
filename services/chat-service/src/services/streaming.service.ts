@@ -262,10 +262,10 @@ export const streamResponse = async (
     
     // Send an 'error' event to the client through the Server-Sent Events (SSE) stream.
     // This tells the client's browser that something went wrong.
-    stream.write(`event: error\\ndata: ${JSON.stringify({ 
+    stream.write(`event: error\ndata: ${JSON.stringify({ 
       error: 'Stream timeout reached', 
       code: 'STREAM_TIMEOUT' 
-    })}\\n\\n`);
+    })}\n\n`);
     // End the stream, signaling that no more data will be sent.
     stream.end();
     
@@ -378,7 +378,7 @@ export const streamResponse = async (
               const jsonPayloadString = JSON.stringify(sseEventPayload);
               logger.debug(`SSE JSON Payload String for session ${sessionId}: [${jsonPayloadString}]`); // Log with delimiters
               // [20250521_16_52] Problem identified: Streaming - Malformed SSE Chunk Parsing. message.controller.js is failing to parse JSON strings from this service. The "Unexpected token \\\\" error indicates improperly escaped characters when JSON.parse() is called in message.controller.js.
-              stream.write(`event: chunk\\\\ndata: ${jsonPayloadString}\\\\n\\\\n`); // SSE messages end with two newlines.
+              stream.write(`event: chunk\ndata: ${jsonPayloadString}\n\n`); // SSE messages end with two newlines.
               //stream.write(`event: chunk\\\\ndata: ${JSON.stringify(sseEventPayload)}\\\\n\\\\n`); 
             }
           } catch (parseError) {

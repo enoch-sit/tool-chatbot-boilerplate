@@ -212,22 +212,30 @@ class CreditTester:
         """Test the credit checking endpoint with retry mechanism"""
         Logger.header("TESTING CREDIT CHECK ENDPOINT")
         
-        # Add retry mechanism for potentially flaky network operations
         max_retries = 3
-        
+        current_request_body = {"requiredCredits": 100}  # Controller expects "requiredCredits"
+        use_alternative_body_next_time = False # Flag to control payload change
+
         for attempt in range(max_retries):
             try:
-                if attempt > 0:
+                if attempt > 0: # This is a retry
                     Logger.info(f"Retry attempt {attempt+1}/{max_retries}...")
                 
-                # Debug current request format
-                request_body = {"credits": 100}
-                Logger.info(f"Sending request with body: {json.dumps(request_body)}")
+                if use_alternative_body_next_time:
+                    Logger.info("Previous attempt resulted in 400, trying with alternative parameter format...")
+                    current_request_body = {
+                        "requiredCredits": 100,  # Controller expects "requiredCredits"
+                        "userId": TEST_USER["username"],
+                        "modelId": "amazon.titan-text-express-v1:0" # Example modelId, adjust if necessary
+                    }
+                    use_alternative_body_next_time = False # Reset flag after using alternative body
+                
+                Logger.info(f"Sending request with body: {json.dumps(current_request_body)}")
                 
                 response = self.session.post(
                     f"{ACCOUNTING_SERVICE_URL}/credits/check",
                     headers=self.headers,
-                    json=request_body
+                    json=current_request_body
                 )
                 
                 Logger.info(f"Response status: {response.status_code}")
@@ -235,29 +243,23 @@ class CreditTester:
                 
                 if response.status_code == 200:
                     data = response.json()
-                    Logger.success(f"Credit check successful: Has sufficient credits = {data.get('hasSufficientCredits', False)}")
+                    Logger.success(f"Credit check successful: Has sufficient credits = {data.get('hasSufficientCredits', data.get('sufficient', False))}")
                     Logger.info(json.dumps(data, indent=2))
                     return True
-                # Special handling for validation errors
                 elif response.status_code == 400:
                     Logger.warning(f"Validation error: {response.text}")
-                    
-                    # Try with a more complete request body for next attempt
                     if attempt < max_retries - 1:
-                        Logger.info("Trying with alternative parameter format...")
-                        request_body = {
-                            "credits": 100,
-                            "userId": TEST_USER["username"],
-                            "modelId": "amazon.titan-text-express-v1:0"
-                        }
-                        time.sleep(1)
+                        Logger.info("Will try with alternative parameter format on next attempt if this was the simple payload.")
+                        # Set flag only if we haven't already switched, or to force re-evaluation
+                        if current_request_body.get("userId") is None: # Heuristic: if it's the simple body
+                             use_alternative_body_next_time = True
+                        time.sleep(1) # Wait before retrying
                     else:
-                        Logger.error("All request formats failed")
+                        Logger.error("All request formats failed or max retries reached for 400 error.")
                         return False
-                # Handle specific error codes that might benefit from retry
-                elif response.status_code in [502, 503, 504]:  # Gateway errors, service unavailable
+                elif response.status_code in [502, 503, 504]:
                     if attempt < max_retries - 1:
-                        retry_delay = (attempt + 1) * 2  # Progressive backoff: 2s, 4s, 6s...
+                        retry_delay = (attempt + 1) * 2
                         Logger.warning(f"Server error {response.status_code}. Retrying in {retry_delay}s...")
                         time.sleep(retry_delay)
                     else:
@@ -274,9 +276,10 @@ class CreditTester:
                     Logger.warning(f"Network error. Retrying in {retry_delay}s...")
                     time.sleep(retry_delay)
                 else:
+                    Logger.error("Network error persisted after max retries.")
                     return False
         
-        return False  # All retries failed
+        return False # All retries failed
     
     def check_credit_balance(self):
         """Check the test user's credit balance"""
@@ -327,12 +330,12 @@ class CreditTester:
             # Request more credits than available to test insufficient credits scenario
             Logger.info(f"Testing credit check with {current_balance + 1000} credits (more than available)")
             
-            # Update: Use "credits" parameter name to match what the server expects
+            # Use "requiredCredits" parameter name to match what the controller expects
             response = self.session.post(
                 f"{ACCOUNTING_SERVICE_URL}/credits/check",
                 headers=self.headers,
                 json={
-                    "credits": current_balance + 1000  # Use "credits" instead of "requiredCredits"
+                    "requiredCredits": current_balance + 1000  # Changed to "requiredCredits" based on compiled JS
                 }
             )
             

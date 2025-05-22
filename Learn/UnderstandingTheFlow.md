@@ -1,3 +1,5 @@
+# Flow
+
 ## Bug Fixes and Resolutions (Applied on May 21, 2025)
 
 Following the analysis of issues identified in previous log files and `debug.md` entries, several key bugs were addressed in the `chat-service`. These fixes aim to improve the reliability of non-streaming credit checks, usage recording, and server-side SSE stream processing.

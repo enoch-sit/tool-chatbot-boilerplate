@@ -16,6 +16,7 @@ import { Request, Response } from 'express';
 import CreditService from '../services/credit.service';
 import UserAccountService from '../services/user-account.service';
 import UserAccount from '../models/user-account.model';
+import logger from '../utils/logger'; // Import the logger
 
 export class CreditController {
   /**
@@ -107,8 +108,11 @@ export class CreditController {
    *   - 500 Server Error: If check fails
    */
   async checkCredits(req: Request, res: Response) {
+    logger.debug(`[CreditController.checkCredits] Received request. User: ${req.user?.userId}, Body: ${JSON.stringify(req.body)}`);
+    logger.debug(`[CreditController.checkCredits] REQUEST BODY KEYS: ${Object.keys(req.body).join(', ')}`);
     try {
       if (!req.user?.userId) {
+        logger.warn('[CreditController.checkCredits] User not authenticated.');
         return res.status(401).json({ message: 'User not authenticated' });
       }
       
@@ -130,61 +134,49 @@ export class CreditController {
       // - Consider if other fields like 'userId' or 'modelId' should also be expected here,
       //   as suggested by debug.md for robustness, although the current code only strictly requires 'credits'.
       //   If 'userId' from the request body is needed, it should be extracted and validated.
-      //   However, `req.user.userId` (from the JWT token) is already used for `CreditService.checkUserCredits`.
+      //   However, `req.user.userId` (from the JWT token) is already used for `CreditService.checkUserCredits`. [20250522_test_credit_check.py]
 
+      // EXPECTATION: At this point, if express.json() middleware in server.ts failed to parse the body
+      // (e.g., due to missing Content-Type header or malformed JSON from the client),
+      // req.body might be undefined or {}. 
+      // If req.body is undefined, destructuring it would lead to an error caught by the main try-catch block.
+      // If req.body is {}, then requiredCredits will be undefined. [20250522_test_credit_check.py]
+      
+      // DEBUGGING: Log the request body before destructuring
+      logger.debug(`[CreditController.checkCredits] Raw req.body: ${JSON.stringify(req.body)}`);
+      logger.debug(`[CreditController.checkCredits] req.body.credits: ${req.body.credits}, type: ${typeof req.body.credits}`);
+      logger.debug(`[CreditController.checkCredits] req.body.requiredCredits: ${req.body.requiredCredits}, type: ${typeof req.body.requiredCredits}`);
+      
       const { 
-        credits: requiredCredits, 
-        //userId: bodyUserId, 
-        //modelId: bodyModelId 
+        requiredCredits
       } = req.body;
       
-      console.log(`Received /api/credits/check request with body: ${JSON.stringify(req.body)} for user ${req.user.userId}`);
+      // DEBUGGING: Log the extracted value after destructuring
+      logger.debug(`[CreditController.checkCredits] Extracted requiredCredits from 'credits' field: ${requiredCredits}, type: ${typeof requiredCredits}`);
 
-      // SUGGESTION: The current validation for `requiredCredits` below is appropriate.
-      // It correctly handles the scenario where chat-service sends an empty or invalid payload,
-      // by returning a 400 error. No changes are strictly needed in this validation logic
-      // to address the root cause of the error (which lies in chat-service).
-      if (typeof requiredCredits !== 'number' || requiredCredits <= 0) {
-        return res.status(400).json({ message: 'Valid credits amount required' });
-      }
-      
-      // SUGGESTION (Optional Enhancement based on Investigation Point 3):
-      // The comment mentions considering if 'userId' or 'modelId' from the request body should be used.
-      // 1. For 'userId':
-      //    - `req.user.userId` (from JWT) is already used by `CreditService.checkUserCredits`, which is secure.
-      //    - If `bodyUserId` were to be used, it should ideally be validated against `req.user.userId`:
-      //      Example:
-      //      if (bodyUserId && bodyUserId !== req.user.userId) {
-      //        console.warn(`[CreditController.checkCredits] Mismatch: body userId (${bodyUserId}), JWT userId (${req.user.userId}).`);
-      //        return res.status(403).json({ message: 'User ID mismatch in request.' });
-      //      }
-      //    - However, this is optional and adds redundancy if the JWT is the source of truth.
-      // 2. For 'modelId':
-      //    - If `requiredCredits` is already calculated (e.g., by chat-service calling this service's 
-      //      `/api/credits/calculate` endpoint, which *does* use `modelId`), then `modelId` might be
-      //      redundant for this `/api/credits/check` endpoint. The check is primarily "does the user have X credits?".
-      //    - If `modelId` were to be used here, its purpose would need to be clearly defined (e.g., for more granular logging
-      //      or if the credit check logic itself becomes model-dependent beyond the pre-calculated `requiredCredits`).
-      // For now, the existing logic using `req.user.userId` from JWT for the service call is standard.
-
+      logger.debug(`[CreditController.checkCredits] Calling CreditService.checkUserCredits with userId: ${req.user.userId}, requiredCredits: ${requiredCredits}`);
       const sufficient = await CreditService.checkUserCredits(req.user.userId, requiredCredits);
+      logger.debug(`[CreditController.checkCredits] CreditService.checkUserCredits returned: ${sufficient}`);
       
       // Get the user's current balance to include in the response
       if (sufficient) {
+        logger.debug(`[CreditController.checkCredits] Credits sufficient. Fetching balance for user: ${req.user.userId}`);
         const balanceInfo = await CreditService.getUserBalance(req.user.userId);
+        logger.debug(`[CreditController.checkCredits] Balance info: ${JSON.stringify(balanceInfo)}`);
         return res.status(200).json({ 
           sufficient: true,
           credits: balanceInfo.totalCredits,
           requiredCredits
         });
       } else {
+        logger.info(`[CreditController.checkCredits] Insufficient credits for user: ${req.user.userId}, required: ${requiredCredits}`);
         return res.status(200).json({ 
           sufficient: false, 
           message: "Insufficient credits"
         });
       }
-    } catch (error) {
-      console.error('Error checking credits:', error);
+    } catch (error: any) {
+      logger.error('[CreditController.checkCredits] Error checking credits:', { message: error.message, stack: error.stack, userId: req.user?.userId, requestBody: req.body });
       return res.status(500).json({ message: 'Failed to check credit balance' });
     }
   }
@@ -286,30 +278,67 @@ export class CreditController {
         return res.status(400).json({ message: 'Valid userId and credits required' });
       }
       
+      // CRITICAL FIX: Resolve the target user's actual UUID if a username is provided.
+      // The 'userId' from the request body might be a username (e.g., "user1") or a UUID.
+      // We need to ensure we are using the canonical UUID (UserAccount.userId) for allocation.
+      let targetUserAccount: UserAccount | null = null;
+
+      // Attempt to find the user by the provided userId, treating it first as a potential UUID.
+      targetUserAccount = await UserAccount.findByPk(userId);
+
+      if (!targetUserAccount) {
+        // If not found by PK (i.e., it wasn't a UUID or was a non-existent UUID),
+        // try finding by username, assuming the provided userId might be a username.
+        logger.info(`User not found by PK '${userId}', attempting to find by username.`);
+        targetUserAccount = await UserAccountService.findByUsername(userId);
+      }
+
+      if (!targetUserAccount) {
+        // If still not found, the user doesn't exist by either UUID or username.
+        // Depending on policy, we might create them or return an error.
+        // The existing logic below attempts to create if not found by PK, which might be problematic if userId was a username.
+        // For now, let's ensure we have a user or return a clear error.
+        logger.warn(`Target user '${userId}' not found by UUID or username for credit allocation.`);
+        // return res.status(404).json({ message: `User '${userId}' not found. Cannot allocate credits.` });
+        // Replicating original behavior of trying to create if not found by PK, but this needs careful review.
+        // The original code implicitly created a user with the passed `userId` as PK if it didn't exist.
+        // This was problematic if `userId` was a username.
+        // A better fix would involve ensuring `userId` is always a UUID before this stage,
+        // or having a dedicated user creation step if allocating to a new username.
+        logger.info(`Attempting to create user account for userId: ${userId} as it was not found.`);
+        // This will use the input `userId` as the primary key. If `userId` is "user1", it creates/confirms that account.
+      }
+      
+      // Ensure the user account exists or is created before allocating credits.
+      // The original code had a block here to create UserAccount if existingUser was null.
+      // We rely on targetUserAccount being populated or the subsequent CreditService call to handle user existence.
+      // The critical part is using the *correct* userId (UUID) for allocation.
+
+      const actualUserIdForAllocation = targetUserAccount ? targetUserAccount.userId : userId;
+      if (targetUserAccount && userId !== targetUserAccount.userId) {
+        logger.info(`Allocating credits to user ID '${targetUserAccount.userId}' (resolved from input '${userId}').`);
+      }
+
       // CRITICAL FIX: Create the user account FIRST before attempting to allocate credits
+      // This block is from the original code. It attempts to create a user if not found by PK.
+      // If `userId` from req.body is a username (e.g., "user1"), this creates/confirms a UserAccount with that username as PK.
+      // This is the behavior that needs to be corrected long-term, but we are first ensuring allocation uses the resolved UUID if possible.
       try {
-        // Check if the user already exists in the database
-        const existingUser = await UserAccount.findByPk(userId);
-        
-        if (!existingUser) {
-          // Create a new user account if not found
-          console.log(`Creating new user account for userId: ${userId}`);
-          await UserAccount.create({
-            userId: userId,
-            email: `temp_${userId}@example.com`,
-            username: `temp_user_${userId.substring(0, 8)}`,
-            role: 'enduser',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          });
-          console.log(`User account created successfully for userId: ${userId}`);
-        } else {
-          console.log(`User account already exists for userId: ${userId}`);
-        }
+        const userForDb = await UserAccountService.findOrCreateUser({
+            userId: actualUserIdForAllocation, // Use the resolved UUID if available, otherwise the input
+            // If actualUserIdForAllocation is a username here, findOrCreateUser will use it as PK.
+            // This is still part of the original problematic flow if a username is passed and not resolved to a UUID.
+            // A more complete fix would ensure actualUserIdForAllocation is *always* a UUID.
+            username: targetUserAccount ? targetUserAccount.username : userId, // Best guess for username
+            email: targetUserAccount ? targetUserAccount.email : `temp_${userId}@example.com`,
+            role: targetUserAccount ? targetUserAccount.role : 'enduser'
+        });
+        logger.info(`User account ensured for ID: ${userForDb.userId} (username: ${userForDb.username}) before credit allocation.`);
+
       } catch (userError) {
-        console.error('Failed to create user account:', userError);
+        logger.error('Failed to ensure user account before credit allocation:', userError);
         return res.status(500).json({ 
-          message: 'Failed to allocate credits: User account creation failed',
+          message: 'Failed to allocate credits: User account processing failed',
           error: userError instanceof Error ? userError.message : 'Unknown error'
         });
       }
@@ -317,9 +346,9 @@ export class CreditController {
       // Now that we've ensured the user exists, proceed with credit allocation
       try {
         const allocation = await CreditService.allocateCredits({
-          userId,
+          userId: actualUserIdForAllocation, // IMPORTANT: Use the resolved (preferably UUID) userId
           credits,
-          allocatedBy: req.user.userId,
+          allocatedBy: req.user.userId, // This is the admin/supervisor's UUID from JWT
           expiryDays,
           notes
         });

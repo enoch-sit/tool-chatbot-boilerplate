@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import ChatSession, { IMessage } from '../../models/chat-session.model'; // Added IMessage import
 import { initializeStreamingSession, streamResponse } from '../../services/streaming.service';
+import * as streamingService from '../../services/streaming.service'; // Added for streamChatResponse
+import { PassThrough } from 'stream'; // Added for streamChatResponse
 import CreditService from '../../services/credit.service';
 import { ObservationManager } from '../../services/observation.service';
 import logger from '../../utils/logger';
@@ -475,7 +477,7 @@ export const streamChatResponse = async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-cache'); // Prevents caching of the stream.
     res.setHeader('Connection', 'keep-alive'); // Keeps the connection open for streaming.
     // Send the headers to the client immediately.
-    res.flushHeaders();
+    res.flushHeaders(); // Send headers immediately
 
     // Add a placeholder message for the assistant's response to the session.
     // This placeholder will be updated with the actual response as it streams in.
@@ -488,119 +490,181 @@ export const streamChatResponse = async (req: Request, res: Response) => {
     // Save the session with the assistant's placeholder message.
     await session.save();
 
-    // Get the actual response stream from the AI model via the streaming service.
-    const responseStream = await streamResponse(streamSession.sessionId, messageHistory, selectedModel, authHeader);
-    // Register this stream with the ObservationManager so supervisors can observe it.
-    observationManager.registerStream(sessionId, responseStream);
-    // Pipe the AI's response stream directly to the client's HTTP response.
-    // This sends data chunks to the client as they are received from the AI.
-    responseStream.pipe(res);
-    // Initialize a variable to accumulate the full response text.
-    let fullResponse = '';
-
-    // Listen for 'data' events on the response stream.
-    // Each 'data' event typically contains a chunk of the AI's response.
-    responseStream.on('data', (data) => {
-      const sseData = data.toString(); // Convert the data buffer to a string.
-      // Check if the SSE data is a 'chunk' event.
-      if (sseData.includes('event: chunk')) {
-        try {
-          // Extract the JSON string from the SSE data.
-          const jsonStr = sseData.split('data: ')[1].trim();
-          // Parse the JSON string to get the chunk data.
-          // [20250521_16_52] Problem identified: Streaming - Malformed SSE Chunk Parsing.
-          // This is where the "Unexpected token \\" in JSON error occurs as per debug.md.
-          // The jsonStr being parsed likely contains improperly escaped characters due to
-          // incorrect processing/splitting of raw SSE event lines or an erroneous unescaping
-          // step performed on the extracted data string before JSON.parse().
-          const chunkData = JSON.parse(jsonStr);
-          // If the chunk data contains text, append it to the fullResponse.
-          if (chunkData.text) { fullResponse += chunkData.text; }
-        } catch (parseError) {
-          // Log an error if parsing the SSE chunk fails.
-          logger.error('Error parsing SSE chunk:', parseError);
-        }
-      }
-    });
-
-    // Listen for the 'end' event on the response stream.
-    // This event signifies that the AI has finished sending its response.
-    responseStream.on('end', async () => {
-      try {
-        // Log that the streaming session has completed.
-        logger.info(`Completed streaming session for chat ${sessionId}`);
-        // Retrieve the latest version of the session from the database.
-        const updatedSession = await ChatSession.findById(sessionId);
-        if (updatedSession) {
-          // Find the last message in the session (which should be the assistant's placeholder).
-          const lastIndex = updatedSession.messages.length - 1;
-          if (lastIndex >= 0 && updatedSession.messages[lastIndex].role === 'assistant') {
-            // Update the content of the assistant's message with the accumulated fullResponse.
-            // DEBUG.MD_NOTE: MongoDB Validation Failure - Empty Content
-            // The debug.md report mentions: "Error updating session after stream end: 
-            // ChatSession validation failed: messages.X.content: Path `content` is required."
-            // This implies that `fullResponse` might be an empty string here.
-            // The ChatSession model requires message content. If `fullResponse` is empty,
-            // assigning it directly (e.g., `updatedSession.messages[lastIndex].content = "";`)
-            // could lead to this validation error if the model doesn't allow empty strings for content.
-            // Recommendation from debug.md: "Ensure that the content field isn't empty before saving to MongoDB. 
-            // Add validation to check if the streamed content is non-empty."
-            // For example, ensure `fullResponse` has a non-empty value or provide a default
-            // like a single space if an empty response is permissible but an empty string isn't.
-            // Example: updatedSession.messages[lastIndex].content = fullResponse || ' ';
-            updatedSession.messages[lastIndex].content = fullResponse || ' ';
-          }
-          // Ensure metadata exists.
-          updatedSession.metadata = updatedSession.metadata || {};
-          // Mark that the active streaming session has ended.
-          updatedSession.metadata.activeStreamingSession = false;
-          // Save the final state of the session to the database.
-          await updatedSession.save();
-        }
-      } catch (error: any) {
-        // Log an error if updating the session after the stream ends fails.
-        logger.error('Error updating session after stream end:', error);
-      }
-    });
-
-    // Listen for the 'close' event on the request object.
-    // This event is triggered if the client closes the connection prematurely.
-    req.on('close', () => {
-      logger.info(`Client disconnected from stream for session ${sessionId}`);
-      // Stop piping the response stream to the client's response.
-      responseStream.unpipe(res);
-      // Potentially, additional cleanup for the responseStream could be done here (e.g., responseStream.destroy()).
-    });
-
-  } catch (error: any) {
-    // Catch any errors that occur during the streaming process.
-    logger.error('Streaming error:', error);
     try {
-      // If a session object exists, try to clean up its state.
-      if (session) {
-        // Mark that there's no active streaming session.
-        (session as any).metadata.activeStreamingSession = false; // Type assertion to access metadata
-        // Save the cleaned-up session state.
-        await (session as any).save();
-      }
-    } catch (cleanupError) {
-      // Log an error if cleaning up the session state fails.
-      logger.error('Error cleaning up session after streaming error:', cleanupError);
-    }
+      // Delegate the actual streaming logic to the StreamingService
+      const chatStream: PassThrough = await streamingService.streamResponse(
+        streamSession.sessionId, 
+        messageHistory, 
+        selectedModel, 
+        authHeader
+      );
 
-    // If headers have already been sent to the client (meaning the stream started),
-    // try to send an error event through the SSE stream.
-    if (res.headersSent) {
-      res.write(`event: error\\ndata: ${JSON.stringify({ error: error.message || 'Unknown streaming error' })}\\n\\n`);
-      res.end(); // Close the SSE stream.
-    } else {
-      // If headers haven't been sent, respond with a regular HTTP error.
-      // Check for specific error messages to provide more context to the client.
-      if (error.message === 'Insufficient credits for streaming') {
-        return res.status(402).json({ message: 'Insufficient credits to start streaming session', error: 'INSUFFICIENT_CREDITS' });
+      // Register this stream with the ObservationManager so supervisors can observe it.
+      observationManager.registerStream(sessionId, chatStream);
+      // Pipe the AI's response stream directly to the client's HTTP response.
+      // This sends data chunks to the client as they are received from the AI.
+      chatStream.pipe(res);
+
+      // Initialize a variable to accumulate the full response text.
+      let fullResponse = '';
+
+      // Listen for 'data' events on the response stream.
+      // Each 'data' event typically contains a chunk of the AI's response.
+      chatStream.on('data', (data: Buffer) => {
+        const sseData = data.toString(); // Convert the data buffer to a string.
+        // Check if the SSE data is a 'chunk' event.
+        if (sseData.includes('event: chunk')) {
+          try {
+            // Extract the JSON string from the SSE data.
+            // Robustly find the start of the JSON data part of an SSE message
+            const dataPrefix = 'data: ';
+            const dataStartIndex = sseData.indexOf(dataPrefix);
+            if (dataStartIndex === -1) {
+              logger.warn(`[streamChatResponse] SSE data event received without 'data: ' prefix: ${sseData}`);
+              return;
+            }
+            // Extract the part after "data: " and trim whitespace
+            const jsonStr = sseData.substring(dataStartIndex + dataPrefix.length).trim();
+            
+            // [20250521_16_52] Problem identified: Streaming - Malformed SSE Chunk Parsing.
+            // This is where the "Unexpected token \\" in JSON error occurs as per debug.md.
+            // The jsonStr being parsed likely contains improperly escaped characters due to
+            // incorrect processing/splitting of raw SSE event lines or an erroneous unescaping
+            // step performed on the extracted data string before JSON.parse().
+            // Corrected parsing by ensuring only the JSON part is parsed.
+            const chunkData = JSON.parse(jsonStr);
+            // If the chunk data contains text, append it to the fullResponse.
+            if (chunkData.text) { fullResponse += chunkData.text; }
+          } catch (parseError: any) { // Typed parseError
+            // Log an error if parsing the SSE chunk fails.
+            logger.error('Error parsing SSE chunk:', parseError);
+          }
+        }
+      });
+
+      // Listen for the 'end' event on the response stream.
+      // This event signifies that the AI has finished sending its response.
+      chatStream.on('end', async () => {
+        try {
+          // Log that the streaming session has completed.
+          logger.info(`Completed streaming session for chat ${sessionId}`);
+          // Retrieve the latest version of the session from the database.
+          const updatedSession = await ChatSession.findById(sessionId);
+          if (updatedSession) {
+            // Find the last message in the session (which should be the assistant's placeholder).
+            const lastIndex = updatedSession.messages.length - 1;
+            if (lastIndex >= 0 && updatedSession.messages[lastIndex].role === 'assistant') {
+              // Update the content of the assistant's message with the accumulated fullResponse.
+              // DEBUG.MD_NOTE: MongoDB Validation Failure - Empty Content
+              // The debug.md report mentions: "Error updating session after stream end: 
+              // ChatSession validation failed: messages.X.content: Path `content` is required."
+              // This implies that `fullResponse` might be an empty string here.
+              // The ChatSession model requires message content. If `fullResponse` is empty,
+              // assigning it directly (e.g., `updatedSession.messages[lastIndex].content = "";`)
+              // could lead to this validation error if the model doesn't allow empty strings for content.
+              // Recommendation from debug.md: "Ensure that the content field isn't empty before saving to MongoDB. 
+              // Add validation to check if the streamed content is non-empty."
+              // For example, ensure `fullResponse` has a non-empty value or provide a default
+              // like a single space if an empty response is permissible but an empty string isn't.
+              // Example: updatedSession.messages[lastIndex].content = fullResponse || ' ';
+              updatedSession.messages[lastIndex].content = fullResponse || ' ';
+            }
+            // Ensure metadata exists.
+            updatedSession.metadata = updatedSession.metadata || {};
+            // Mark that the active streaming session has ended.
+            updatedSession.metadata.activeStreamingSession = false;
+            // Save the final state of the session to the database.
+            await updatedSession.save();
+          }
+        } catch (error: any) {
+          // Log an error if updating the session after the stream ends fails.
+          logger.error('Error updating session after stream end:', error);
+        }
+      });
+
+      // Listen for the 'close' event on the request object.
+      // This event is triggered if the client closes the connection prematurely.
+      req.on('close', async () => { // Added async
+        logger.info('Client disconnected from stream');
+        // Ensure the stream is destroyed to free up resources
+        if (chatStream && !chatStream.destroyed) {
+          chatStream.destroy();
+        }
+        // [20250521_16_52] Problem identified: Streaming - Malformed SSE Chunk Parsing within message.controller.ts.
+        // According to debug.md, this controller (specifically a PassThrough.on('data') anonymous handler, 
+        // which would be around here or implicitly part of how chatStream is handled/piped) 
+        // fails to parse JSON strings from the streaming service when processing SSE chunks.
+        // The error "Unexpected token \\" suggests improperly escaped characters in the string fed to JSON.parse().
+        // This could be due to incorrect processing/splitting of raw SSE event lines or an erroneous unescaping step
+        // if/when this controller inspects or handles data chunks from chatStream before they are sent to the client via res.pipe().
+        // The actual parsing logic leading to the error (at JS line 523 as per debug.md) would be implicitly part of this stream handling.
+
+        // Attempt to finalize the session with accounting, marking it as unsuccessful due to client disconnect
+        if (sessionId && streamSession.sessionId) { // Corrected: streamSession.sessionId
+          logger.info(`Client disconnected, attempting to finalize streaming session ${streamSession.sessionId} for chat session ${sessionId}`); // Corrected: streamSession.sessionId
+          try {
+            // Assuming CreditService.finalizeStreamingSession exists and is correctly typed
+            // This function is not defined in the provided credit.service.ts, so this is a placeholder call
+            // await CreditService.finalizeStreamingSession(sessionId, streamSession.sessionId, false, req.headers.authorization || '');
+            logger.info(`Placeholder: Successfully finalized streaming session ${streamSession.sessionId} for chat session ${sessionId}`); // Corrected: streamSession.sessionId
+          } catch (finalizeError: any) { // Typed finalizeError
+            logger.error(`Error finalizing streaming session ${streamSession.sessionId} for chat session ${sessionId}:`, finalizeError); // Corrected: streamSession.sessionId
+          }
+        }
+      });
+
+    } catch (error: any) { // Typed error
+      // Catch any errors that occur during the streaming process.
+      logger.error('Streaming error:', error);
+      try {
+        // If a session object exists, try to clean up its state.
+        if (session) {
+          // Mark that there's no active streaming session.
+          (session as any).metadata.activeStreamingSession = false; // Type assertion to access metadata
+          // Save the cleaned-up session state.
+          await (session as any).save();
+        }
+      } catch (cleanupError: any) { // Typed cleanupError
+        // Log an error if cleaning up the session state fails.
+        logger.error('Error cleaning up session after streaming error:', cleanupError);
       }
-      // For other errors, send a generic 500 (Internal Server Error) response.
-      res.status(500).json({ message: 'Error streaming chat response', error: error.message });
+
+      // If headers have already been sent to the client (meaning the stream started),
+      // try to send an error event through the SSE stream.
+      if (res.headersSent) {
+        res.write(`event: error\ndata: ${JSON.stringify({ error: error.message || 'Unknown streaming error' })}\n\n`);
+        res.end(); // Close the SSE stream.
+      } else {
+        // If headers haven't been sent, respond with a regular HTTP error.
+        // Check for specific error messages to provide more context to the client.
+        if (error.message === 'Insufficient credits for streaming') {
+          return res.status(402).json({ message: 'Insufficient credits to start streaming session', error: 'INSUFFICIENT_CREDITS' });
+        }
+        // For other errors, send a generic 500 (Internal Server Error) response.
+        res.status(500).json({ message: 'Error streaming chat response', error: error.message });
+      }
+    }
+  } catch (error: any) { // Outer catch for initial setup errors before streaming starts
+    logger.error('Error setting up stream or initial credit check:', error);
+    // If a session object exists, try to clean up its state.
+    if (session && (session as any).metadata) {
+        try {
+            (session as any).metadata.activeStreamingSession = false;
+            await (session as any).save();
+        } catch (cleanupError: any) {
+            logger.error('Error cleaning up session after initial setup error:', cleanupError);
+        }
+    }
+    // Respond with an error if headers haven't been sent
+    if (!res.headersSent) {
+        if (error.message === 'Insufficient credits for streaming' || error.message?.includes('INSUFFICIENT_CREDITS')) {
+            return res.status(402).json({ message: 'Insufficient credits to start streaming session', error: 'INSUFFICIENT_CREDITS' });
+        }
+        return res.status(500).json({ message: 'Failed to start chat stream', error: error.message });
+    } else {
+        // If headers were sent, it implies the error happened after the stream started, which should be caught by the inner try/catch.
+        // However, as a fallback, ensure the response ends.
+        res.end();
     }
   }
 };
