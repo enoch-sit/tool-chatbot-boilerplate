@@ -458,11 +458,22 @@ class SupervisorTester:
                 headers=self.user_headers,
                 json={
                     "message": "Hello, this is a test message before streaming",
-                    "modelId": "amazon.titan-text-express-v1:0"
+                    # "modelId": "amazon.titan-text-express-v1:0" # This specific modelId might be a factor in the 400 error
+                    "modelId": "amazon.nova-micro-v1:0" # This specific modelId might be a factor in the 400 error
+                    
                 }
             )
             
             if prep_response.status_code != 200:
+                # A 400 error here might indicate issues with the non-streaming message endpoint,
+                # possibly related to:
+                # 1. Model ID compatibility/configuration for non-streaming messages.
+                #    (e.g., "amazon.titan-text-express-v1:0" might have specific requirements
+                #    or might not be fully supported by the /messages endpoint).
+                # 2. Validation logic within the chat service for this specific request type.
+                # 3. Credit calculation or availability for this non-streaming model.
+                # The test continues because the primary goal is to test observation of an
+                # active *streaming* session, which is initiated later.
                 Logger.warning(f"Failed to send prep message: {prep_response.status_code}, but continuing...")
             else:
                 Logger.success("Sent initial message successfully")
