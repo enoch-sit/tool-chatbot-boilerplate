@@ -762,7 +762,8 @@ class ChatServiceTester:
                 headers=self.headers,
                 json={
                     "message": "Hello, this is a test message before streaming",
-                    "modelId": "amazon.titan-text-express-v1:0"
+                    # "modelId": "amazon.titan-text-express-v1:0" # This specific modelId might be a factor in the 400 error
+                    "modelId": "amazon.nova-micro-v1:0" # This specific modelId might be a factor in the 400 error
                 }
             )
             
