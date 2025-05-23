@@ -14,6 +14,7 @@ import { ChatMessage, escapeRegExp } from './utils';
 /**
  * Send Message (Non-streaming)
  */
+// 20250523_test_flow
 export const sendMessage = async (req: Request, res: Response) => {
   const userId = req.user?.userId;
   const sessionId = req.params.sessionId;
@@ -358,6 +359,7 @@ export const sendMessage = async (req: Request, res: Response) => {
 /**
  * Get Messages
  */
+// 20250523_test_flow
 export const getMessages = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
@@ -381,6 +383,7 @@ export const getMessages = async (req: Request, res: Response) => {
  * @param req - The Express request object. Contains user information, session ID, message, and model ID.
  * @param res - The Express response object. Used to send the SSE stream or error messages.
  */
+// 20250523_test_flow
 export const streamChatResponse = async (req: Request, res: Response) => {
   // Extract user ID from the authenticated user's information attached to the request.
   const userId = req.user?.userId;
@@ -672,6 +675,7 @@ export const streamChatResponse = async (req: Request, res: Response) => {
 /**
  * Update Chat with Stream Response
  */
+// 20250523_test_flow
 export const updateChatWithStreamResponse = async (req: Request, res: Response) => {
   const userId = req.user?.userId;
   const sessionId = req.params.sessionId;

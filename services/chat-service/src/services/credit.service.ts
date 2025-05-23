@@ -25,6 +25,7 @@ import logger from '../utils/logger';
  * @param authHeader - Authorization header value for accounting service auth
  * @returns Boolean indicating if user has sufficient credits
  */
+// 20250523_test_flow
 export const checkUserCredits = async (
   userId: string,
   requiredCredits: number,
@@ -112,6 +113,7 @@ function toNumber(value: any): number {
   return typeof value === 'number' ? value : (value ?? 0);
 }
 
+// 20250523_test_flow
 /**
  * Calculate required credits for a message
  * 
@@ -123,6 +125,7 @@ function toNumber(value: any): number {
  * @param authHeader - Authorization header value for accounting service auth
  * @returns Number of estimated required credits
  */
+// 20250523_test_flow
 export const calculateRequiredCredits = async (
   message: string,
   modelId: string,
@@ -209,6 +212,7 @@ export const calculateRequiredCredits = async (
  * @param tokensUsed - Number of tokens consumed in the operation
  * @param authHeader - Authorization header value for accounting service auth
  */
+// 20250523_test_flow
 export const recordChatUsage = async (
   userId: string,
   modelId: string,

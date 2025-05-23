@@ -15,7 +15,9 @@
 import { Request, Response } from 'express';
 import UsageService from '../services/usage.service';
 
+// 20250523_test_flow
 export class UsageController {
+  // 20250523_test_flow
   /**
    * Record a usage event
    * POST /api/usage/record
@@ -37,6 +39,7 @@ export class UsageController {
    *   - 401 Unauthorized: If no user authenticated
    *   - 500 Server Error: If recording fails
    */
+  // 20250523_test_flow
   async recordUsage(req: Request, res: Response) {
     try {
       const { service, operation, credits, metadata } = req.body;
@@ -71,6 +74,7 @@ export class UsageController {
     }
   }
   
+  // 20250523_test_flow
   /**
    * Get usage statistics for the current user
    * GET /api/usage/stats
@@ -88,6 +92,7 @@ export class UsageController {
    *   - 401 Unauthorized: If no user authenticated
    *   - 500 Server Error: If retrieval fails
    */
+  // 20250523_test_flow
   async getUserStats(req: Request, res: Response) {
     try {
       if (!req.user?.userId) {
@@ -121,6 +126,7 @@ export class UsageController {
     }
   }
   
+  // 20250523_test_flow
   /**
    * Get system-wide usage statistics (admin only)
    * GET /api/usage/system-stats
@@ -139,6 +145,7 @@ export class UsageController {
    *   - 403 Forbidden: If user lacks admin permission
    *   - 500 Server Error: If retrieval fails
    */
+  // 20250523_test_flow
   async getSystemStats(req: Request, res: Response) {
     try {
       if (!req.user?.userId) {
@@ -175,6 +182,7 @@ export class UsageController {
     }
   }
   
+  // 20250523_test_flow
   /**
    * Get usage statistics for a specific user (admin and supervisor only)
    * GET /api/usage/stats/:userId
@@ -193,6 +201,7 @@ export class UsageController {
    *   - 403 Forbidden: If user lacks permission
    *   - 500 Server Error: If retrieval fails
    */
+  // 20250523_test_flow
   async getUserStatsByAdmin(req: Request, res: Response) {
     try {
       const { userId } = req.params;

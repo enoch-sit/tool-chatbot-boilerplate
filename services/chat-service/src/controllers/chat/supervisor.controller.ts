@@ -7,6 +7,7 @@ import { escapeRegExp } from './utils';
 /**
  * Observe Session
  */
+// 20250523_test_flow
 export const observeSession = async (req: Request, res: Response) => {
   try {
     const supervisorId = req.user?.userId;
@@ -73,6 +74,7 @@ export const observeSession = async (req: Request, res: Response) => {
 /**
  * Supervisor Get Chat Session
  */
+// 20250523_test_flow
 export const supervisorGetChatSession = async (req: Request, res: Response) => {
   try {
     const role = req.user?.role;
@@ -116,6 +118,7 @@ export const supervisorGetChatSession = async (req: Request, res: Response) => {
 /**
  * Supervisor List Chat Sessions
  */
+// 20250523_test_flow
 export const supervisorListChatSessions = async (req: Request, res: Response) => {
   try {
     const role = req.user?.role;
@@ -166,6 +169,7 @@ export const supervisorListChatSessions = async (req: Request, res: Response) =>
 /**
  * Search Users
  */
+// 20250523_test_flow
 export const searchUsers = async (req: Request, res: Response) => {
   try {
     const role = req.user?.role;

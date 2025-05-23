@@ -33,6 +33,14 @@ export interface Model {
 }
 
 /**
+ * Interface for Model Recommendation
+ */
+export interface ModelRecommendation {
+  recommendedModel: string;
+  reason: string;
+}
+
+/**
  * Available Models Catalog
  * 
  * Comprehensive list of AI models available through the service.
@@ -88,7 +96,8 @@ const AVAILABLE_MODELS: Model[] = [
  * @param userRole - Role of the requesting user (admin, supervisor, user)
  * @returns Array of models available to the specified user role
  */
-export function getAvailableModels(userRole: string = 'user'): Model[] {
+// 20250523_test_flow
+export const getAvailableModels = (userRole: string = 'user'): Model[] => {
   // Admins and supervisors have access to all models, including testing/preview models
   if (userRole === 'admin' || userRole === 'supervisor') {
     return AVAILABLE_MODELS;
@@ -127,10 +136,11 @@ export function getAvailableModels(userRole: string = 'user'): Model[] {
  * @param priority - The user's priority between quality, speed, and cost
  * @returns Object containing the recommended model ID and explanation
  */
-export function recommendModel(
+// 20250523_test_flow
+export const recommendModel = (
   task: 'general' | 'code' | 'creative' | 'long-document', 
   priority: 'speed' | 'quality' | 'cost' = 'quality'
-): { recommendedModel: string; reason: string } {
+): ModelRecommendation => {
   
   let recommendedModelId = config.defaultModelId;
   let reason = 'Default model recommendation';

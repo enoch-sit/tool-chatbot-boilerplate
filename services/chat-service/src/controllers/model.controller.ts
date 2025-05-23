@@ -9,6 +9,7 @@ import logger from '../utils/logger';
 /**
  * Get available models for the user
  */
+// 20250523_test_flow
 export const getModels = async (req: Request, res: Response) => {
   try {
     const userRole = req.user?.role || 'user';
@@ -31,6 +32,7 @@ export const getModels = async (req: Request, res: Response) => {
 /**
  * Get model recommendation based on task and priorities
  */
+// 20250523_test_flow
 export const getModelRecommendation = async (req: Request, res: Response) => {
   try {
     const { task = 'general', priority = 'quality' } = req.body;

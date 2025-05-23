@@ -70,6 +70,15 @@ app.use(rateLimiter());
  */
 app.use('/api', apiRoutes);
 
+// Health check endpoint
+// 20250523_test_flow
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString() 
+  });
+});
+
 /**
  * Metrics Endpoint
  * Internal endpoint for collecting Prometheus metrics

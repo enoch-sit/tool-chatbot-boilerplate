@@ -95,6 +95,7 @@ const formatPromptBody = (modelId: string, messages: any[]): any => {
  * @param modelId - The ID of the model that generated the chunk.
  * @returns The extracted text content, or an empty string if not found.
  */
+// 20250523_test_flow
 export const extractTextFromChunk = (chunkData: any, modelId: string): string => {
   // DEBUG.MD_NOTE: Nova Response Format Issue & User Provided Log
   // The debug.md report and user-provided logs confirm that Amazon Nova models
@@ -153,6 +154,7 @@ const bedrockClient = new BedrockRuntimeClient({
  * @returns Object containing session ID and allocated credits
  * @throws Error if credit allocation fails or other errors occur
  */
+// 20250523_test_flow
 export const initializeStreamingSession = async (
   userId: string,
   messages: any[],
@@ -239,6 +241,7 @@ export const initializeStreamingSession = async (
  * @param authHeader - Authorization header for accounting service calls
  * @returns PassThrough stream that emits Server-Sent Events
  */
+// 20250523_test_flow
 export const streamResponse = async (
   sessionId: string,
   messages: any[],

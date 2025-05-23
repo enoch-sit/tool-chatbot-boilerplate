@@ -23,6 +23,7 @@ import UserAccountService from './user-account.service';
 import logger from '../utils/logger'; // Import the logger
 
 export class CreditService {
+  // 20250523_test_flow
   /**
    * Get active credit balance for a user
    * 
@@ -76,6 +77,7 @@ export class CreditService {
     };
   }
   
+  // 20250523_test_flow
   /**
    * Check if user has sufficient credits for an operation
    * 
@@ -106,6 +108,7 @@ export class CreditService {
     return hasSufficient;
   }
   
+  // 20250523_test_flow
   /**
    * Allocate credits to a user
    * 
@@ -180,6 +183,7 @@ export class CreditService {
     }
   }
   
+  // 20250523_test_flow
   /**
    * Deduct credits from a user's balance
    * 
@@ -223,6 +227,7 @@ export class CreditService {
     return remainingToDeduct <= 0;
   }
   
+  // 20250523_test_flow
   /**
    * Calculate credits needed for a token count
    * 

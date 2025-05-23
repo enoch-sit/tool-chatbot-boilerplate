@@ -19,6 +19,7 @@ import UserAccount from '../models/user-account.model';
 import logger from '../utils/logger'; // Import the logger
 
 export class CreditController {
+  // 20250523_test_flow
   /**
    * Get current user's credit balance
    * GET /api/credits/balance
@@ -45,6 +46,7 @@ export class CreditController {
     }
   }
   
+  // 20250523_test_flow
   /**
    * Get a specific user's credit balance (admin/supervisor only)
    * GET /api/credits/balance/:userId
@@ -89,6 +91,7 @@ export class CreditController {
     }
   }
   
+  // 20250523_test_flow
   /**
    * Check if user has sufficient credits for an operation
    * POST /api/credits/check
@@ -181,6 +184,7 @@ export class CreditController {
     }
   }
   
+  // 20250523_test_flow
   /**
    * Calculate credits for a token count (often used for estimation)
    * POST /api/credits/calculate
@@ -240,6 +244,7 @@ export class CreditController {
     }
   }
   
+  // 20250523_test_flow
   /**
    * Allocate credits to a user (admin/supervisor only)
    * POST /api/credits/allocate

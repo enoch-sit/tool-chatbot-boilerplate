@@ -120,6 +120,7 @@ export class ObservationManager {
    * @param sessionId - Unique identifier for the chat session
    * @param stream - PassThrough stream from the user's chat session
    */
+  // 20250523_test_flow
   public registerStream(sessionId: string, stream: PassThrough): void {
     // Store the stream reference
     this.activeStreams.set(sessionId, stream);
@@ -202,6 +203,7 @@ export class ObservationManager {
    * 
    * @param sessionId - Unique identifier for the chat session to deregister
    */
+  // 20250523_test_flow
   public deregisterStream(sessionId: string): void {
     // Clean up the stream reference
     const stream = this.activeStreams.get(sessionId);
@@ -233,6 +235,7 @@ export class ObservationManager {
    * @param sessionId - Unique identifier for the chat session
    * @returns True if the session can be observed, false otherwise
    */
+  // 20250523_test_flow
   public isStreamActive(sessionId: string): boolean {
     return this.activeStreams.has(sessionId) || this.streamTimeouts.has(sessionId);
   }
@@ -247,6 +250,7 @@ export class ObservationManager {
    * @param callback - Function to receive stream data events
    * @returns Unsubscribe function to stop observation
    */
+  // 20250523_test_flow
   public addObserver(sessionId: string, callback: ObserverCallback): () => void {
     // Check if the session is available for observation
     const isActive = this.activeStreams.has(sessionId);
@@ -403,3 +407,7 @@ export class ObservationManager {
     return [...new Set([...activeIds, ...recentIds])]; // Remove duplicates
   }
 }
+
+// 20250523_test_flow
+const observationService = ObservationManager.getInstance();
+export default observationService;
