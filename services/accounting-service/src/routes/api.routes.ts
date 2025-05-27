@@ -83,7 +83,7 @@ router.get('/credits/balance', CreditController.getUserBalance);
  *   { requiredCredits: number } - Amount of credits needed for the operation
  * 
  * Response:
- *   200 OK: { hasSufficientCredits: boolean }
+ *   200 OK: { sufficient: boolean, credits?: number, requiredCredits?: number, message?: string }
  *   400 Bad Request: If requiredCredits field is missing/invalid
  *   401 Unauthorized: If no user authenticated
  *   500 Server Error: If check fails
@@ -149,7 +149,7 @@ router.get('/credits/balance/:userId', requireSupervisor, CreditController.getUs
  *   }
  * 
  * Response:
- *   201 Created: { id: string, userId: string, credits: number, expiresAt: string }
+ *   201 Created: { id: string, userId: string, totalCredits: number, remainingCredits: number, expiresAt: string }
  *   400 Bad Request: If required fields are missing
  *   401 Unauthorized: If no user authenticated
  *   403 Forbidden: If user lacks permission
@@ -343,7 +343,7 @@ router.get('/streaming-sessions/recent/:userId', requireSupervisor, StreamingSes
  *   }
  * 
  * Response:
- *   201 Created: Usage record details
+ *   201 Created: { id: string, service: string, operation: string, credits: number, timestamp: string }
  *   400 Bad Request: If required fields are missing or invalid
  *   401 Unauthorized: If no user authenticated
  *   500 Server Error: If recording fails
@@ -363,7 +363,7 @@ router.post('/usage/record', UsageController.recordUsage);
  *   endDate: ISO date string (optional)
  * 
  * Response:
- *   200 OK: Usage statistics object
+ *   200 OK: { totalRecords: number, totalCredits: number, byService: object, byDay: object, byModel: object, recentActivity: Array }
  *   401 Unauthorized: If no user authenticated
  *   500 Server Error: If retrieval fails
  */
@@ -386,7 +386,7 @@ router.get('/usage/stats', UsageController.getUserStats);
  *   endDate: ISO date string (optional)
  * 
  * Response:
- *   200 OK: Usage statistics object
+ *   200 OK: { totalRecords: number, totalCredits: number, byService: object, byDay: object, byModel: object, recentActivity: Array }
  *   400 Bad Request: If userId is missing
  *   401 Unauthorized: If no user authenticated
  *   403 Forbidden: If user lacks permission
@@ -408,7 +408,7 @@ router.get('/usage/stats/:userId', requireSupervisor, UsageController.getUserSta
  *   endDate: ISO date string (optional)
  * 
  * Response:
- *   200 OK: System-wide usage statistics object
+ *   200 OK: { totalRecords: number, totalCredits: number, byUser: object, byService: object, byDay: object, byModel: object }
  *   401 Unauthorized: If no user authenticated
  *   403 Forbidden: If user lacks admin permission
  *   500 Server Error: If retrieval fails

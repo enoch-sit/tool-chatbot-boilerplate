@@ -230,8 +230,9 @@ router.delete(
  * 
  * Output (200 OK):
  * {
- *   "message": string,             // Success message
- *   "sessionId": string            // ID of the updated session
+ *   "message": "string,             // Success message
+ *   "sessionId": "string,           // ID of the updated session
+ *   "aiResponse": "string"          // The AI's response to the user's message
  * }
  * 
  * Errors:
