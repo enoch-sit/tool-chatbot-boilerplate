@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  flowise-proxy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-super-secret-jwt-key-here}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRATION_HOURS=24
+      - FLOWISE_API_URL=${FLOWISE_API_URL:-http://flowise:3000}
+      - FLOWISE_API_KEY=${FLOWISE_API_KEY}
+      - EXTERNAL_AUTH_URL=${EXTERNAL_AUTH_URL:-http://auth-service:8001}
+      - ACCOUNTING_SERVICE_URL=${ACCOUNTING_SERVICE_URL:-http://accounting-service:8002}
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/flowise_proxy
+      - DEBUG=${DEBUG:-false}
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - postgres
+    networks:
+      - flowise-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=flowise_proxy
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - flowise-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  flowise-network:
+    driver: bridge
