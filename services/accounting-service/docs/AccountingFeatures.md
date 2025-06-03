@@ -121,3 +121,64 @@ This workflow demonstrates:
 2. The client includes this JWT in the `Authorization` header when making requests to the Accounting Service.
 3. The Accounting Service's JWT middleware validates the token and extracts user details.
 4. The service then processes the request, potentially interacting with its database, and returns a response.
+
+### 4.1. Workflow: Service Usage with Custom Credit Deduction
+
+This workflow illustrates how a client application or another backend service interacts with the Accounting Service to perform an operation that consumes credits. The calling service is responsible for determining the *amount* of credits to deduct based on its own logic or by using the `calculate` endpoint.
+
+1. **Authentication**: The client or calling service first authenticates with an external Authentication Service to obtain a JWT.
+2. **Initiate Operation & Get Balance**: The client requests an operation from a primary service (e.g., a Chat Service). This primary service, before proceeding, needs to check the user's credit. It calls the Accounting Service's `GET /api/credits/balance` endpoint (passing the user's JWT) to fetch the current credit balance.
+3. **Calculate Cost & Check Sufficiency**: The primary service then calculates the cost of the requested operation. This calculation can be internal to the primary service or it might use the Accounting Service's `POST /api/credits/calculate` endpoint. Once the cost (`requiredCredits`) is known, the primary service checks if the user's fetched balance is sufficient. Alternatively, it can use the `POST /api/credits/check` endpoint.
+4. **Perform Operation & Deduct Credits**: If credits are sufficient, the primary service performs its main operation (e.g., processes a chat message, starts a computation). Upon successful completion of its own tasks, it then calls the Accounting Service to deduct the credits. Since the `deductCredits` method within `CreditService` is not directly exposed via a generic "deduct X credits" API endpoint, this deduction typically happens as part of a more specific workflow, like `POST /api/streaming-sessions/finalize` (which internally calls `deductCredits`) or by recording a usage event via `POST /api/usage/record` if that endpoint is configured to also trigger a deduction based on the `credits` field. For a direct custom deduction, a specific internal mechanism or a dedicated (potentially admin-level) endpoint in the primary service would be responsible for determining the amount and then instructing the `CreditService` (possibly through an internal service call if co-located, or a specific trusted API call) to perform the deduction.
+5. **Confirmation**: The primary service receives confirmation of the credit deduction and then confirms the successful completion of the overall operation to the client.
+
+```mermaid
+sequenceDiagram
+    participant ClientApp as Client Application
+    participant AuthExt as External Auth Service
+    participant PrimarySvc as Primary Service (e.g., Chat Service)
+    participant AccSvc as Accounting Service
+    participant AccDB as Accounting DB
+
+    ClientApp->>AuthExt: Login Request (credentials)
+    activate AuthExt
+    AuthExt-->>ClientApp: JWT Access Token
+    deactivate AuthExt
+
+    ClientApp->>PrimarySvc: Request Operation (e.g., send message)
+    activate PrimarySvc
+    PrimarySvc->>AccSvc: GET /api/credits/balance (with JWT)
+    activate AccSvc
+
+    AccSvc->>AccSvc: JWT Middleware: Verify Token
+    activate AccSvc #DarkSlateGray
+    AccSvc-->>AccSvc: Token Validated, User Info Extracted
+    deactivate AccSvc #DarkSlateGray
+    AccSvc->>AccDB: Query for credit balance (userId)
+    activate AccDB
+    AccDB-->>AccSvc: Credit Balance Data
+    deactivate AccDB
+    AccSvc-->>PrimarySvc: User's Credit Balance
+    deactivate AccSvc
+
+    PrimarySvc->>PrimarySvc: Calculate/Determine `requiredCredits` for operation
+    note right of PrimarySvc: May use AccSvc's /calculate or own logic
+
+    PrimarySvc->>PrimarySvc: Check if Balance >= `requiredCredits`
+    alt Credits Sufficient
+        PrimarySvc->>PrimarySvc: Perform core operation (e.g., process message)
+        PrimarySvc->>AccSvc: Trigger Credit Deduction (e.g., via Finalize Session or Record Usage with credit amount)
+        activate AccSvc
+        AccSvc->>AccSvc: (Internally) Call CreditService.deductCredits(`userId`, `calculatedAmount`)
+        AccSvc->>AccDB: Update credit allocations
+        activate AccDB
+        AccDB-->>AccSvc: Deduction Confirmed
+        deactivate AccDB
+        AccSvc-->>PrimarySvc: Deduction Successful
+        deactivate AccSvc
+        PrimarySvc-->>ClientApp: Operation Successful
+    else Credits Insufficient
+        PrimarySvc-->>ClientApp: Operation Failed (Insufficient Credits)
+    end
+    deactivate PrimarySvc
+```
