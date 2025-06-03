@@ -182,3 +182,79 @@ sequenceDiagram
     end
     deactivate PrimarySvc
 ```
+
+### 4.2. Workflow: Chat-Proxy-Service Integration
+
+This workflow demonstrates a simplified architecture where a Chat-Proxy-Service acts as both the client-facing interface and the primary service that manages credit operations. This consolidated approach reduces the complexity of inter-service communication while maintaining proper credit management.
+
+In this scenario, the Chat-Proxy-Service:
+- Receives direct requests from client applications
+- Manages authentication flow internally
+- Handles credit checking and deduction
+- Processes chat operations
+- Returns consolidated responses to clients
+
+```mermaid
+sequenceDiagram
+    participant ClientApp as Client Application
+    participant ChatProxy as Chat-Proxy-Service
+    participant AuthExt as External Auth Service
+    participant AccSvc as Accounting Service
+    participant AccDB as Accounting DB
+    participant LLMSvc as LLM/Chat Backend
+
+    ClientApp->>ChatProxy: Chat Request (credentials or existing JWT)
+    activate ChatProxy
+
+    alt No JWT provided
+        ChatProxy->>AuthExt: Authenticate User (credentials)
+        activate AuthExt
+        AuthExt-->>ChatProxy: JWT Access Token
+        deactivate AuthExt
+    end
+
+    ChatProxy->>AccSvc: GET /api/credits/balance (with JWT)
+    activate AccSvc
+    AccSvc->>AccSvc: JWT Middleware: Verify Token
+    AccSvc->>AccDB: Query credit balance
+    activate AccDB
+    AccDB-->>AccSvc: Credit Balance
+    deactivate AccDB
+    AccSvc-->>ChatProxy: User's Credit Balance
+    deactivate AccSvc
+
+    ChatProxy->>ChatProxy: Estimate tokens/credits needed for chat operation
+    ChatProxy->>ChatProxy: Check if Balance >= estimated credits
+
+    alt Credits Sufficient
+        ChatProxy->>AccSvc: POST /api/streaming-sessions/initialize
+        activate AccSvc
+        AccSvc->>AccDB: Create session, pre-allocate credits
+        activate AccDB
+        AccDB-->>AccSvc: Session initialized
+        deactivate AccDB
+        AccSvc-->>ChatProxy: Session ID + Pre-allocation confirmed
+        deactivate AccSvc
+
+        ChatProxy->>LLMSvc: Process Chat Request
+        activate LLMSvc
+        LLMSvc-->>ChatProxy: Chat Response + Actual Token Usage
+        deactivate LLMSvc
+
+        ChatProxy->>AccSvc: POST /api/streaming-sessions/finalize (actual tokens)
+        activate AccSvc
+        AccSvc->>AccDB: Reconcile credits, process refund if needed
+        activate AccDB
+        AccDB-->>AccSvc: Final credit deduction completed
+        deactivate AccDB
+        AccSvc-->>ChatProxy: Session finalized
+        deactivate AccSvc
+
+        ChatProxy-->>ClientApp: Chat Response + Updated Credit Balance
+    else Credits Insufficient
+        ChatProxy-->>ClientApp: Error: Insufficient Credits
+    end
+    deactivate ChatProxy
+```
+
+**Key Benefits of Chat-Proxy-Service Architecture:**

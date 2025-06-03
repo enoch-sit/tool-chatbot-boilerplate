@@ -1,0 +1,35 @@
+{  "name": "flowise-proxy-service",
+  "version": "1.0.0",
+  "description": "TypeScript server to test Flowise API endpoints",
+  "main": "dist/src/server.js",  "scripts": {
+    "build": "tsc",
+    "start": "node dist/src/server.js",
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "test": "ts-node test/test-api.ts",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "flowise-sdk": "^1.0.9"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.18",
+    "@types/express": "^4.17.22",
+    "@types/node": "^20.17.57",
+    "nodemon": "^3.1.10",
+    "rimraf": "^5.0.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "flowise",
+    "api",
+    "proxy",
+    "test"
+  ],
+  "author": "",
+  "license": "MIT"
+}

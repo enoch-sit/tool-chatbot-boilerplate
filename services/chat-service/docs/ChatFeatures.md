@@ -80,27 +80,27 @@ sequenceDiagram
     participant Auth Service
     participant Chat Service
     participant Accounting Service
-    participant AI Model (e.g., AWS Bedrock)
+    participant AI Model e.g. AWS Bedrock
 
-    Client->>Auth Service: Login Request (e.g., /api/auth/login)
-    Note over Auth Service: Validates credentials, issues JWT (as per ExternalAuthAPIEndpoint.md)
+    Client->>Auth Service: Login Request e.g., /api/auth/login
+    Note over Auth Service: Validates credentials, issues JWT as per ExternalAuthAPIEndpoint.md
     Auth Service-->>Client: JWT Token
 
-    Client->>Chat Service: API Request (e.g., Send Message, with JWT)
-    Note over Chat Service: Middleware verifies JWT (shared secret or public key from Auth Service)
+    Client->>Chat Service: API Request e.g., Send Message, with JWT
+    Note over Chat Service: Middleware verifies JWT shared secret or public key from Auth Service
 
-    Chat Service->>Accounting Service: Credit Check Request (with User Info/JWT)
-    Note over Accounting Service: Verifies sufficient credits (as per AccountingFeatures.md)
+    Chat Service->>Accounting Service: Credit Check Request with User Info/JWT
+    Note over Accounting Service: Verifies sufficient credits as per AccountingFeatures.md
     Accounting Service-->>Chat Service: Credit Status Response
 
     alt Sufficient Credits
-        Chat Service->>AI Model: Process Request (e.g., get completion for user's message)
-        AI Model-->>Chat Service: AI Response (can be streaming or complete)
-        Chat Service->>Accounting Service: Record Usage Request (tokens, cost)
+        Chat Service->>AI Model: Process Request e.g., get completion for user's message
+        AI Model-->>Chat Service: AI Response can be streaming or complete
+        Chat Service->>Accounting Service: Record Usage Request tokens, cost
         Accounting Service-->>Chat Service: Usage Recorded
-        Chat Service-->>Client: Success Response (with AI output / SSE stream)
+        Chat Service-->>Client: Success Response with AI output / SSE stream
     else Insufficient Credits
-        Chat Service-->>Client: Error Response (e.g., 402 Payment Required)
+        Chat Service-->>Client: Error Response e.g., 402 Payment Required
     end
 
     Note over Chat Service: For supervisor actions, role checks are performed after JWT validation.
@@ -156,13 +156,13 @@ sequenceDiagram
 
     User->>Chat Service: Create Chat Session Request
     Note over Chat Service: Validates request, checks JWT
-    Chat Service->>Accounting Service: Check Credits (optional)
+    Chat Service->>Accounting Service: Check Credits optional
     Accounting Service-->>Chat Service: Credit Status
     alt Sufficient Credits
         Chat Service->>Chat Service: Create Session, Generate ID
-        Chat Service-->>User: Chat Session Created (ID)
+        Chat Service-->>User: Chat Session Created ID
     else Insufficient Credits
-        Chat Service-->>User: Error (Insufficient Credits)
+        Chat Service-->>User: Error Insufficient Credits
     end
 ```
 
@@ -175,7 +175,7 @@ sequenceDiagram
     participant AI Model
     participant Accounting Service
 
-    User->>Chat Service: Send Message (Non-Streaming)
+    User->>Chat Service: Send Message Non-Streaming
     Note over Chat Service: Validates request, checks JWT
     Chat Service->>AI Model: Process Message
     AI Model-->>Chat Service: AI Response

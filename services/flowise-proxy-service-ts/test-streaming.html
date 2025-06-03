@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowise Streaming Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            margin-bottom: 20px;
+        }
+        input, button, textarea {
+            margin: 5px;
+            padding: 10px;
+        }
+        #output {
+            border: 1px solid #ccc;
+            padding: 10px;
+            min-height: 200px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+        }
+        input[type="text"], textarea {
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Flowise Proxy Streaming Test</h1>
+    
+    <div class="container">
+        <div class="input-group">
+            <label>Chatflow ID:</label>
+            <input type="text" id="chatflowId" placeholder="Enter chatflow ID" value="your-chatflow-id-here">
+        </div>
+        
+        <div class="input-group">
+            <label>Question:</label>
+            <textarea id="question" placeholder="Enter your question">What is the capital of France?</textarea>
+        </div>
+        
+        <div class="input-group">
+            <label>Streaming:</label>
+            <input type="checkbox" id="streaming" checked>
+        </div>
+        
+        <button onclick="testPrediction()">Send Request</button>
+        <button onclick="clearOutput()">Clear Output</button>
+    </div>
+    
+    <div class="container">
+        <h3>Response:</h3>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const baseUrl = 'http://localhost:3001';
+        
+        function log(message) {
+            const output = document.getElementById('output');
+            output.textContent += new Date().toISOString() + ': ' + message + '\n';
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+        }
+        
+        async function testPrediction() {
+            const chatflowId = document.getElementById('chatflowId').value.trim();
+            const question = document.getElementById('question').value.trim();
+            const streaming = document.getElementById('streaming').checked;
+            
+            if (!chatflowId || !question) {
+                alert('Please enter both chatflow ID and question');
+                return;
+            }
+            
+            clearOutput();
+            log('Starting request...');
+            log(`Chatflow ID: ${chatflowId}`);
+            log(`Question: ${question}`);
+            log(`Streaming: ${streaming}`);
+            log('---');
+            
+            try {
+                const response = await fetch(`${baseUrl}/test/prediction/${chatflowId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        streaming: streaming
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                if (streaming) {
+                    log('Streaming response started...');
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        
+                        if (done) {
+                            log('\nStreaming completed');
+                            break;
+                        }
+
+                        const chunk = decoder.decode(value, { stream: true });
+                        
+                        // Parse Server-Sent Events
+                        const lines = chunk.split('\n');
+                        for (const line of lines) {
+                            if (line.startsWith('event:')) {
+                                const event = line.substring(6).trim();
+                                log(`Event: ${event}`);
+                            } else if (line.startsWith('data:')) {
+                                const data = line.substring(5).trim();
+                                try {
+                                    const parsedData = JSON.parse(data);
+                                    log(`Data: ${JSON.stringify(parsedData)}`);
+                                } catch (e) {
+                                    log(`Data (raw): ${data}`);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    const result = await response.json();
+                    log('Non-streaming response:');
+                    log(JSON.stringify(result, null, 2));
+                }
+                
+            } catch (error) {
+                log(`Error: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>
