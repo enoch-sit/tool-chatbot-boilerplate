@@ -1,51 +1,63 @@
-import httpx
+import bcrypt
 from typing import Dict, Optional
 from app.config import settings
 from app.auth.jwt_handler import JWTHandler
+from app.models.user import User
+from app.models.chatflow import UserChatflow
 
 class AuthService:
     def __init__(self):
-        self.external_auth_url = settings.EXTERNAL_AUTH_URL
         self.jwt_handler = JWTHandler()
 
     async def authenticate_user(self, username: str, password: str) -> Optional[Dict]:
-        """Authenticate user against external auth service"""
+        """Authenticate user against MongoDB database"""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.external_auth_url}/authenticate",
-                    json={"username": username, "password": password},
-                    timeout=30.0
-                )
-                
-                if response.status_code == 200:
-                    user_data = response.json()
-                    return user_data
-                else:
-                    return None
+            # Find user by username
+            user = await User.find_one(User.username == username)
+            if not user:
+                return None
+            
+            # Check if user is active
+            if not user.is_active:
+                return None
+            
+            # Verify password (assuming passwords are hashed with bcrypt)
+            if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+                return None
+            
+            # Return user data
+            return {
+                "id": str(user.id),
+                "username": user.username,
+                "email": user.email,
+                "role": user.role,
+                "credits": user.credits
+            }
                     
-        except httpx.RequestError as e:
+        except Exception as e:
             print(f"Auth service error: {e}")
             return None
-        except Exception as e:
-            print(f"Unexpected auth error: {e}")
-            return None
 
-    async def validate_user_permissions(self, user_id: int, chatflow_id: str) -> bool:
-        """Validate if user has access to specific chatflow"""
+    async def validate_user_permissions(self, user_id: str, chatflow_id: str) -> bool:
+        """Validate if user has access to specific chatflow using MongoDB"""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.external_auth_url}/users/{user_id}/permissions",
-                    params={"chatflow_id": chatflow_id},
-                    timeout=30.0
-                )
-                
-                if response.status_code == 200:
-                    permissions = response.json()
-                    return permissions.get("has_access", False)
-                else:
-                    return False
+            # Find user first
+            user = await User.get(user_id)
+            if not user:
+                return False
+            
+            # Admin users have access to all chatflows
+            if user.role == "Admin":
+                return True
+            
+            # Check if user has specific access to this chatflow
+            user_chatflow = await UserChatflow.find_one(
+                UserChatflow.user_id == user_id,
+                UserChatflow.chatflow_id == chatflow_id,
+                UserChatflow.is_active == True
+            )
+            
+            return user_chatflow is not None
                     
         except Exception as e:
             print(f"Permission validation error: {e}")

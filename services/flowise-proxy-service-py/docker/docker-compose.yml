@@ -15,12 +15,13 @@ services:
       - FLOWISE_API_KEY=${FLOWISE_API_KEY}
       - EXTERNAL_AUTH_URL=${EXTERNAL_AUTH_URL:-http://auth-service:8001}
       - ACCOUNTING_SERVICE_URL=${ACCOUNTING_SERVICE_URL:-http://accounting-service:8002}
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/flowise_proxy
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DATABASE_NAME=flowise_proxy
       - DEBUG=${DEBUG:-false}
       - HOST=0.0.0.0
       - PORT=8000
     depends_on:
-      - postgres
+      - mongodb
     networks:
       - flowise-network
     restart: unless-stopped
@@ -30,25 +31,25 @@ services:
       timeout: 10s
       retries: 3
 
-  postgres:
-    image: postgres:15-alpine
+  mongodb:
+    image: mongo:7-jammy
     environment:
-      - POSTGRES_DB=flowise_proxy
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
+      - MONGO_INITDB_DATABASE=flowise_proxy
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongodb_data:/data/db
     networks:
       - flowise-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 30s
       timeout: 10s
       retries: 3
+    ports:
+      - "27017:27017"
 
 volumes:
-  postgres_data:
+  mongodb_data:
     driver: local
 
 networks:

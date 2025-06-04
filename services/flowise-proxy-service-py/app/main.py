@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import chatflows, chat
 from app.config import settings
+from app.database import connect_to_mongo, close_mongo_connection
 import logging
 import asyncio
 
@@ -16,6 +17,36 @@ app = FastAPI(
     version="1.0.0",
     debug=settings.DEBUG
 )
+
+# Database connection events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database connection on startup"""
+    await connect_to_mongo()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connection on shutdown"""
+    await close_mongo_connection()
+
+# Create FastAPI application
+app = FastAPI(
+    title="Flowise Proxy Service",
+    description="Proxy service for Flowise with authentication and credit management",
+    version="1.0.0",
+    debug=settings.DEBUG
+)
+
+# Database connection events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database connection on startup"""
+    await connect_to_mongo()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connection on shutdown"""
+    await close_mongo_connection()
 
 # Add CORS middleware
 app.add_middleware(

@@ -6,7 +6,7 @@ class AccountingService:
     def __init__(self):
         self.accounting_url = settings.ACCOUNTING_SERVICE_URL
 
-    async def check_user_credits(self, user_id: int) -> Optional[int]:
+    async def check_user_credits(self, user_id: str) -> Optional[int]:
         """Check user's available credits"""
         try:
             async with httpx.AsyncClient() as client:
@@ -28,7 +28,7 @@ class AccountingService:
             print(f"Unexpected accounting error: {e}")
             return None
 
-    async def deduct_credits(self, user_id: int, amount: int, reason: str = "Chat request") -> bool:
+    async def deduct_credits(self, user_id: str, amount: int, reason: str = "Chat request") -> bool:
         """Deduct credits from user account"""
         try:
             async with httpx.AsyncClient() as client:
@@ -69,7 +69,7 @@ class AccountingService:
             print(f"Cost lookup error: {e}")
             return 1  # Default cost
 
-    async def log_transaction(self, user_id: int, chatflow_id: str, cost: int, success: bool) -> None:
+    async def log_transaction(self, user_id: str, chatflow_id: str, cost: int, success: bool) -> None:
         """Log transaction for audit purposes"""
         try:
             async with httpx.AsyncClient() as client:
