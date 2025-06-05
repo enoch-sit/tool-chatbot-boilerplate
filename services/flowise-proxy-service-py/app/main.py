@@ -71,6 +71,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    print("=ok=")
     return {
         "status": "healthy", 
         "service": "flowise-proxy-service",

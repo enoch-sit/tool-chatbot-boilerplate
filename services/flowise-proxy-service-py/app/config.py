@@ -1,21 +1,27 @@
 import os
 from pydantic_settings import BaseSettings
 from typing import Optional
+import secrets
 
 class Settings(BaseSettings):
-    # JWT Configuration
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-super-secret-jwt-key-here")
+    # JWT Configuration - Separate secret keys for access and refresh tokens
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev_access_secret_key_change_this_in_production")  # Legacy support
+    JWT_ACCESS_SECRET: str = os.getenv("JWT_ACCESS_SECRET", os.getenv("JWT_SECRET_KEY", "dev_access_secret_key_change_this_in_production"))
+    JWT_REFRESH_SECRET: str = os.getenv("JWT_REFRESH_SECRET", os.getenv("JWT_SECRET_KEY", "dev_refresh_secret_key_change_this_in_production"))
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-    JWT_EXPIRATION_HOURS: int = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
-    JWT_ACCESS_SECRET: str = os.getenv("JWT_ACCESS_SECRET", "dev_access_secret_key_change_this_in_production")
+    JWT_EXPIRATION_HOURS: int = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))  # Legacy support
+    
+    # Token expiration configuration
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
     # Flowise Configuration
     FLOWISE_API_URL: str = os.getenv("FLOWISE_API_URL", "http://somepublicendpoint.com")
     FLOWISE_API_KEY: Optional[str] = os.getenv("FLOWISE_API_KEY")
 
     # External Services URLs - Updated to use new container-based URLs
-    ACCOUNTING_API_URL: str = os.getenv("ACCOUNTING_API_URL", "http://accounting-service-accounting-service-1:3001/api")
-    AUTH_API_URL: str = os.getenv("AUTH_API_URL", "http://auth-service-dev:3000/api")
+    AUTH_API_URL: str = os.getenv("AUTH_API_URL", "http://localhost:3000")
+    ACCOUNTING_API_URL: str = os.getenv("ACCOUNTING_API_URL", "http://localhost:3001")
     
     # Fallback URLs for local development
     EXTERNAL_AUTH_URL: str = os.getenv("EXTERNAL_AUTH_URL", "http://localhost:3000")
@@ -24,17 +30,48 @@ class Settings(BaseSettings):
     MONGODB_DATABASE_NAME: str = os.getenv("MONGODB_DATABASE_NAME", "flowise_proxy")
 
     # Streaming Configuration
-    MAX_STREAMING_DURATION: int = int(os.getenv("MAX_STREAMING_DURATION", "120000"))
-
-    # CORS Configuration
+    MAX_STREAMING_DURATION: int = int(os.getenv("MAX_STREAMING_DURATION", "120000"))    # CORS Configuration
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "*")
-
+    
     # Server Configuration
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
+    
+    def __post_init__(self):
+        """Validate configuration after initialization"""
+        # Validate JWT algorithm
+        if self.JWT_ALGORITHM != "HS256":
+            raise ValueError(f"Only HS256 algorithm is supported for JWT tokens, got: {self.JWT_ALGORITHM}")
+        
+        # Warn about weak secrets in production
+        if not self.DEBUG:
+            weak_secrets = [
+                "your-super-secret-jwt-key-here",
+                "dev_access_secret_key_change_this_in_production",
+                "dev_refresh_secret_key_change_this_in_production",
+                "secret", "password", "123456"
+            ]
+            
+            # Check access secret
+            if self.JWT_ACCESS_SECRET in weak_secrets or len(self.JWT_ACCESS_SECRET) < 32:
+                raise ValueError("SECURITY WARNING: Weak JWT access secret detected in production mode. Use a strong, randomly generated secret key of at least 32 characters.")
+            
+            # Check refresh secret
+            if self.JWT_REFRESH_SECRET in weak_secrets or len(self.JWT_REFRESH_SECRET) < 32:
+                raise ValueError("SECURITY WARNING: Weak JWT refresh secret detected in production mode. Use a strong, randomly generated secret key of at least 32 characters.")
+            
+            # Check legacy secret (still used as fallback)
+            if self.JWT_SECRET_KEY in weak_secrets or len(self.JWT_SECRET_KEY) < 32:
+                raise ValueError("SECURITY WARNING: Weak JWT secret detected in production mode. Use a strong, randomly generated secret key of at least 32 characters.")
 
     class Config:
         env_file = ".env"
 
 settings = Settings()
+
+# Validate settings on module import
+try:
+    settings.__post_init__()
+except Exception as e:
+    print(f"⚠️  Configuration Warning: {e}")

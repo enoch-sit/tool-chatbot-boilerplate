@@ -548,6 +548,9 @@ class AuthRequest(BaseModel):
     username: str
     password: str
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
 @router.post("/authenticate")
 async def authenticate(auth_request: AuthRequest):
     """
@@ -567,6 +570,33 @@ async def authenticate(auth_request: AuthRequest):
         raise HTTPException(status_code=401, detail="Authentication failed")
     
     return {"access_token": token, "token_type": "bearer"}
+
+@router.post("/refresh")
+async def refresh_token(refresh_request: RefreshTokenRequest, request: Request):
+    """
+    Refresh access token using external auth service - NO MIDDLEWARE DEPENDENCY
+    This endpoint bypasses authenticate_user middleware to avoid circular dependency.
+    """
+    from app.services.external_auth_service import ExternalAuthService
+    
+    external_auth_service = ExternalAuthService()
+    
+    # Refresh tokens via external auth service (no middleware)
+    refresh_result = await external_auth_service.refresh_token(
+        refresh_request.refresh_token
+    )
+    
+    if refresh_result is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token"
+        )
+    
+    return {
+        "access_token": refresh_result["access_token"],
+        "refresh_token": refresh_result["refresh_token"], 
+        "token_type": refresh_result["token_type"]
+    }
 
 @router.post("/predict")
 async def chat_predict(
@@ -729,13 +759,48 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run Hypercorn with HTTP/2 support
-CMD ["hypercorn", "main:app", "--bind", "0.0.0.0:8000", "--http", "h2"]
+# Run Hypercorn with optimal configuration
+CMD ["hypercorn", "main:app", "--bind", "0.0.0.0:8000"]
 ```
 
 #### 4.2.10.1. Dockerfile Implementation Analysis
 
-**✅ CORRECT IMPLEMENTATION:**
+**✅ UPDATED IMPLEMENTATION - ERROR FIXED:**
+
+**🔧 HYPERCORN ERROR RESOLUTION:**
+
+The error `hypercorn: error: unrecognized arguments: --http h2` was caused by:
+- **Incorrect Flag**: `--http h2` is not a valid Hypercorn argument
+- **Hypercorn 0.14.4**: HTTP/2 is enabled by default, no flag needed
+- **Fixed Command**: `CMD ["hypercorn", "main:app", "--bind", "0.0.0.0:8000"]`
+
+**🚀 WHY HYPERCORN OVER OTHER SERVERS:**
+
+1. **🔋 ASGI-Native**: Built specifically for async Python (FastAPI, Starlette)
+   - Superior to Gunicorn+Uvicorn workers for pure async applications
+   - Native async/await support without threading overhead
+
+2. **⚡ HTTP/2 & HTTP/3 Support**: 
+   - Built-in HTTP/2 multiplexing (enabled by default in 0.14.4+)
+   - Future-ready with HTTP/3 support (experimental)
+   - Better performance for concurrent requests
+
+3. **🛡️ Production-Grade Security**:
+   - TLS 1.3 support out of the box
+   - WebSocket security features
+   - Request/response size limits
+
+4. **🔧 Enterprise Features**:
+   - Graceful shutdown handling
+   - Process monitoring and health checks
+   - Resource usage controls (memory, connections)
+
+5. **🌐 Modern Web Standards**:
+   - Server-Sent Events (SSE) support
+   - WebSocket bidirectional communication
+   - Stream processing capabilities
+
+**🎯 IMPLEMENTATION DETAILS:**
 
 1. **Base Image**: Uses `python:3.11-slim` - optimal for production
 2. **Working Directory**: Set to `/app` - standard practice
@@ -747,7 +812,7 @@ CMD ["hypercorn", "main:app", "--bind", "0.0.0.0:8000", "--http", "h2"]
 6. **Security**: Creates non-root user `appuser` with UID 1000
 7. **Port Exposure**: Exposes port 8000
 8. **Health Check**: Uses curl to verify `/health` endpoint
-9. **Server**: Uses Hypercorn with HTTP/2 support
+9. **Server**: Uses Hypercorn with automatic HTTP/2 support
 
 **🔍 VERIFICATION STEPS:**
 

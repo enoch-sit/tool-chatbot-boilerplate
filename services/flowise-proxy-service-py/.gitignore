@@ -290,3 +290,5 @@ postgres-data/
 # Build artifacts
 build/
 dist/
+
+venv/

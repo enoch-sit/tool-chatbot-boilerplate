@@ -1,16 +1,18 @@
-version: '3.8'
-
-services:
+services:  
   flowise-proxy:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-super-secret-jwt-key-here}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-${JWT_SECRET_KEY:-dev_access_secret_key_change_this_in_production}}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-${JWT_SECRET_KEY:-dev_refresh_secret_key_change_this_in_production}}
       - JWT_ALGORITHM=HS256
       - JWT_EXPIRATION_HOURS=24
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
       - FLOWISE_API_URL=${FLOWISE_API_URL:-http://flowise:3000}
       - FLOWISE_API_KEY=${FLOWISE_API_KEY}
       - EXTERNAL_AUTH_URL=${EXTERNAL_AUTH_URL:-http://auth-service:8001}
@@ -46,7 +48,7 @@ services:
       timeout: 10s
       retries: 3
     ports:
-      - "27017:27017"
+      - "27019:27017"
 
 volumes:
   mongodb_data:

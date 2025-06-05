@@ -3,6 +3,7 @@ from beanie import init_beanie
 from app.config import settings
 from app.models.user import User
 from app.models.chatflow import Chatflow, UserChatflow
+from app.models.refresh_token import RefreshToken
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,11 +19,10 @@ async def connect_to_mongo():
     try:
         database.client = AsyncIOMotorClient(settings.MONGODB_URL)
         database.database = database.client[settings.MONGODB_DATABASE_NAME]
-        
-        # Initialize beanie with the document models
+          # Initialize beanie with the document models
         await init_beanie(
             database=database.database,
-            document_models=[User, Chatflow, UserChatflow]
+            document_models=[User, Chatflow, UserChatflow, RefreshToken]
         )
         
         logger.info(f"Connected to MongoDB at {settings.MONGODB_URL}")

@@ -9,7 +9,7 @@ async def authenticate_user(credentials: HTTPAuthorizationCredentials = Security
     """Middleware to authenticate users based on JWT token"""
     try:
         token = credentials.credentials
-        payload = JWTHandler.verify_token(token)
+        payload = JWTHandler.verify_access_token(token)
         
         if payload is None:
             raise HTTPException(
@@ -18,7 +18,20 @@ async def authenticate_user(credentials: HTTPAuthorizationCredentials = Security
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        return payload
+        # Handle both old and new payload formats for backward compatibility
+        user_id = payload.get("sub") or payload.get("user_id")
+        if not user_id:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token payload - missing user ID",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Normalize payload format
+        normalized_payload = payload.copy()
+        normalized_payload["user_id"] = user_id  # Ensure user_id is available for existing code
+        
+        return normalized_payload
         
     except HTTPException:
         raise
