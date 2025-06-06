@@ -4,7 +4,7 @@
   "description": "Accounting service for tracking credits, managing API keys, and streaming session accounting",
   "main": "src/server.js",
   "scripts": {
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
     "test": "jest",
