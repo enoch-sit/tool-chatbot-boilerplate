@@ -7,6 +7,8 @@ from app.services.accounting_service import AccountingService
 from app.services.auth_service import AuthService
 from app.services.external_auth_service import ExternalAuthService
 from app.auth.jwt_handler import JWTHandler
+from flowise import Flowise, PredictionData
+from app.config import settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -190,7 +192,6 @@ async def chat_predict(
     """
     try:
         # Initialize services
-        flowise_service = FlowiseService()
         accounting_service = AccountingService()
         auth_service = AuthService()
         
@@ -204,12 +205,8 @@ async def chat_predict(
                 detail="Access denied to this chatflow"
             )
         
-        # 2. Check if chatflow exists
-        if not await flowise_service.validate_chatflow_exists(chatflow_id):
-            raise HTTPException(
-                status_code=404,
-                detail="Chatflow not found"
-            )
+        # 2. Initialize Flowise client directly
+        flowise_client = Flowise(settings.FLOWISE_API_URL, settings.FLOWISE_API_KEY)
         
         # 3. Get chatflow cost
         cost = await accounting_service.get_chatflow_cost(chatflow_id)
@@ -228,16 +225,28 @@ async def chat_predict(
                 status_code=402,
                 detail="Failed to deduct credits"
             )
-        
-        # 6. Process chat request
+          # 6. Process chat request using Flowise library with streaming
         try:
-            result = await flowise_service.predict(
-                chatflow_id,
-                chat_request.question,
-                chat_request.overrideConfig
+            # Create prediction using Flowise library with streaming enabled
+            completion = flowise_client.create_prediction(
+                PredictionData(
+                    chatflowId=chatflow_id,
+                    question=chat_request.question,
+                    streaming=True,  # Enable streaming for proxy behavior
+                    overrideConfig=chat_request.overrideConfig if chat_request.overrideConfig else None
+                )
             )
             
-            if result is None:
+            # Collect all streaming chunks into a complete response
+            full_response = ""
+            response_received = False
+            
+            for chunk in completion:
+                if chunk:
+                    full_response += str(chunk)
+                    response_received = True
+            
+            if not response_received or not full_response:
                 # Log failed transaction but don't refund credits automatically
                 await accounting_service.log_transaction(user_id, chatflow_id, cost, False)
                 raise HTTPException(
@@ -250,12 +259,13 @@ async def chat_predict(
             
             # 8. Return consolidated response
             return {
-                "response": result,
+                "response": full_response,
                 "metadata": {
                     "chatflow_id": chatflow_id,
                     "cost": cost,
                     "remaining_credits": user_credits - cost,
-                    "user": current_user.get("username")
+                    "user": current_user.get("username"),
+                    "streaming": True
                 }
             }
             

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 # Extract chatflow ID from the API URL
-CHATFLOW_ID = "e13cbaa3-c909-4570-8c49-78b45115f34a"
+# CHATFLOW_ID = "e13cbaa3-c909-4570-8c49-78b45115f34a"
 API_KEY = os.getenv('FLOWISE_API_KEY')
 FLOWISE_ENDPOINT = os.getenv('FLOWISE_ENDPOINT')
 
@@ -107,7 +107,7 @@ def validate_environment():
     else:
         print(f"✅ FLOWISE_API_KEY: {'*' * (len(API_KEY) - 4)}{API_KEY[-4:] if len(API_KEY) > 4 else '****'}")
     
-    print(f"✅ CHATFLOW_ID (for reference): {CHATFLOW_ID}")
+    #print(f"✅ CHATFLOW_ID (for reference): {CHATFLOW_ID}")
     return True
 
 if __name__ == "__main__":

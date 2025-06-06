@@ -61,6 +61,398 @@
 
 * *(Example: `{ "message": "Token revoked successfully" }`)*
 
+## Admin Endpoints
+
+### `POST /api/admin/chatflows/add-users`
+
+**Code Location:** `app/api/admin.py` - `add_users_to_chatflow()` function (lines 26-111)
+
+**Description:** Add multiple users to a chatflow (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+* `Content-Type: application/json`
+
+**Request Body:**
+
+* `{ "user_ids": ["user_id_1", "user_id_2", "user_id_3"], "chatflow_id": "chatflow_123" }`
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "user_id": "user_id_1",
+    "username": "username1",
+    "status": "success",
+    "message": "Access granted successfully"
+  },
+  {
+    "user_id": "user_id_2", 
+    "username": "username2",
+    "status": "skipped",
+    "message": "User already has active access to this chatflow"
+  }
+]
+```
+
+### `POST /api/admin/chatflows/{chatflow_id}/users/{user_id}`
+
+**Code Location:** `app/api/admin.py` - `add_single_user_to_chatflow()` function (lines 113-167)
+
+**Description:** Add a single user to a chatflow (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "user_id": "user_id_1",
+  "username": "username1",
+  "chatflow_id": "chatflow_123",
+  "status": "success",
+  "message": "Access granted successfully"
+}
+```
+
+### `DELETE /api/admin/chatflows/{chatflow_id}/users/{user_id}`
+
+**Code Location:** `app/api/admin.py` - `remove_user_from_chatflow()` function (lines 169-223)
+
+**Description:** Remove a user from a chatflow (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "user_id": "user_id_1",
+  "username": "username1", 
+  "chatflow_id": "chatflow_123",
+  "status": "success",
+  "message": "Access revoked successfully"
+}
+```
+
+### `GET /api/admin/users`
+
+**Code Location:** `app/api/admin.py` - `list_all_users()` function (lines 225-269)
+
+**Description:** List all users (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "user_id_1",
+    "username": "username1",
+    "email": "user1@example.com",
+    "role": "User",
+    "credits": 100,
+    "is_active": true,
+    "created_at": "2024-01-01T00:00:00",
+    "updated_at": "2024-01-01T00:00:00"
+  }
+]
+```
+
+### `GET /api/admin/users/{user_id}/chatflows`
+
+**Code Location:** `app/api/admin.py` - `list_user_chatflows()` function (lines 271-327)
+
+**Description:** List all chatflows accessible to a specific user (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "user_id": "user_id_1",
+  "username": "username1",
+  "chatflows": [
+    {
+      "chatflow_id": "chatflow_123",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00"
+    }
+  ],
+  "total_count": 1
+}
+```
+
+### `POST /api/admin/users/sync`
+
+**Code Location:** `app/api/admin.py` - `sync_users_with_external_auth()` function (lines 350-475)
+
+**Description:** Sync users with external auth service (Admin only). This endpoint fetches all users from the external auth service and synchronizes them with the local database.
+
+**Functionality:**
+- Creates new users that exist in external auth but not locally
+- Updates existing users with current information from external auth
+- Deactivates users that no longer exist in external auth
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+* `Content-Type: application/json`
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "success",
+  "message": "User synchronization completed successfully",
+  "timestamp": "2025-06-06T10:30:00.000Z",
+  "statistics": {
+    "total_external_users": 25,
+    "total_local_users": 20,
+    "created_users": 3,
+    "updated_users": 2,
+    "deactivated_users": 0,
+    "errors": []
+  }
+}
+```
+
+**Possible Errors:**
+- **400 Bad Request:** Admin access token required for external auth service
+- **403 Forbidden:** Admin access required to sync users
+- **502 Bad Gateway:** Failed to fetch users from external auth service
+- **500 Internal Server Error:** Unexpected error during synchronization
+
+### `POST /api/admin/chatflows/sync`
+
+**Code Location:** `app/api/admin.py` - `sync_chatflows_from_flowise()` function
+
+**Description:** Synchronize chatflows from Flowise API to local database (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "total_fetched": 15,
+  "created": 3,
+  "updated": 10,
+  "deleted": 2,
+  "errors": 0,
+  "error_details": [],
+  "sync_timestamp": "2024-12-20T10:30:45.123456"
+}
+```
+
+**Response (500 Internal Server Error):**
+
+```json
+{
+  "detail": "Failed to sync chatflows: Connection timeout"
+}
+```
+
+### `GET /api/admin/chatflows`
+
+**Code Location:** `app/api/admin.py` - `list_all_chatflows()` function
+
+**Description:** List all chatflows stored in the local database (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Query Parameters:**
+
+* `include_deleted` (optional, boolean): Include deleted chatflows in results (default: false)
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "64a1b2c3d4e5f6789012345",
+    "flowise_id": "uuid-chatflow-123",
+    "name": "Customer Support Bot",
+    "description": "AI assistant for customer inquiries",
+    "deployed": true,
+    "is_public": false,
+    "category": "customer-service",
+    "type": "CHATFLOW",
+    "api_key_id": "api-key-456",
+    "flow_data": {
+      "nodes": [...],
+      "edges": [...]
+    },
+    "chatbot_config": {
+      "welcomeMessage": "Hello! How can I help you?",
+      "backgroundColor": "#ffffff"
+    },
+    "api_config": {
+      "rateLimit": 100,
+      "timeout": 30000
+    },
+    "analytic_config": {
+      "enabled": true,
+      "trackUserSessions": true
+    },
+    "speech_to_text_config": null,
+    "created_date": "2024-12-15T09:00:00Z",
+    "updated_date": "2024-12-20T10:30:00Z",
+    "synced_at": "2024-12-20T10:30:45Z",
+    "sync_status": "active",
+    "sync_error": null
+  }
+]
+```
+
+### `GET /api/admin/chatflows/stats`
+
+**Code Location:** `app/api/admin.py` - `get_chatflow_stats()` function
+
+**Description:** Get chatflow statistics including sync status (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "total": 25,
+  "active": 20,
+  "deleted": 3,
+  "error": 2,
+  "last_sync": "2024-12-20T10:30:45Z"
+}
+```
+
+### `GET /api/admin/chatflows/{flowise_id}`
+
+**Code Location:** `app/api/admin.py` - `get_chatflow_by_id()` function
+
+**Description:** Get a specific chatflow by its Flowise ID (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Path Parameters:**
+
+* `flowise_id` (string): The Flowise ID of the chatflow
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "64a1b2c3d4e5f6789012345",
+  "flowise_id": "uuid-chatflow-123",
+  "name": "Customer Support Bot",
+  "description": "AI assistant for customer inquiries",
+  "deployed": true,
+  "is_public": false,
+  "category": "customer-service",
+  "type": "CHATFLOW",
+  "api_key_id": "api-key-456",
+  "flow_data": {
+    "nodes": [...],
+    "edges": [...]
+  },
+  "chatbot_config": {
+    "welcomeMessage": "Hello! How can I help you?",
+    "backgroundColor": "#ffffff"
+  },
+  "api_config": {
+    "rateLimit": 100,
+    "timeout": 30000
+  },
+  "analytic_config": {
+    "enabled": true,
+    "trackUserSessions": true
+  },
+  "speech_to_text_config": null,
+  "created_date": "2024-12-15T09:00:00Z",
+  "updated_date": "2024-12-20T10:30:00Z",
+  "synced_at": "2024-12-20T10:30:45Z",
+  "sync_status": "active",
+  "sync_error": null
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "detail": "Chatflow with ID uuid-chatflow-123 not found"
+}
+```
+
+### `DELETE /api/admin/chatflows/{flowise_id}`
+
+**Code Location:** `app/api/admin.py` - `force_delete_chatflow()` function
+
+**Description:** Force delete a chatflow from the local database. This does not delete the chatflow from Flowise (Admin only).
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Path Parameters:**
+
+* `flowise_id` (string): The Flowise ID of the chatflow to delete
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Chatflow uuid-chatflow-123 deleted successfully"
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "detail": "Chatflow with ID uuid-chatflow-123 not found"
+}
+```
+
 ## Chatflow Endpoints
 
 ### `GET /chatflows/`
@@ -313,6 +705,20 @@ This service implements a complete proxy solution with JWT authentication, role-
 * Lines 10-22: `list_chatflows()` - List available chatflows
 * Lines 24-36: `get_chatflow()` - Get specific chatflow details
 * Lines 38-50: `get_chatflow_config()` - Get chatflow configuration
+
+**`app/api/admin.py`** - Admin management endpoints
+
+* Lines 26-111: `add_users_to_chatflow()` - Add multiple users to chatflow
+* Lines 113-167: `add_single_user_to_chatflow()` - Add single user to chatflow
+* Lines 169-223: `remove_user_from_chatflow()` - Remove user from chatflow
+* Lines 225-269: `list_all_users()` - List all users
+* Lines 271-327: `list_user_chatflows()` - List chatflows for a user
+* Lines 350-475: `sync_users_with_external_auth()` - Sync users with external auth service
+* Lines 477-495: `sync_chatflows_from_flowise()` - Sync chatflows with Flowise API
+* Lines 497-513: `list_all_chatflows()` - List all chatflows in local database
+* Lines 515-525: `get_chatflow_stats()` - Get chatflow statistics
+* Lines 527-541: `get_chatflow_by_id()` - Get chatflow by Flowise ID
+* Lines 543-553: `force_delete_chatflow()` - Force delete chatflow from local database
 
 ### Development & Testing
 

@@ -13,11 +13,13 @@ class Settings(BaseSettings):
     
     # Token expiration configuration
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
-    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
-
-    # Flowise Configuration
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))    # Flowise Configuration
     FLOWISE_API_URL: str = os.getenv("FLOWISE_API_URL", "http://somepublicendpoint.com")
     FLOWISE_API_KEY: Optional[str] = os.getenv("FLOWISE_API_KEY")
+    
+    # Chatflow sync settings
+    ENABLE_CHATFLOW_SYNC: bool = os.getenv("ENABLE_CHATFLOW_SYNC", "true").lower() == "true"
+    CHATFLOW_SYNC_INTERVAL_HOURS: int = int(os.getenv("CHATFLOW_SYNC_INTERVAL_HOURS", "1"))
 
     # External Services URLs - Updated to use new container-based URLs
     AUTH_API_URL: str = os.getenv("AUTH_API_URL", "http://localhost:3000")

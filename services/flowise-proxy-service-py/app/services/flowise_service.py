@@ -6,6 +6,7 @@ class FlowiseService:
     def __init__(self):
         self.flowise_url = settings.FLOWISE_API_URL
         self.api_key = settings.FLOWISE_API_KEY
+        self.timeout = 3000
 
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for Flowise API requests"""
@@ -21,7 +22,7 @@ class FlowiseService:
                 response = await client.get(
                     f"{self.flowise_url}/api/v1/chatflows",
                     headers=self._get_headers(),
-                    timeout=30.0
+                    timeout=self.timeout
                 )
                 
                 if response.status_code == 200:
@@ -44,7 +45,7 @@ class FlowiseService:
                 response = await client.get(
                     f"{self.flowise_url}/api/v1/chatflows/{chatflow_id}",
                     headers=self._get_headers(),
-                    timeout=30.0
+                    timeout=self.timeout
                 )
                 
                 if response.status_code == 200:
@@ -71,7 +72,7 @@ class FlowiseService:
                     f"{self.flowise_url}/api/v1/prediction/{chatflow_id}",
                     headers=self._get_headers(),
                     json=payload,
-                    timeout=120.0  # Longer timeout for AI responses
+                    timeout=self.timeout  # Longer timeout for AI responses
                 )
                 
                 if response.status_code == 200:
@@ -102,7 +103,7 @@ class FlowiseService:
                 response = await client.get(
                     f"{self.flowise_url}/api/v1/chatflows/{chatflow_id}/config",
                     headers=self._get_headers(),
-                    timeout=30.0
+                    timeout=self.timeout
                 )
                 
                 if response.status_code == 200:

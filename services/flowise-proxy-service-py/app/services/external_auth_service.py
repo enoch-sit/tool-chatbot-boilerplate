@@ -121,3 +121,50 @@ class ExternalAuthService:
         except Exception as e:
             logger.error(f"Token refresh error: {e}")
             return None
+    
+    async def get_all_users(self, access_token: str) -> Optional[Dict]:
+        """
+        Fetch all users from external auth service
+        
+        Args:
+            access_token: Admin access token for authentication
+            
+        Returns:
+            Dict containing users list, or None if request fails
+        """
+        try:
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": f"Bearer {access_token}"
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.auth_url}/api/admin/users",
+                    headers=headers,
+                    timeout=self.timeout
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data
+                elif response.status_code == 401:
+                    logger.warning("Unauthorized access to external auth service")
+                    return None
+                elif response.status_code == 403:
+                    logger.warning("Forbidden: Admin access required")
+                    return None
+                else:
+                    logger.error(f"External auth service returned {response.status_code}: {response.text}")
+                    return None
+                    
+        except httpx.ConnectError:
+            logger.error(f"Cannot connect to auth service at {self.auth_url}")
+            return None
+        except httpx.TimeoutException:
+            logger.error(f"Timeout connecting to auth service")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching users: {e}")
+            return None
