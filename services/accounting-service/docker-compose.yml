@@ -6,19 +6,21 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3001:3001"
+      - "${ACCOUNTING_SERVICE_PORT:-3001}:3001"
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=development
-      - PORT=3001
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${ACCOUNTING_SERVICE_PORT:-3001}
       - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=accounting_db
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - JWT_ACCESS_SECRET=dev_access_secret_key_change_this_in_production
-      - JWT_REFRESH_SECRET=dev_refresh_secret_key_change_this_in_production
-      - LOG_LEVEL=debug
-      - CORS_ORIGIN=http://localhost:3000
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-accounting_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-dev_access_secret_key_change_this_in_production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev_refresh_secret_key_change_this_in_production}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
     depends_on:
       - postgres
     volumes:
@@ -34,11 +36,13 @@ services:
   postgres:
     image: postgres:14-alpine
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
+    env_file:
+      - .env
     environment:
-      - POSTGRES_DB=accounting_db
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${DB_NAME:-accounting_db}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
