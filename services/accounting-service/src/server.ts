@@ -83,10 +83,11 @@ const startServer = async () => {
   try {
     // Test database connection
     await testConnection();
-    
-    // Sync database models (in development only)
+      // Sync database models (in development only)
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
+      // Use sync without alter to avoid PostgreSQL syntax issues
+      // alter: true can generate invalid SQL for complex schema changes
+      await sequelize.sync({ force: false });
       logger.info('Database synced');
     }
     
