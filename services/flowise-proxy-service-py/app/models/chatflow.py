@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from bson import ObjectId
 from beanie import Document
 
-class Chatflow(BaseModel):
+class Chatflow(Document):
     id: Optional[str] = Field(default=None, alias="_id")
     flowise_id: str = Field(..., description="Flowise chatflow ID")
     name: str = Field(..., description="Chatflow name")
@@ -28,12 +28,16 @@ class Chatflow(BaseModel):
     synced_at: datetime = Field(default_factory=datetime.utcnow, description="Last sync timestamp")
     
     # Sync status
+        # Sync status
     sync_status: str = Field(default="active", description="Sync status: active, deleted, error")
     sync_error: Optional[str] = Field(None, description="Last sync error message")
 
     class Config:
         populate_by_name = True
         json_encoders = {ObjectId: str}
+    
+    class Settings:
+        collection = "chatflows"
 
 class ChatflowSyncResult(BaseModel):
     total_fetched: int
@@ -53,9 +57,6 @@ class UserChatflow(Document):
     
     class Settings:
         collection = "user_chatflows"
-        indexes = [
-            [("user_id", 1), ("chatflow_id", 1)],  # Compound index for efficient queries
-        ]
 
     def __repr__(self):
         return f"<UserChatflow(user_id='{self.user_id}', chatflow_id='{self.chatflow_id}')>"
