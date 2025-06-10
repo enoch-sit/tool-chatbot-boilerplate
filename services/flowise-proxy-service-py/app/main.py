@@ -7,6 +7,7 @@ from app.tasks.chatflow_sync import chatflow_sync_task
 from app.core.logging import logger
 import logging
 import asyncio
+from contextlib import asynccontextmanager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,10 +20,11 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
-# Database connection events
-@app.on_event("startup")
-async def startup_event():
-    """Application startup event"""
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events for the FastAPI application."""
+    # Startup logic
     logger.info("Starting Flowise Proxy Service")
     
     # Initialize database connection
@@ -31,17 +33,21 @@ async def startup_event():
     # Start periodic chatflow sync if enabled
     if hasattr(settings, 'ENABLE_CHATFLOW_SYNC') and settings.ENABLE_CHATFLOW_SYNC:
         asyncio.create_task(chatflow_sync_task.start_periodic_sync())
+    
+    try:
+        yield  # Application runs here
+    finally:
+        # Shutdown logic
+        logger.info("Shutting down Flowise Proxy Service")
+        
+        # Stop periodic sync
+        chatflow_sync_task.stop_periodic_sync()
+        
+        # Close database connection
+        await close_mongo_connection()
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown event"""
-    logger.info("Shutting down Flowise Proxy Service")
-    
-    # Stop periodic sync
-    chatflow_sync_task.stop_periodic_sync()
-    
-    # Close database connection
-    await close_mongo_connection()
+# Attach lifespan to the app
+app.lifespan = lifespan
 
 # Add CORS middleware
 app.add_middleware(

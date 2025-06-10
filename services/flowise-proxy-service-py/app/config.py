@@ -1,5 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import Optional
 import secrets
 
@@ -34,11 +35,20 @@ class Settings(BaseSettings):
     # Streaming Configuration
     MAX_STREAMING_DURATION: int = int(os.getenv("MAX_STREAMING_DURATION", "120000"))    # CORS Configuration
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "*")
-    
-    # Server Configuration
+      # Server Configuration
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
     HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    PORT: int = int(os.getenv("PORT", "8000"))    # Logging Configuration
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO" if not os.getenv("DEBUG", "true").lower() == "true" else "DEBUG")
+    
+    @field_validator('LOG_LEVEL')
+    @classmethod
+    def validate_log_level(cls, v):
+        """Validate log level is one of the allowed values"""
+        allowed_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if v.upper() not in allowed_levels:
+            raise ValueError(f"LOG_LEVEL must be one of {allowed_levels}, got: {v}")
+        return v.upper()
     
     def __post_init__(self):
         """Validate configuration after initialization"""
@@ -62,13 +72,13 @@ class Settings(BaseSettings):
             # Check refresh secret
             if self.JWT_REFRESH_SECRET in weak_secrets or len(self.JWT_REFRESH_SECRET) < 32:
                 raise ValueError("SECURITY WARNING: Weak JWT refresh secret detected in production mode. Use a strong, randomly generated secret key of at least 32 characters.")
-            
-            # Check legacy secret (still used as fallback)
+              # Check legacy secret (still used as fallback)
             if self.JWT_SECRET_KEY in weak_secrets or len(self.JWT_SECRET_KEY) < 32:
                 raise ValueError("SECURITY WARNING: Weak JWT secret detected in production mode. Use a strong, randomly generated secret key of at least 32 characters.")
 
     class Config:
         env_file = ".env"
+        extra = "ignore"  # Allow extra environment variables to be ignored
 
 settings = Settings()
 

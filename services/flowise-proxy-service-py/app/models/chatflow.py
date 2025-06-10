@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from bson import ObjectId
-from beanie import Document
+from beanie import Document, PydanticObjectId
 
 class Chatflow(Document):
-    id: Optional[str] = Field(default=None, alias="_id")
+    id: Optional[PydanticObjectId] = Field(default=None, alias="_id")
     flowise_id: str = Field(..., description="Flowise chatflow ID")
     name: str = Field(..., description="Chatflow name")
     description: Optional[str] = Field(None, description="Chatflow description")
@@ -26,15 +26,14 @@ class Chatflow(Document):
     created_date: Optional[datetime] = Field(None, description="Flowise creation date")
     updated_date: Optional[datetime] = Field(None, description="Flowise update date")
     synced_at: datetime = Field(default_factory=datetime.utcnow, description="Last sync timestamp")
-    
-    # Sync status
-        # Sync status
+      # Sync status
     sync_status: str = Field(default="active", description="Sync status: active, deleted, error")
     sync_error: Optional[str] = Field(None, description="Last sync error message")
 
     class Config:
         populate_by_name = True
         json_encoders = {ObjectId: str}
+        arbitrary_types_allowed = True
     
     class Settings:
         collection = "chatflows"

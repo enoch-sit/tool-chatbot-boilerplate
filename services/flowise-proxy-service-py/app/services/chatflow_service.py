@@ -40,14 +40,17 @@ class ChatflowService:
             for flowise_cf in flowise_chatflows:
                 try:
                     flowise_id = flowise_cf["id"]
+                    logger.debug(f"Sync: Processing Flowise chatflow with id: {flowise_id}, name: {flowise_cf.get('name')}") # DEBUG log
                     current_flowise_ids.add(flowise_id)
                     
                     # Convert Flowise chatflow to our model
                     chatflow_data = await self._convert_flowise_chatflow(flowise_cf)
+                    logger.debug(f"Sync: Converted chatflow data for {flowise_id}: {chatflow_data}") # DEBUG log
                     
                     # Check if chatflow exists
                     if flowise_id in existing_ids:
                         # Update existing chatflow
+                        logger.debug(f"Sync: Updating existing chatflow with flowise_id: {flowise_id}") # DEBUG log
                         await self.collection.update_one(
                             {"flowise_id": flowise_id},
                             {"$set": chatflow_data}
@@ -56,6 +59,7 @@ class ChatflowService:
                         logger.info(f"Updated chatflow: {chatflow_data['name']} ({flowise_id})")
                     else:
                         # Create new chatflow
+                        logger.debug(f"Sync: Creating new chatflow with flowise_id: {flowise_id}") # DEBUG log
                         await self.collection.insert_one(chatflow_data)
                         result.created += 1
                         logger.info(f"Created chatflow: {chatflow_data['name']} ({flowise_id})")
