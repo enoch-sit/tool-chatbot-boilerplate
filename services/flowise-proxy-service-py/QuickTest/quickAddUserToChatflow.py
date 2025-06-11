@@ -551,7 +551,7 @@ def test_bulk_add_users_to_chatflow(token, flowise_id, usernames):
                 message = result_item.get('message')
                 user_identifier = result_item.get('username', result_item.get('user_id', 'Unknown User'))
                 print(f"   - User: {user_identifier}, Status: {status}, Message: {message}")
-                if status != 'success':
+                if status != 'success' and status != 'reactivated':
                     all_reported_success = False
             
             with open(LOG_PATH, "a") as log_file:

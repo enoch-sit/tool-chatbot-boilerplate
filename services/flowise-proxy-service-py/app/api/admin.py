@@ -128,7 +128,7 @@ async def add_users_to_chatflow(
             logger.debug(f"DEBUG: Existing access query result: {existing_access}")
             
             if existing_access:
-                logger.info(f"DEBUG: Existing access found for user {user_id} - is_active: {existing_access.is_active}, created: {existing_access.created_at}")
+                logger.info(f"DEBUG: Existing access found for user {user_id} - is_active: {existing_access.is_active}, created: {existing_access.assigned_at}")
                 if existing_access.is_active:
                     results.append(UserChatflowResponse(
                         user_id=user_id,
@@ -178,7 +178,7 @@ async def add_users_to_chatflow(
             logger.error(f"DEBUG: Exception context - chatflow_id: {request.chatflow_id}")
             
             # Include stack trace for development debugging
-            import traceback
+            # import traceback
             logger.debug(f"DEBUG: Stack trace: {traceback.format_exc()}")
             
             logger.error(f"Error adding user {user_id} to chatflow {request.chatflow_id}: {e}")
