@@ -10,7 +10,7 @@ from app.auth.jwt_handler import JWTHandler
 from flowise import Flowise, PredictionData
 from app.config import settings
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
 class ChatRequest(BaseModel):
     chatflow_id: str

@@ -4,7 +4,7 @@ from app.auth.middleware import authenticate_user
 from app.services.flowise_service import FlowiseService
 from app.services.auth_service import AuthService
 
-router = APIRouter(prefix="/chatflows", tags=["chatflows"])
+router = APIRouter(prefix="/api/v1/chatflows", tags=["chatflows"])
 
 @router.get("/", response_model=List[Dict])
 async def list_chatflows(

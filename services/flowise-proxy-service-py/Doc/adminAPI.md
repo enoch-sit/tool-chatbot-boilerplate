@@ -4,7 +4,7 @@
 
 This document provides detailed information about the Admin API endpoints for the Flowise Proxy Service. These endpoints are used for managing chatflows, user access to chatflows, and related administrative tasks.
 
-**Base Path**: All admin API endpoints are prefixed with `/api/admin`.
+**Base Path**: All admin API endpoints are prefixed with `/api/v1/admin`.
 
 **Authentication**:
 All endpoints require a valid JWT (JSON Web Token) Bearer token to be included in the `Authorization` header of the request.
@@ -72,13 +72,13 @@ Represents a chatflow entity. While the full model is not detailed here, it typi
 
 ```json
 {
-  "id": "string",
+  "id": "string", // Corresponds to _id in the database
   "flowise_id": "string",
   "name": "string",
   "description": "string",
-  "status": "string",
-  "created_at": "datetime",
-  "updated_at": "datetime",
+  "sync_status": "string", // Reflects the synchronization status (e.g., active, deleted)
+  "created_date": "datetime", // Corresponds to created_at in some contexts
+  "updated_date": "datetime", // Corresponds to updated_at in some contexts
   "is_public": "boolean"
 }
 ```
@@ -89,11 +89,13 @@ Response model for the chatflow synchronization operation. While the full model 
 
 ```json
 {
-  "new_chatflows_added": "integer",
-  "existing_chatflows_updated": "integer",
-  "chatflows_removed": "integer",
-  "total_chatflows_synced": "integer",
-  "errors": ["string"]
+  "created": "integer", // Number of new chatflows added
+  "updated": "integer", // Number of existing chatflows updated
+  "deleted": "integer", // Number of chatflows marked as deleted
+  "total_fetched": "integer", // Total chatflows fetched from the source
+  "errors": "integer", // Count of errors during synchronization
+  "error_details": ["string"], // List of error messages, if any
+  "sync_timestamp": "datetime" // Timestamp of the synchronization
 }
 ```
 
@@ -105,7 +107,7 @@ These endpoints manage the association of users with specific chatflows.
 
 ### Add Multiple Users to a Chatflow (by User IDs)
 
-* **Endpoint**: `POST /api/admin/chatflows/add-users`
+* **Endpoint**: `POST /api/v1/admin/chatflows/add-users`
 * **Description**: Assigns multiple existing users, identified by their user IDs, to a specified chatflow. This creates or activates `UserChatflow` links.
 * **Authentication**: Admin role required.
 * **Request Body**: `AddUsersToChatflowRequest`
@@ -136,13 +138,13 @@ These endpoints manage the association of users with specific chatflows.
   ]
   ```
 
-* **Notes**: The provided source code for this endpoint appears to be a partial implementation (stub). The actual logic for finding users and creating `UserChatflow` links needs to be fully implemented for it to function as described.
+* **Notes**: This endpoint is fully implemented. It handles user validation, checks for existing access, reactivates inactive access if present, or creates new user-chatflow links.
 
 ---
 
 ### Add Multiple Users to a Chatflow (by Email)
 
-* **Endpoint**: `POST /api/admin/chatflows/add-users-by-email`
+* **Endpoint**: `POST /api/v1/admin/chatflows/add-users-by-email`
 * **Description**: Assigns multiple users, identified by their email addresses, to a specified chatflow. If a user with a given email does not exist, a new user account may be created and then linked to the chatflow. This creates or activates `UserChatflow` links.
 * **Authentication**: Admin role required.
 * **Request Body**: `AddUsersToChatlowByEmailRequest`
@@ -179,13 +181,14 @@ These endpoints manage the association of users with specific chatflows.
   ]
   ```
 
-* **Notes**: The provided source code for this endpoint appears to be a stub. For this endpoint to function as described (including user creation if non-existent), it requires full implementation. This is a critical endpoint often used in bulk operations.
+* **Notes**: This endpoint is implemented. It handles finding users by email, creating new user accounts if they do not exist, and then assigns them to the chatflow by utilizing the core logic for adding users to chatflows. This is a critical endpoint often used in bulk operations.
+**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
 
 ---
 
 ### Add a Single User to a Chatflow (by User ID)
 
-* **Endpoint**: `POST /api/admin/chatflows/{chatflow_id}/users/{user_id}`
+* **Endpoint**: `POST /api/v1/admin/chatflows/{chatflow_id}/users/{user_id}`
 * **Description**: Assigns a single existing user, identified by their user ID, to a specific chatflow identified by its `chatflow_id`.
 * **Authentication**: Admin role required.
 * **Path Parameters**:
@@ -203,13 +206,13 @@ These endpoints manage the association of users with specific chatflows.
   }
   ```
 
-* **Notes**: The provided source code for this endpoint appears to be a stub. Full implementation is needed.
+* **Notes**: This endpoint is fully implemented. It validates the user, checks for existing access, reactivates inactive access if present, or creates a new user-chatflow link.
 
 ---
 
 ### Add a Single User to a Chatflow (by Email)
 
-* **Endpoint**: `POST /api/admin/chatflows/{chatflow_id}/users/email/{email}`
+* **Endpoint**: `POST /api/v1/admin/chatflows/{chatflow_id}/users/email/{email}`
 * **Description**: Assigns a single user, identified by their email, to a specific chatflow. If the user doesn't exist, a new user account may be created.
 * **Authentication**: Admin role required.
 * **Path Parameters**:
@@ -217,13 +220,14 @@ These endpoints manage the association of users with specific chatflows.
   * `email` (string, required): The email of the user to add.
 * **Request Body**: None.
 * **Success Response** (`200 OK` or `201 Created`): Expected to be a `UserChatflowResponse` or a simple success message.
-* **Notes**: The provided source code for this endpoint appears to be a stub. Full implementation is needed.
+* **Notes**: This endpoint is implemented. It finds a user by email (creating one if non-existent) and then utilizes the logic for adding a single user to a chatflow to assign them.
+**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py` (using `flowise_id` in the path).
 
 ---
 
 ### Remove a User from a Chatflow (by User ID)
 
-* **Endpoint**: `DELETE /api/admin/chatflows/{chatflow_id}/users/{user_id}`
+* **Endpoint**: `DELETE /api/v1/admin/chatflows/{chatflow_id}/users/{user_id}`
 * **Description**: Revokes a user's access to a specific chatflow. This typically deactivates the `UserChatflow` link (sets `is_active = false`) or deletes the link. **It does not delete the user account.**
 * **Authentication**: Admin role required.
 * **Path Parameters**:
@@ -239,28 +243,29 @@ These endpoints manage the association of users with specific chatflows.
 
 * **Error Responses**:
   * `404 Not Found`: If the user, chatflow, or the specific user-chatflow link doesn't exist.
-  * `409 Conflict`: May be returned if the user's access was already inactive (idempotent removal).
-* **Notes**: The provided source code for this endpoint appears to be a stub. Full implementation is needed.
+  * `409 Conflict`: May be returned if the user's access was already inactive.
+* **Notes**: This endpoint is implemented. It deactivates the user's access to the chatflow (sets `is_active = false` on the `UserChatflow` link).
 
 ---
 
 ### Remove a User from a Chatflow (by Email)
 
-* **Endpoint**: `DELETE /api/admin/chatflows/{chatflow_id}/users/email/{email}`
+* **Endpoint**: `DELETE /api/v1/admin/chatflows/{chatflow_id}/users/email/{email}`
 * **Description**: Finds a user by email and revokes their access to the specified chatflow. This deactivates/deletes the `UserChatflow` link, not the user account.
 * **Authentication**: Admin role required.
 * **Path Parameters**:
   * `chatflow_id` (string, required): The ID of the chatflow.
   * `email` (string, required): The email of the user to remove.
 * **Success Response** (`200 OK` or `204 No Content`): Success message or no content.
-* **Notes**: The provided source code for this endpoint appears to be a stub. Full implementation is needed.
+* **Notes**: This endpoint is implemented. It finds a user by email and then utilizes the logic for removing a user from a chatflow to revoke their access.
+**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py` (using `flowise_id` in the path).
 
 ---
 
 ### Bulk Add Users to a Chatflow (by User IDs, using flowise_id in path)
 
-* **Endpoint**: `POST /api/admin/chatflows/{flowise_id}/users/bulk`
-* **Description**: A wrapper endpoint to add multiple existing users (by ID) to a chatflow identified by `flowise_id` in the path. It internally calls the `/api/admin/chatflows/add-users` logic. The `chatflow_id` in the request body will be overridden by the `flowise_id` from the path.
+* **Endpoint**: `POST /api/v1/admin/chatflows/{flowise_id}/users/bulk`
+* **Description**: A wrapper endpoint to add multiple existing users (by ID) to a chatflow identified by `flowise_id` in the path. It internally calls the `/api/v1/admin/chatflows/add-users` logic. The `chatflow_id` in the request body will be overridden by the `flowise_id` from the path.
 * **Authentication**: Admin role required.
 * **Path Parameters**:
   * `flowise_id` (string, required): The Flowise ID of the chatflow.
@@ -274,14 +279,14 @@ These endpoints manage the association of users with specific chatflows.
   ```
 
 * **Success Response** (`200 OK`): `List[UserChatflowResponse]` (dependent on the implementation of the called function).
-* **Notes**: This endpoint is implemented to call `add_users_to_chatflow`. Its full functionality depends on the completeness of that underlying function (which is currently a stub).
+* **Notes**: This endpoint is designed to call the `add_users_to_chatflow` logic. The `flowise_id` from the path is intended to be used as the `chatflow_id` for the underlying function, effectively overriding any `chatflow_id` in the request body.
 
 ---
 
 ### Bulk Add Users to a Chatflow (by Email, using flowise_id in path)
 
-* **Endpoint**: `POST /api/admin/chatflows/{flowise_id}/users/email/bulk`
-* **Description**: A wrapper endpoint to add multiple users (by email) to a chatflow identified by `flowise_id` in the path. It internally calls the `/api/admin/chatflows/add-users-by-email` logic. The `chatflow_id` in the request body will be overridden by the `flowise_id` from the path.
+* **Endpoint**: `POST /api/v1/admin/chatflows/{flowise_id}/users/email/bulk`
+* **Description**: A wrapper endpoint to add multiple users (by email) to a chatflow identified by `flowise_id` in the path. It internally calls the `/api/v1/admin/chatflows/add-users-by-email` logic. The `chatflow_id` in the request body will be overridden by the `flowise_id` from the path.
 * **Authentication**: Admin role required.
 * **Path Parameters**:
   * `flowise_id` (string, required): The Flowise ID of the chatflow.
@@ -295,7 +300,7 @@ These endpoints manage the association of users with specific chatflows.
   ```
 
 * **Success Response** (`200 OK`): `List[UserChatflowResponse]` (dependent on the implementation of the called function).
-* **Notes**: This endpoint is implemented to call `add_users_to_chatflow_by_email`. Its full functionality depends on the completeness of that underlying function (which is currently a stub). This endpoint was previously used by test scripts, but tests have been updated to call `/api/admin/chatflows/add-users-by-email` directly.
+* **Notes**: This endpoint is designed to call the `add_users_to_chatflow_by_email` logic. The `flowise_id` from the path is used to identify the target chatflow, and the `chatflow_id` in the request body is overridden. The underlying `add_users_to_chatflow_by_email` function is fully implemented.
 
 ---
 
@@ -307,7 +312,7 @@ These endpoints are for managing the chatflows themselves.
 
 ### Synchronize Chatflows from Flowise
 
-* **Endpoint**: `POST /api/admin/chatflows/sync`
+* **Endpoint**: `POST /api/v1/admin/chatflows/sync`
 * **Description**: Fetches all chatflows from the configured external Flowise instance and updates/creates corresponding records in the local database.
 * **Authentication**: Admin role required.
 * **Request Body**: None.
@@ -315,20 +320,24 @@ These endpoints are for managing the chatflows themselves.
 
   ```json
   {
-    "new_chatflows_added": 5,
-    "existing_chatflows_updated": 2,
-    "total_chatflows_synced": 7,
-    "errors": []
+    "created": 5,
+    "updated": 2,
+    "deleted": 0,
+    "total_fetched": 7,
+    "errors": 0,
+    "error_details": [],
+    "sync_timestamp": "YYYY-MM-DDTHH:MM:SS.ffffff"
   }
   ```
 
 * **Notes**: The implementation details (e.g., how it handles deletions or conflicts) depend on the `ChatflowService`.
+**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
 
 ---
 
 ### List All Chatflows
 
-* **Endpoint**: `GET /api/admin/chatflows`
+* **Endpoint**: `GET /api/v1/admin/chatflows`
 * **Description**: Retrieves a list of all chatflows stored in the local database.
 * **Authentication**: Admin role required.
 * **Query Parameters**:
@@ -341,20 +350,24 @@ These endpoints are for managing the chatflows themselves.
       "id": "db_id_1",
       "flowise_id": "flowise_chatflow_id_1",
       "name": "Support Bot"
+      // ... other chatflow fields
     },
     {
       "id": "db_id_2",
       "flowise_id": "flowise_chatflow_id_2",
       "name": "FAQ Assistant"
+      // ... other chatflow fields
     }
   ]
   ```
+
+**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
 
 ---
 
 ### Get Chatflow Statistics
 
-* **Endpoint**: `GET /api/admin/chatflows/stats`
+* **Endpoint**: `GET /api/v1/admin/chatflows/stats`
 * **Description**: Retrieves statistics about the chatflows, potentially including sync status, counts by status, etc.
 * **Authentication**: Admin role required.
 * **Success Response** (`200 OK`): JSON object with statistics. The exact structure is not defined in the provided code but might look like:
@@ -370,11 +383,13 @@ These endpoints are for managing the chatflows themselves.
   }
   ```
 
+**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
+
 ---
 
 ### Get Chatflow by Flowise ID
 
-* **Endpoint**: `GET /api/admin/chatflows/{flowise_id}`
+* **Endpoint**: `GET /api/v1/admin/chatflows/{flowise_id}`
 * **Description**: Retrieves detailed information for a specific chatflow using its Flowise ID.
 * **Authentication**: Admin role required.
 * **Path Parameters**:
@@ -382,36 +397,25 @@ These endpoints are for managing the chatflows themselves.
 * **Success Response** (`200 OK`): `Chatflow` object.
 * **Error Responses**:
   * `404 Not Found`: If no chatflow with the given `flowise_id` exists.
+**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
 
 ---
 
 ### Force Delete a Chatflow
 
-* **Endpoint**: `DELETE /api/admin/chatflows/{flowise_id}`
+* **Endpoint**: `DELETE /api/v1/admin/chatflows/{flowise_id}`
 * **Description**: Deletes a chatflow record from the local database. **Important**: This operation typically only removes the record locally and does NOT delete the actual chatflow from the external Flowise instance.
 * **Authentication**: Admin role required.
 * **Path Parameters**:
-  * `flowise_id` (string, required): The Flowise ID of the chatflow to delete locally.
-* **Success Response** (`200 OK` or `204 No Content`):
-
-  ```json
-  {
-    "message": "Chatflow successfully deleted from local database."
-  }
-  ```
-
-* **Error Responses**:
-  * `404 Not Found`: If the chatflow doesn't exist locally.
-
----
-
-## 5. Chatflow User Information API Endpoints
+  * `flowise_id` (string, required): The Flowise ID of the chatflow to delete.
+* **Success Response** (`200 OK` or `204 No Content`): Success message or no content.
+* **Notes**: The actual deletion logic and its implications (e.g., on data consistency, orphaned records) should be well understood before using this endpoint.
 
 ---
 
 ### List Users Assigned to a Chatflow
 
-* **Endpoint**: `GET /api/admin/chatflows/{flowise_id}/users`
+* **Endpoint**: `GET /api/v1/admin/chatflows/{flowise_id}/users`
 * **Description**: Retrieves a list of all users who are actively assigned to a specific chatflow.
 * **Authentication**: Admin role required.
 * **Path Parameters**:
@@ -435,18 +439,4 @@ These endpoints are for managing the chatflows themselves.
   If no users are assigned, an empty list `[]` is returned.
 * **Error Responses**:
   * `404 Not Found`: If the chatflow with the given `flowise_id` does not exist.
-
----
-
-## 6. Common HTTP Status Codes for Errors
-
-Beyond specific success responses, expect these common HTTP status codes for errors:
-
-* **`400 Bad Request`**: The request was malformed, e.g., missing required fields in the JSON body, or invalid data types. The response body may contain details about the error.
-* **`401 Unauthorized`**: The request lacks valid authentication credentials (e.g., missing or invalid JWT token).
-* **`403 Forbidden`**: The authenticated user does not have the necessary permissions (e.g., `ADMIN_ROLE`) to perform the requested operation.
-* **`404 Not Found`**: The requested resource (e.g., a specific chatflow, user, or user-chatflow link) could not be found.
-* **`409 Conflict`**: The request could not be completed due to a conflict with the current state of the resource. For example, trying to add a user to a chatflow they are already part of, or trying to remove access that is already inactive (though some endpoints might treat this idempotently as success).
-* **`500 Internal Server Error`**: An unexpected error occurred on the server while processing the request. The response body may contain a generic error message. Server logs should be checked for more details.
-
----
+**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.

@@ -66,7 +66,7 @@ def get_admin_token():
     print("\n--- Getting admin access token ---")
     try:
         response = requests.post(
-            f"{API_BASE_URL}/chat/authenticate",
+            f"{API_BASE_URL}/api/v1/chat/authenticate",
             json={
                 "username": ADMIN_USER["username"],
                 "password": ADMIN_USER["password"],
@@ -121,7 +121,7 @@ def test_sync_chatflows(token):
     try:
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.post(
-            f"{API_BASE_URL}/api/admin/chatflows/sync",
+            f"{API_BASE_URL}/api/v1/admin/chatflows/sync",
             headers=headers
         )
         
@@ -172,7 +172,7 @@ def test_list_chatflows(token):
         
         # Test without deleted chatflows
         response = requests.get(
-            f"{API_BASE_URL}/api/admin/chatflows",
+            f"{API_BASE_URL}/api/v1/admin/chatflows",
             headers=headers
         )
         
@@ -194,7 +194,7 @@ def test_list_chatflows(token):
             
             # Test with deleted chatflows
             response_with_deleted = requests.get(
-                f"{API_BASE_URL}/api/admin/chatflows?include_deleted=true",
+                f"{API_BASE_URL}/api/v1/admin/chatflows?include_deleted=true",
                 headers=headers
             )
             
@@ -223,7 +223,7 @@ def test_chatflow_stats(token):
     try:
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.get(
-            f"{API_BASE_URL}/api/admin/chatflows/stats",
+            f"{API_BASE_URL}/api/v1/admin/chatflows/stats",
             headers=headers
         )
         
@@ -260,7 +260,7 @@ def test_get_specific_chatflow(token, flowise_id=None):
         try:
             headers = {"Authorization": f"Bearer {token}"}
             response = requests.get(
-                f"{API_BASE_URL}/api/admin/chatflows",
+                f"{API_BASE_URL}/api/v1/admin/chatflows",
                 headers=headers
             )
             
@@ -286,7 +286,7 @@ def test_get_specific_chatflow(token, flowise_id=None):
     try:
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.get(
-            f"{API_BASE_URL}/api/admin/chatflows/{flowise_id}",
+            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}",
             headers=headers
         )
         
@@ -325,7 +325,7 @@ def get_user_id_by_email(token, email):
     try:
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.get(
-            f"{API_BASE_URL}/api/admin/users",
+            f"{API_BASE_URL}/api/v1/admin/users",
             headers=headers
         )
         
@@ -361,7 +361,7 @@ def test_add_user_to_chatflow(token, flowise_id, email):
         headers = {"Authorization": f"Bearer {token}"}
         
         response = requests.post(
-            f"{API_BASE_URL}/api/admin/chatflows/{flowise_id}/users/{user_id}",
+            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}/users/{user_id}",
             headers=headers
         )
         
@@ -407,7 +407,7 @@ def test_list_chatflow_users(token, flowise_id):
     try:
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.get(
-            f"{API_BASE_URL}/api/admin/chatflows/{flowise_id}/users",
+            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}/users",
             headers=headers
         )
         
@@ -456,7 +456,7 @@ def test_remove_user_from_chatflow(token, flowise_id, email):
     try:
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.delete(
-            f"{API_BASE_URL}/api/admin/chatflows/{flowise_id}/users/{user_id}",
+            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}/users/{user_id}",
             headers=headers
         )
         
@@ -518,7 +518,7 @@ def test_bulk_add_users_to_chatflow(token, flowise_id, emails):
         }
         
         response = requests.post(
-            f"{API_BASE_URL}/api/admin/chatflows/add-users",
+            f"{API_BASE_URL}/api/v1/admin/chatflows/add-users",
             json=payload,
             headers=headers
         )

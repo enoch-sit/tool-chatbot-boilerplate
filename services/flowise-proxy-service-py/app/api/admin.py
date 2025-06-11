@@ -14,6 +14,7 @@ from app.core.logging import logger
 import traceback # Added for format_exc
 
 """
+JWT token design
 'sub' = '68142f163a381f81ef90342d'
 'username' = 'user'
 'email' = 'user@example.com'
@@ -24,7 +25,7 @@ import traceback # Added for format_exc
 'user_id' = '68142f163a381fe1e190342d'
 """
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 security = HTTPBearer()
 
 class AddUsersToChatflowRequest(BaseModel):
