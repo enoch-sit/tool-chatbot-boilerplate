@@ -342,8 +342,7 @@ Handled by `CreditController`. Base path: `/api/credits`
           totalCredits: allocation.totalCredits,
           remainingCredits: allocation.remainingCredits,
           expiresAt: allocation.expiresAt
-        });
-      } catch (creditError) {
+        });      } catch (creditError) {
         // ... error handling ...
       }
     } catch (error) {
@@ -351,6 +350,176 @@ Handled by `CreditController`. Base path: `/api/credits`
     }
   }
   // ...existing code...
+  ```
+
+### 6. Set Absolute Credit Amount for a User (Admin/Supervisors Only)
+- **Endpoint:** `POST /api/credits/set`
+- **Description:** Sets the total credit amount for a specific user, replacing current balance.
+- **Authentication:** JWT required.
+- **Authorization:** `admin` or `supervisor` role required.
+- **Request Body:**
+  ```json
+  {
+    "userId": "string",         // ID of the user to set credits for
+    "credits": "number",        // Absolute credit amount to set
+    "expiryDays": "number",     // Optional: Days until credits expire (default: 30)
+    "notes": "string"           // Optional: Notes about the operation
+  }
+  ```
+- **Response (200 OK):**
+  ```json
+  {
+    "userId": "string",
+    "previousCredits": "number", // Credits the user had before the operation
+    "newCredits": "number",     // New credit balance (same as 'credits' in request)
+    "message": "string"         // Confirmation message
+  }
+  ```
+- **Error Responses:**
+    - 400 Bad Request: If required fields are missing or credits is negative.
+    - 401 Unauthorized: If no user authenticated.
+    - 403 Forbidden: If authenticated user lacks permission.
+    - 404 Not Found: If target user doesn't exist.
+    - 500 Server Error: If operation fails.
+- **Controller Function Snippet (from `credit.controller.ts`):**
+  ```typescript
+  // src/controllers/credit.controller.ts
+  // ...existing code...
+  async setCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const { userId, credits, expiryDays, notes } = req.body;
+      
+      if (!userId || typeof credits !== 'number' || credits < 0) {
+        return res.status(400).json({ message: 'Valid userId and non-negative credits required' });
+      }
+      // ...implementation details...
+    } catch (error) {
+      // ...error handling...
+    }
+  }
+  // ...existing code...
+  ```
+
+### 7. Remove/Deduct Credits from a User (Admin/Supervisors Only)
+- **Endpoint:** `DELETE /api/credits/remove`
+- **Description:** Removes or deducts a specific amount of credits from a user.
+- **Authentication:** JWT required.
+- **Authorization:** `admin` or `supervisor` role required.
+- **Request Body:**
+  ```json
+  {
+    "userId": "string",         // ID of the user to remove credits from
+    "credits": "number",        // Amount of credits to remove
+    "notes": "string"           // Optional: Notes about the operation
+  }
+  ```
+- **Response (200 OK):**
+  ```json
+  {
+    "userId": "string",
+    "previousCredits": "number", // Credits the user had before the operation
+    "newCredits": "number",     // New credit balance after removal
+    "removedCredits": "number", // Amount of credits that were removed
+    "message": "string"         // Confirmation message
+  }
+  ```
+- **Error Responses:**
+    - 400 Bad Request: If required fields are missing, credits is negative, or insufficient credits.
+    - 401 Unauthorized: If no user authenticated.
+    - 403 Forbidden: If authenticated user lacks permission.
+    - 404 Not Found: If target user doesn't exist.
+    - 500 Server Error: If operation fails.
+- **Controller Function Snippet (from `credit.controller.ts`):**
+  ```typescript
+  // src/controllers/credit.controller.ts
+  // ...existing code...
+  async removeCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const { userId, credits, notes } = req.body;
+      
+      if (!userId || typeof credits !== 'number' || credits <= 0) {
+        return res.status(400).json({ message: 'Valid userId and positive credits amount required' });
+      }
+      // ...implementation details...
+    } catch (error) {
+      // ...error handling...
+    }
+  }
+  // ...existing code...
+  ```
+
+### 8. Adjust Credits for a User (Admin/Supervisors Only)
+- **Endpoint:** `PUT /api/credits/adjust`
+- **Description:** Adjusts credits by a positive or negative amount (add or subtract).
+- **Authentication:** JWT required.
+- **Authorization:** `admin` or `supervisor` role required.
+- **Request Body:**
+  ```json
+  {
+    "userId": "string",         // ID of the user to adjust credits for
+    "adjustment": "number",     // Credit adjustment amount (positive to add, negative to subtract)
+    "expiryDays": "number",     // Optional: Days until credits expire (only for positive adjustments)
+    "notes": "string"           // Optional: Notes about the operation
+  }
+  ```
+- **Response (200 OK):**
+  ```json
+  {
+    "userId": "string",
+    "previousCredits": "number", // Credits the user had before the operation
+    "newCredits": "number",     // New credit balance after adjustment
+    "adjustment": "number",     // The adjustment amount applied
+    "message": "string"         // Confirmation message
+  }
+  ```
+- **Error Responses:**
+    - 400 Bad Request: If required fields are missing or adjustment would result in negative balance.
+    - 401 Unauthorized: If no user authenticated.
+    - 403 Forbidden: If authenticated user lacks permission.
+    - 404 Not Found: If target user doesn't exist.
+    - 500 Server Error: If operation fails.
+- **Controller Function Snippet (from `credit.controller.ts`):**
+  ```typescript
+  // src/controllers/credit.controller.ts
+  // ...existing code...
+  async adjustCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const { userId, adjustment, expiryDays, notes } = req.body;
+      
+      if (!userId || typeof adjustment !== 'number' || adjustment === 0) {
+        return res.status(400).json({ message: 'Valid userId and non-zero adjustment required' });
+      }
+      // ...implementation details...
+    } catch (error) {
+      // ...error handling...
+    }
+  }
+  // ...existing code...
+  ```
   ```
 
 ---

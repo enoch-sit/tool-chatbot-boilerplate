@@ -4,6 +4,131 @@
 
 The **Workflow: Service Usage with Custom Credit Deduction** outlines how a client application or another backend service interacts with the Accounting Service to perform an operation that consumes credits, with the primary service determining the credit amount to deduct. Below is a detailed sequence of this workflow, including all API calls with their URLs, request bodies, headers, and expected responses, presented in the correct order as described in the provided documentation.
 
+## Credit Management Administrative Operations
+
+The Accounting Service provides three additional endpoints for advanced credit management operations that allow administrators and supervisors to directly manipulate user credit balances:
+
+### Administrative Credit Management Endpoints
+
+**Note**: All administrative credit management endpoints require `admin` or `supervisor` role and valid JWT authentication.
+
+#### 1. Set Absolute Credit Amount
+**Endpoint**: `POST /api/credits/set`
+
+This endpoint replaces a user's entire credit balance with a specific amount.
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:3001/api/credits/set \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user_id_12345",
+    "credits": 500,
+    "expiryDays": 60,
+    "notes": "Monthly credit reset to 500"
+  }'
+```
+
+**Expected Response (200 OK)**:
+```json
+{
+  "userId": "user_id_12345",
+  "previousCredits": 150.75,
+  "newCredits": 500,
+  "message": "Credits set to 500 for user johndoe"
+}
+```
+
+#### 2. Remove/Deduct Credits
+**Endpoint**: `DELETE /api/credits/remove`
+
+This endpoint removes a specific amount of credits from a user's balance.
+
+**Example Request**:
+```bash
+curl -X DELETE http://localhost:3001/api/credits/remove \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user_id_12345",
+    "credits": 100,
+    "notes": "Penalty deduction for policy violation"
+  }'
+```
+
+**Expected Response (200 OK)**:
+```json
+{
+  "userId": "user_id_12345",
+  "previousCredits": 500,
+  "newCredits": 400,
+  "removedCredits": 100,
+  "message": "Removed 100 credits from user johndoe"
+}
+```
+
+#### 3. Adjust Credits (Flexible Add/Subtract)
+**Endpoint**: `PUT /api/credits/adjust`
+
+This endpoint provides flexible credit adjustment with positive values adding credits and negative values subtracting credits.
+
+**Example Request (Adding Credits)**:
+```bash
+curl -X PUT http://localhost:3001/api/credits/adjust \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user_id_12345",
+    "adjustment": 250,
+    "expiryDays": 30,
+    "notes": "Bonus credits for referral program"
+  }'
+```
+
+**Expected Response (200 OK)**:
+```json
+{
+  "userId": "user_id_12345",
+  "previousCredits": 400,
+  "newCredits": 650,
+  "adjustment": 250,
+  "message": "Adjusted credits by 250 for user johndoe"
+}
+```
+
+**Example Request (Subtracting Credits)**:
+```bash
+curl -X PUT http://localhost:3001/api/credits/adjust \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user_id_12345",
+    "adjustment": -50,
+    "notes": "Adjustment for refund processing"
+  }'
+```
+
+**Expected Response (200 OK)**:
+```json
+{
+  "userId": "user_id_12345",
+  "previousCredits": 650,
+  "newCredits": 600,
+  "adjustment": -50,
+  "message": "Adjusted credits by -50 for user johndoe"
+}
+```
+
+### Comparison of Credit Operations
+
+| Operation | Endpoint | Purpose | User Balance Before | Action | User Balance After |
+|-----------|----------|---------|-------------------|--------|-------------------|
+| **Allocate** | `POST /api/credits/allocate` | Add credits to existing balance | 100 | +50 | 150 |
+| **Set** | `POST /api/credits/set` | Replace entire balance | 100 | =200 | 200 |
+| **Remove** | `DELETE /api/credits/remove` | Subtract specific amount | 100 | -30 | 70 |
+| **Adjust** | `PUT /api/credits/adjust` | Flexible add/subtract | 100 | +25 or -25 | 125 or 75 |
+
 ---
 
 ### Workflow Sequence: Service Usage with Custom Credit Deduction

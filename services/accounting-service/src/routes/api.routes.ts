@@ -157,6 +157,112 @@ router.get('/credits/balance/:userId', requireSupervisor, CreditController.getUs
  */
 router.post('/credits/allocate', requireSupervisor, CreditController.allocateCredits);
 
+/**
+ * Allocate credits to a user (admin and supervisors only)
+ * POST /api/credits/allocate
+ * 
+ * Allocates credits to a specific user (admin/supervisor only). [20250522_10:11_test_credit_check.py]
+ * 
+ * Authentication: JWT required
+ * Authorization: Admin or Supervisor role required
+ * 
+ * Request body:
+ *   { 
+ *     userId: string,
+ *     credits: number,
+ *     expiryDays: number (optional),
+ *     notes: string (optional)
+ *   }
+ * 
+ * Response:
+ *   201 Created: { id: string, userId: string, totalCredits: number, remainingCredits: number, expiresAt: string }
+ *   400 Bad Request: If required fields are missing
+ *   401 Unauthorized: If no user authenticated
+ *   403 Forbidden: If user lacks permission
+ *   500 Server Error: If allocation fails
+ */
+router.post('/credits/allocate', requireSupervisor, CreditController.allocateCredits);
+
+/**
+ * Set absolute credit amount for a user (admin and supervisors only)
+ * POST /api/credits/set
+ * 
+ * Sets the total credit amount for a specific user, replacing current balance.
+ * 
+ * Authentication: JWT required
+ * Authorization: Admin or Supervisor role required
+ * 
+ * Request body:
+ *   { 
+ *     userId: string,
+ *     credits: number,
+ *     expiryDays: number (optional),
+ *     notes: string (optional)
+ *   }
+ * 
+ * Response:
+ *   200 OK: { userId: string, previousCredits: number, newCredits: number, message: string }
+ *   400 Bad Request: If required fields are missing or credits is negative
+ *   401 Unauthorized: If no user authenticated
+ *   403 Forbidden: If user lacks permission
+ *   404 Not Found: If user doesn't exist
+ *   500 Server Error: If operation fails
+ */
+router.post('/credits/set', requireSupervisor, CreditController.setCredits);
+
+/**
+ * Remove/deduct credits from a user (admin and supervisors only)
+ * DELETE /api/credits/remove
+ * 
+ * Removes or deducts a specific amount of credits from a user.
+ * 
+ * Authentication: JWT required
+ * Authorization: Admin or Supervisor role required
+ * 
+ * Request body:
+ *   { 
+ *     userId: string,
+ *     credits: number,
+ *     notes: string (optional)
+ *   }
+ * 
+ * Response:
+ *   200 OK: { userId: string, previousCredits: number, newCredits: number, removedCredits: number, message: string }
+ *   400 Bad Request: If required fields are missing, credits is negative, or insufficient credits
+ *   401 Unauthorized: If no user authenticated
+ *   403 Forbidden: If user lacks permission
+ *   404 Not Found: If user doesn't exist
+ *   500 Server Error: If operation fails
+ */
+router.delete('/credits/remove', requireSupervisor, CreditController.removeCredits);
+
+/**
+ * Adjust credits for a user (admin and supervisors only)
+ * PUT /api/credits/adjust
+ * 
+ * Adjusts credits by a positive or negative amount (add or subtract).
+ * 
+ * Authentication: JWT required
+ * Authorization: Admin or Supervisor role required
+ * 
+ * Request body:
+ *   { 
+ *     userId: string,
+ *     adjustment: number, // positive to add, negative to subtract
+ *     expiryDays: number (optional, only for positive adjustments),
+ *     notes: string (optional)
+ *   }
+ * 
+ * Response:
+ *   200 OK: { userId: string, previousCredits: number, newCredits: number, adjustment: number, message: string }
+ *   400 Bad Request: If required fields are missing or adjustment would result in negative balance
+ *   401 Unauthorized: If no user authenticated
+ *   403 Forbidden: If user lacks permission
+ *   404 Not Found: If user doesn't exist
+ *   500 Server Error: If operation fails
+ */
+router.put('/credits/adjust', requireSupervisor, CreditController.adjustCredits);
+
 // ===== STREAMING SESSION ENDPOINTS =====
 
 /**

@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, Security
+from fastapi import APIRouter, HTTPException, Depends, Security, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import List, Dict
-from pydantic import BaseModel
-from app.auth.middleware import authenticate_user, require_role
+from typing import List, Dict, Optional, Literal
+from pydantic import BaseModel, Field
+from app.auth.middleware import authenticate_user, require_role, get_current_admin_user
 from app.models.user import User
 from app.models.chatflow import UserChatflow, Chatflow, ChatflowSyncResult
 from app.services.external_auth_service import ExternalAuthService
@@ -41,6 +41,47 @@ class UserChatflowResponse(BaseModel):
     username: str
     status: str
     message: str
+
+class UserCleanupRequest(BaseModel):
+    """Request model for user cleanup operations."""
+    action: Literal["delete_invalid", "reassign_by_email", "deactivate_invalid"] = "deactivate_invalid"
+    chatflow_ids: Optional[List[str]] = Field(None, description="Limit cleanup to specific chatflows")
+    dry_run: bool = Field(False, description="Perform validation only without making changes")
+    force: bool = Field(False, description="Force cleanup even if external auth lookup fails")
+
+class InvalidUserAssignment(BaseModel):
+    """Details of an invalid user assignment."""
+    user_chatflow_id: str
+    user_id: str
+    chatflow_id: str
+    chatflow_name: Optional[str]
+    issue_type: Literal["user_not_found", "id_mismatch", "external_auth_error"]
+    details: str
+    suggested_action: str
+
+class UserCleanupResult(BaseModel):
+    """Response model for user cleanup operations."""
+    total_records_processed: int
+    invalid_user_ids_found: int
+    records_deleted: int
+    records_deactivated: int
+    records_reassigned: int
+    errors: int
+    error_details: List[str]
+    dry_run: bool
+    cleanup_timestamp: datetime
+    invalid_assignments: List[InvalidUserAssignment]
+
+class UserAuditResult(BaseModel):
+    """Response model for user assignment audit."""
+    total_assignments: int
+    valid_assignments: int
+    invalid_assignments: int
+    assignments_by_issue_type: Dict[str, int]
+    chatflows_affected: int
+    invalid_user_details: List[InvalidUserAssignment]
+    audit_timestamp: datetime
+    recommendations: List[str]
 
 ADMIN_ROLE = 'admin'
 USER_ROLE = 'user'
@@ -564,41 +605,6 @@ async def add_users_to_chatflow_by_email(
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-# NOT TESTED: This function appears to be an alternative bulk endpoint that's not used in tests
-# @router.post("/chatflows/{flowise_id}/users/email/bulk", response_model=List[UserChatflowResponse])
-# async def bulk_add_users_to_chatflow_by_email(
-#     flowise_id: str,
-#     request: AddUsersToChatlowByEmailRequest,
-#     current_user: Dict = Depends(authenticate_user)
-# ):
-#     """
-#     Add multiple users to a chatflow by email using bulk operation (Admin only)
-    
-#     Args:
-#         flowise_id: The Flowise ID of the chatflow
-#         request: Contains list of emails
-#         current_user: Current authenticated user (must be Admin)
-    
-#     Returns:
-#         List of results for each user operation
-#     """
-#     # Verify admin role
-#     user_role = current_user.get('role')
-#     if user_role != ADMIN_ROLE:
-#         raise HTTPException(
-#             status_code=403, 
-#             detail="Admin access required to assign users to chatflows"
-#         )
-    
-#     chatflow = await Chatflow.find_one(Chatflow.flowise_id == flowise_id)
-#     if not chatflow:
-#         logger.warning(f"bulk_add_users_to_chatflow_by_email: Chatflow with Flowise ID {flowise_id} not found.")
-#         raise HTTPException(status_code=404, detail="Chatflow not found")
-    
-#     request.chatflow_id = flowise_id
-#     return await add_users_to_chatflow_by_email(request, current_user)
-
-
 # Chatflow Management Endpoints
 
 # TESTED: This function is tested by test_sync_chatflows()
@@ -872,7 +878,7 @@ async def bulk_add_users_to_chatflow_by_email(
             detail="Admin access required to assign users to chatflows"
         )
     
-    # chatflow = await Chatflow.find_one(Chatflow.flowise_id == flowise_id) # Old direct Beanie call
+    # Verify chatflow exists
     chatflow = await chatflow_service.get_chatflow_by_flowise_id(flowise_id) # New call via service
     if not chatflow:
         logger.warning(f"bulk_add_users_to_chatflow_by_email: Chatflow with Flowise ID {flowise_id} not found via service.")
@@ -881,383 +887,224 @@ async def bulk_add_users_to_chatflow_by_email(
     request.chatflow_id = flowise_id # This should be okay as flowise_id is the identifier used by UserChatflow.chatflow_id
     return await add_users_to_chatflow_by_email(request, current_user)
 
-@router.get("/chatflows", response_model=List[Chatflow])
-async def list_all_chatflows(
-    include_deleted: bool = False,
-    chatflow_service: ChatflowService = Depends(get_chatflow_service),
-    current_user: Dict = Depends(authenticate_user)
-):
-    """
-    List all chatflows stored in the database.
-    """
-    user_role = current_user.get('role')
-    if user_role != ADMIN_ROLE:
-        # logger.warning(f"DEBUG: Access denied - user {current_user.get('username')} has role {user_role}")
-        # logger.warning(f"DEBUG: User details - ID: {current_user.get('user_id')}, sub: {current_user.get('sub')}")
-        raise HTTPException(
-            status_code=403, 
-            detail="Admin access required to assign users to chatflows"
-        )
-    try:
-        chatflows = await chatflow_service.list_chatflows(include_deleted=include_deleted)
-        return chatflows
-    except Exception as e:
-        logger.error(f"Failed to list chatflows: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list chatflows: {str(e)}"
-        )
+# User Cleanup and Audit Endpoints
 
-@router.get("/chatflows/stats")
-async def get_chatflow_stats(
-    chatflow_service: ChatflowService = Depends(get_chatflow_service),
-    current_user: Dict = Depends(authenticate_user)
+@router.get("/chatflows/audit-users", response_model=UserAuditResult)
+async def audit_user_chatflow_assignments(
+    include_valid: bool = Query(False, description="Include valid user assignments in the audit"),
+    chatflow_id: Optional[str] = Query(None, description="Limit audit to specific chatflow"),
+    current_user: Dict = Depends(get_current_admin_user),
+    chatflow_service: ChatflowService = Depends(get_chatflow_service)
 ):
     """
-    Get chatflow statistics including sync status.
+    Audit UserChatflow records to identify mismatches with external auth system.
+    
+    This endpoint provides a read-only analysis of user assignment data quality
+    without making any changes to the database.
+    
+    **Authentication**: Admin role required.
     """
     try:
-        stats = await chatflow_service.get_chatflow_stats()
-        return stats
-    except Exception as e:
-        logger.error(f"Failed to get chatflow stats: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get chatflow stats: {str(e)}"
-        )
-
-@router.get("/chatflows/{flowise_id}", response_model=Chatflow)
-async def get_chatflow_by_id(
-    flowise_id: str,
-    chatflow_service: ChatflowService = Depends(get_chatflow_service),
-    current_user: Dict = Depends(authenticate_user)
-):
-    """
-    Get a specific chatflow by its Flowise ID.
-    """
-    try:
-        chatflow = await chatflow_service.get_chatflow_by_flowise_id(flowise_id)
-        if not chatflow:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Chatflow with ID {flowise_id} not found"
-            )
-        return chatflow
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get chatflow {flowise_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get chatflow: {str(e)}"
-        )
-
-@router.delete("/chatflows/{flowise_id}")
-async def force_delete_chatflow(
-    flowise_id: str,
-    chatflow_service: ChatflowService = Depends(get_chatflow_service),
-    current_user: Dict = Depends(authenticate_user)
-):
-    """
-    Force delete a chatflow from the local database.
-    This does not delete the chatflow from Flowise.
-    """
-    try:
-        result = await chatflow_service.collection.delete_one({"flowise_id": flowise_id})
-        if result.deleted_count == 0:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Chatflow with ID {flowise_id} not found"
-            )
+        external_auth_service = ExternalAuthService()
+        admin_token = current_user.get('access_token')
         
-        logger.info(f"Admin {current_user['email']} deleted chatflow {flowise_id}")
-        return {"message": f"Chatflow {flowise_id} deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to delete chatflow {flowise_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete chatflow: {str(e)}"
-        )
-
-@router.get("/chatflows/{flowise_id}/users", response_model=List[Dict])
-async def list_chatflow_users(
-    flowise_id: str,
-    current_user: Dict = Depends(authenticate_user),
-    chatflow_service: ChatflowService = Depends(get_chatflow_service) # Added ChatflowService dependency
-):
-    """
-    List all users assigned to a specific chatflow (Admin only)
-    
-    Args:
-        flowise_id: The Flowise ID of the chatflow
-        current_user: Current authenticated user (must be Admin)
-        chatflow_service: Service for chatflow operations
-    
-    Returns:
-        List of users assigned to the chatflow
-    """
-    logger.info(f"list_chatflow_users: Received request for flowise_id: '{flowise_id}'") # DEBUG log
-    # Verify admin role
-    user_role = current_user.get('role')
-    if user_role != ADMIN_ROLE:
-        raise HTTPException(
-            status_code=403, 
-            detail="Admin access required to view chatflow users"
-        )
-    
-    try:
-        # Verify the chatflow exists by its flowise_id using ChatflowService.
-        logger.debug(f"list_chatflow_users: Attempting to find Chatflow with flowise_id: '{flowise_id}' using chatflow_service") # DEBUG log
-        # chatflow_exists = await Chatflow.find_one(Chatflow.flowise_id == flowise_id) # Old direct Beanie call
-        chatflow_exists = await chatflow_service.get_chatflow_by_flowise_id(flowise_id) # New call via service
-        logger.debug(f"list_chatflow_users: Result of chatflow_service.get_chatflow_by_flowise_id for flowise_id '{flowise_id}': {'Found' if chatflow_exists else 'Not Found'}") # DEBUG log
+        # Query UserChatflow records
+        query_filter = {}
+        if chatflow_id:
+            query_filter["chatflow_id"] = chatflow_id
+            
+        user_chatflow_links = await UserChatflow.find(query_filter).to_list()
         
-        if not chatflow_exists:
-            logger.warning(f"list_chatflow_users: Chatflow with Flowise ID {flowise_id} not found when checking existence via service.")
-            raise HTTPException(status_code=404, detail=f"Chatflow with Flowise ID {flowise_id} not found")
-
-        # Find all active UserChatflow entries for this chatflow's flowise_id
-        user_chatflow_links = await UserChatflow.find(
-            UserChatflow.chatflow_id == flowise_id, # Query by flowise_id
-            UserChatflow.is_active == True
-        ).to_list()
-
-        if not user_chatflow_links:
-            logger.info(f"list_chatflow_users: No active user links found for chatflow {flowise_id}.")
-            return [] 
-
-        user_details_list = []
+        total_assignments = len(user_chatflow_links)
+        invalid_assignments = []
+        valid_count = 0
+        invalid_count = 0
+        assignments_by_issue_type = {}
+        chatflows_affected = set()
+        
         for link in user_chatflow_links:
-            user = await User.get(link.user_id) 
-            if user:
-                user_details_list.append({
-                    "user_id": str(user.id),
-                    "username": user.username,
-                    "email": user.email,
-                    "role": user.role,
-                    "assigned_at": link.assigned_at.isoformat() if link.assigned_at else None, # Corrected: created_at -> assigned_at
-                    "is_active_in_chatflow": link.is_active 
-                })
-            else:
-                logger.warning(f"User with ID {link.user_id} referenced in UserChatflow for chatflow {flowise_id} but not found in Users collection.")
+            try:
+                # Try to validate user exists in external auth
+                external_user = await external_auth_service.get_user_by_id(link.user_id, admin_token)
+                if external_user:
+                    valid_count += 1
+                    if include_valid:
+                        chatflow = await chatflow_service.get_chatflow_by_flowise_id(link.chatflow_id)
+                        invalid_assignments.append(InvalidUserAssignment(
+                            user_chatflow_id=str(link.id),
+                            user_id=link.user_id,
+                            chatflow_id=link.chatflow_id,
+                            chatflow_name=chatflow.name if chatflow else None,
+                            issue_type="user_not_found",
+                            details="User is valid",
+                            suggested_action="no_action_needed"
+                        ))
+                else:
+                    invalid_count += 1
+                    chatflows_affected.add(link.chatflow_id)
+                    issue_type = "user_not_found"
+                    assignments_by_issue_type[issue_type] = assignments_by_issue_type.get(issue_type, 0) + 1
+                    
+                    chatflow = await chatflow_service.get_chatflow_by_flowise_id(link.chatflow_id)
+                    invalid_assignments.append(InvalidUserAssignment(
+                        user_chatflow_id=str(link.id),
+                        user_id=link.user_id,
+                        chatflow_id=link.chatflow_id,
+                        chatflow_name=chatflow.name if chatflow else None,
+                        issue_type=issue_type,
+                        details="User ID not found in external auth system",
+                        suggested_action="delete_or_reassign"
+                    ))
+                    
+            except Exception as e:
+                invalid_count += 1
+                chatflows_affected.add(link.chatflow_id)
+                issue_type = "external_auth_error"
+                assignments_by_issue_type[issue_type] = assignments_by_issue_type.get(issue_type, 0) + 1
+                
+                chatflow = await chatflow_service.get_chatflow_by_flowise_id(link.chatflow_id)
+                invalid_assignments.append(InvalidUserAssignment(
+                    user_chatflow_id=str(link.id),
+                    user_id=link.user_id,
+                    chatflow_id=link.chatflow_id,
+                    chatflow_name=chatflow.name if chatflow else None,
+                    issue_type=issue_type,
+                    details=f"External auth lookup failed: {str(e)}",
+                    suggested_action="manual_review_required"
+                ))
         
-        logger.info(f"list_chatflow_users: Returning {len(user_details_list)} users for chatflow {flowise_id}.")
-        return user_details_list
+        recommendations = []
+        if invalid_count > 0:
+            recommendations.append(f"Found {invalid_count} invalid user assignments")
+            if len(chatflows_affected) > 0:
+                recommendations.append(f"{len(chatflows_affected)} chatflows have invalid user assignments")
+            recommendations.append("Consider running cleanup with 'deactivate_invalid' action for safer cleanup")
         
-    except HTTPException:
-        raise 
+        return UserAuditResult(
+            total_assignments=total_assignments,
+            valid_assignments=valid_count,
+            invalid_assignments=invalid_count,
+            assignments_by_issue_type=assignments_by_issue_type,
+            chatflows_affected=len(chatflows_affected),
+            invalid_user_details=invalid_assignments if not include_valid else [a for a in invalid_assignments if a.issue_type != "user_not_found"],
+            audit_timestamp=datetime.now(),
+            recommendations=recommendations
+        )
+        
     except Exception as e:
-        logger.error(f"Error listing users for chatflow {flowise_id}: {e}") 
+        logger.error(f"Error during user audit: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Audit failed: {str(e)}")
 
-@router.post("/chatflows/{flowise_id}/users/bulk", response_model=List[UserChatflowResponse])
-async def bulk_add_users_to_chatflow(
-    flowise_id: str,
-    request: AddUsersToChatflowRequest,
-    current_user: Dict = Depends(authenticate_user),
-    chatflow_service: ChatflowService = Depends(get_chatflow_service) # Added ChatflowService dependency
+@router.post("/chatflows/cleanup-users", response_model=UserCleanupResult)
+async def cleanup_user_chatflow_assignments(
+    cleanup_request: UserCleanupRequest,
+    current_user: Dict = Depends(get_current_admin_user),
+    chatflow_service: ChatflowService = Depends(get_chatflow_service)
 ):
     """
-    Add multiple users to a chatflow using bulk operation (Admin only)
+    Clean up legacy UserChatflow records with invalid or mismatched user IDs.
     
-    Args:
-        flowise_id: The Flowise ID of the chatflow
-        request: Contains list of user_ids
-        current_user: Current authenticated user (must be Admin)
-        chatflow_service: Service for chatflow operations
+    This endpoint helps resolve issues from the migration to external auth integration
+    by identifying and handling UserChatflow records that don't match external auth user IDs.
     
-    Returns:
-        List of results for each user operation
-    """
-    # Verify admin role
-    user_role = current_user.get('role')
-    if user_role != ADMIN_ROLE:
-        raise HTTPException(
-            status_code=403, 
-            detail="Admin access required to assign users to chatflows"
-        )
-    
-    # Verify chatflow exists
-    # chatflow = await Chatflow.find_one(Chatflow.flowise_id == flowise_id) # Old direct Beanie call
-    chatflow = await chatflow_service.get_chatflow_by_flowise_id(flowise_id) # New call via service
-    if not chatflow:
-        logger.warning(f"bulk_add_users_to_chatflow: Chatflow with Flowise ID {flowise_id} not found via service.")
-        raise HTTPException(status_code=404, detail="Chatflow not found")
-    
-    request.chatflow_id = flowise_id # This should be okay as flowise_id is the identifier used by UserChatflow.chatflow_id
-    return await add_users_to_chatflow(request, current_user)
-
-@router.get("/chatflows", response_model=List[Chatflow])
-async def list_all_chatflows(
-    include_deleted: bool = False,
-    chatflow_service: ChatflowService = Depends(get_chatflow_service),
-    current_user: Dict = Depends(authenticate_user)
-):
-    """
-    List all chatflows stored in the database.
-    """
-    user_role = current_user.get('role')
-    if user_role != ADMIN_ROLE:
-        # logger.warning(f"DEBUG: Access denied - user {current_user.get('username')} has role {user_role}")
-        # logger.warning(f"DEBUG: User details - ID: {current_user.get('user_id')}, sub: {current_user.get('sub')}")
-        raise HTTPException(
-            status_code=403, 
-            detail="Admin access required to assign users to chatflows"
-        )
-    try:
-        chatflows = await chatflow_service.list_chatflows(include_deleted=include_deleted)
-        return chatflows
-    except Exception as e:
-        logger.error(f"Failed to list chatflows: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list chatflows: {str(e)}"
-        )
-
-@router.get("/chatflows/stats")
-async def get_chatflow_stats(
-    chatflow_service: ChatflowService = Depends(get_chatflow_service),
-    current_user: Dict = Depends(authenticate_user)
-):
-    """
-    Get chatflow statistics including sync status.
+    **Authentication**: Admin role required.
+    **Important**: This operation can modify or remove UserChatflow records permanently.
     """
     try:
-        stats = await chatflow_service.get_chatflow_stats()
-        return stats
-    except Exception as e:
-        logger.error(f"Failed to get chatflow stats: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get chatflow stats: {str(e)}"
-        )
-
-@router.get("/chatflows/{flowise_id}", response_model=Chatflow)
-async def get_chatflow_by_id(
-    flowise_id: str,
-    chatflow_service: ChatflowService = Depends(get_chatflow_service),
-    current_user: Dict = Depends(authenticate_user)
-):
-    """
-    Get a specific chatflow by its Flowise ID.
-    """
-    try:
-        chatflow = await chatflow_service.get_chatflow_by_flowise_id(flowise_id)
-        if not chatflow:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Chatflow with ID {flowise_id} not found"
-            )
-        return chatflow
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get chatflow {flowise_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get chatflow: {str(e)}"
-        )
-
-@router.delete("/chatflows/{flowise_id}")
-async def force_delete_chatflow(
-    flowise_id: str,
-    chatflow_service: ChatflowService = Depends(get_chatflow_service),
-    current_user: Dict = Depends(authenticate_user)
-):
-    """
-    Force delete a chatflow from the local database.
-    This does not delete the chatflow from Flowise.
-    """
-    try:
-        result = await chatflow_service.collection.delete_one({"flowise_id": flowise_id})
-        if result.deleted_count == 0:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Chatflow with ID {flowise_id} not found"
-            )
+        external_auth_service = ExternalAuthService()
+        admin_token = current_user.get('access_token')
         
-        logger.info(f"Admin {current_user['email']} deleted chatflow {flowise_id}")
-        return {"message": f"Chatflow {flowise_id} deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to delete chatflow {flowise_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete chatflow: {str(e)}"
-        )
-
-@router.get("/chatflows/{flowise_id}/users", response_model=List[Dict])
-async def list_chatflow_users(
-    flowise_id: str,
-    current_user: Dict = Depends(authenticate_user),
-    chatflow_service: ChatflowService = Depends(get_chatflow_service) # Added ChatflowService dependency
-):
-    """
-    List all users assigned to a specific chatflow (Admin only)
-    
-    Args:
-        flowise_id: The Flowise ID of the chatflow
-        current_user: Current authenticated user (must be Admin)
-        chatflow_service: Service for chatflow operations
-    
-    Returns:
-        List of users assigned to the chatflow
-    """
-    logger.info(f"list_chatflow_users: Received request for flowise_id: '{flowise_id}'") # DEBUG log
-    # Verify admin role
-    user_role = current_user.get('role')
-    if user_role != ADMIN_ROLE:
-        raise HTTPException(
-            status_code=403, 
-            detail="Admin access required to view chatflow users"
-        )
-    
-    try:
-        # Verify the chatflow exists by its flowise_id using ChatflowService.
-        logger.debug(f"list_chatflow_users: Attempting to find Chatflow with flowise_id: '{flowise_id}' using chatflow_service") # DEBUG log
-        # chatflow_exists = await Chatflow.find_one(Chatflow.flowise_id == flowise_id) # Old direct Beanie call
-        chatflow_exists = await chatflow_service.get_chatflow_by_flowise_id(flowise_id) # New call via service
-        logger.debug(f"list_chatflow_users: Result of chatflow_service.get_chatflow_by_flowise_id for flowise_id '{flowise_id}': {'Found' if chatflow_exists else 'Not Found'}") # DEBUG log
+        # Query UserChatflow records
+        query_filter = {}
+        if cleanup_request.chatflow_ids:
+            query_filter["chatflow_id"] = {"$in": cleanup_request.chatflow_ids}
+            
+        user_chatflow_links = await UserChatflow.find(query_filter).to_list()
         
-        if not chatflow_exists:
-            logger.warning(f"list_chatflow_users: Chatflow with Flowise ID {flowise_id} not found when checking existence via service.")
-            raise HTTPException(status_code=404, detail=f"Chatflow with Flowise ID {flowise_id} not found")
-
-        # Find all active UserChatflow entries for this chatflow's flowise_id
-        user_chatflow_links = await UserChatflow.find(
-            UserChatflow.chatflow_id == flowise_id, # Query by flowise_id
-            UserChatflow.is_active == True
-        ).to_list()
-
-        if not user_chatflow_links:
-            logger.info(f"list_chatflow_users: No active user links found for chatflow {flowise_id}.")
-            return [] 
-
-        user_details_list = []
+        total_records_processed = len(user_chatflow_links)
+        invalid_user_ids_found = 0
+        records_deleted = 0
+        records_deactivated = 0
+        records_reassigned = 0
+        errors = 0
+        error_details = []
+        invalid_assignments = []
+        
         for link in user_chatflow_links:
-            user = await User.get(link.user_id) 
-            if user:
-                user_details_list.append({
-                    "user_id": str(user.id),
-                    "username": user.username,
-                    "email": user.email,
-                    "role": user.role,
-                    "assigned_at": link.assigned_at.isoformat() if link.assigned_at else None, # Corrected: created_at -> assigned_at
-                    "is_active_in_chatflow": link.is_active 
-                })
-            else:
-                logger.warning(f"User with ID {link.user_id} referenced in UserChatflow for chatflow {flowise_id} but not found in Users collection.")
+            try:
+                # Check if user exists in external auth
+                external_user = await external_auth_service.get_user_by_id(link.user_id, admin_token)
+                
+                if not external_user:
+                    invalid_user_ids_found += 1
+                    chatflow = await chatflow_service.get_chatflow_by_flowise_id(link.chatflow_id)
+                    
+                    invalid_assignment = InvalidUserAssignment(
+                        user_chatflow_id=str(link.id),
+                        user_id=link.user_id,
+                        chatflow_id=link.chatflow_id,
+                        chatflow_name=chatflow.name if chatflow else None,
+                        issue_type="user_not_found",
+                        details="User ID not found in external auth system",
+                        suggested_action=cleanup_request.action
+                    )
+                    invalid_assignments.append(invalid_assignment)
+                    
+                    # Perform cleanup action
+                    if not cleanup_request.dry_run:
+                        if cleanup_request.action == "delete_invalid":
+                            await link.delete()
+                            records_deleted += 1
+                        elif cleanup_request.action == "deactivate_invalid":
+                            link.is_active = False
+                            await link.save()
+                            records_deactivated += 1
+                        elif cleanup_request.action == "reassign_by_email":
+                            # Try to find user by looking up local user record
+                            local_user = await User.get(link.user_id)
+                            if local_user and local_user.email:
+                                try:
+                                    external_user_by_email = await external_auth_service.get_user_by_email(local_user.email, admin_token)
+                                    if external_user_by_email:
+                                        link.user_id = external_user_by_email.get('user_id')
+                                        await link.save()
+                                        records_reassigned += 1
+                                    else:
+                                        link.is_active = False
+                                        await link.save()
+                                        records_deactivated += 1
+                                except Exception as reassign_error:
+                                    error_details.append(f"Reassignment failed for {link.user_id}: {str(reassign_error)}")
+                                    errors += 1
+                            else:
+                                link.is_active = False
+                                await link.save()
+                                records_deactivated += 1
+                                
+            except Exception as e:
+                errors += 1
+                error_details.append(f"Error processing UserChatflow {link.id}: {str(e)}")
+                if not cleanup_request.force:
+                    continue
         
-        logger.info(f"list_chatflow_users: Returning {len(user_details_list)} users for chatflow {flowise_id}.")
-        return user_details_list
+        logger.info(f"Admin {current_user.get('username')} completed user cleanup: "
+                   f"{records_deleted} deleted, {records_deactivated} deactivated, {records_reassigned} reassigned")
         
-    except HTTPException:
-        raise 
+        return UserCleanupResult(
+            total_records_processed=total_records_processed,
+            invalid_user_ids_found=invalid_user_ids_found,
+            records_deleted=records_deleted,
+            records_deactivated=records_deactivated,
+            records_reassigned=records_reassigned,
+            errors=errors,
+            error_details=error_details,
+            dry_run=cleanup_request.dry_run,
+            cleanup_timestamp=datetime.now(),
+            invalid_assignments=invalid_assignments
+        )
+        
     except Exception as e:
-        logger.error(f"Error listing users for chatflow {flowise_id}: {e}") 
+        logger.error(f"Error during user cleanup: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")

@@ -273,6 +273,144 @@ export class CreditService {
       return Math.ceil(inputCost + outputCost);
     }
   }
+  /**
+   * Set absolute credit amount for a user (replaces current balance)
+   * 
+   * Clears all existing credit allocations for a user and creates a new single allocation
+   * with the specified amount. This effectively sets the user's balance to an exact amount.
+   * 
+   * @param {Object} params - Set credits parameters
+   * @param {string} params.userId - ID of user to set credits for
+   * @param {number} params.credits - Absolute credit amount to set
+   * @param {string} params.setBy - ID of admin/supervisor performing the operation
+   * @param {number} [params.expiryDays=30] - Days until credits expire
+   * @param {string} [params.notes] - Optional notes about the operation
+   * @returns {Promise<CreditAllocation>} The new allocation record
+   * @throws {Error} If operation fails
+   */
+  async setAbsoluteCredits(params: {
+    userId: string,
+    credits: number,
+    setBy: string,
+    expiryDays?: number,
+    notes?: string
+  }) {
+    const { userId, credits, setBy, expiryDays = 30, notes } = params;
+    
+    logger.info(`[CreditService.setAbsoluteCredits] Setting absolute credits for user ${userId} to ${credits}`);
+    
+    // First ensure the user exists in our system
+    try {
+      await UserAccountService.findOrCreateUser({ userId });
+      logger.debug(`[CreditService.setAbsoluteCredits] User account ensured for userId: ${userId}`);
+    } catch (error) {
+      logger.error('[CreditService.setAbsoluteCredits] Failed to find or create user account:', error);
+      throw new Error('Failed to set credits: User account creation failed');
+    }
+    
+    try {
+      // Clear all existing allocations for this user
+      const deletedCount = await CreditAllocation.destroy({
+        where: { userId }
+      });
+      logger.info(`[CreditService.setAbsoluteCredits] Cleared ${deletedCount} existing allocations for user ${userId}`);
+      
+      // Create new allocation with the specified amount
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + expiryDays);
+      
+      const allocation = await CreditAllocation.create({
+        userId,
+        totalCredits: credits,
+        remainingCredits: credits,
+        allocatedBy: setBy,
+        allocatedAt: new Date(),
+        expiresAt,
+        notes: notes || `Credits set to absolute amount: ${credits}`
+      });
+      
+      logger.info(`[CreditService.setAbsoluteCredits] Created new allocation ${allocation.id} with ${credits} credits for user ${userId}`);
+      return allocation;
+    } catch (error) {
+      logger.error('[CreditService.setAbsoluteCredits] Error setting absolute credits:', error);
+      throw new Error(`Failed to set credits: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  
+
+  /**
+   * Adjust credits for a user (add or subtract)
+   * 
+   * Flexible method that can either add or subtract credits based on the adjustment value.
+   * Positive adjustments allocate new credits, negative adjustments deduct existing credits.
+   * 
+   * @param {Object} params - Adjust credits parameters
+   * @param {string} params.userId - ID of user to adjust credits for
+   * @param {number} params.adjustment - Credit adjustment amount (positive to add, negative to subtract)
+   * @param {string} params.adjustedBy - ID of admin/supervisor performing the operation
+   * @param {number} [params.expiryDays=30] - Days until credits expire (only for positive adjustments)
+   * @param {string} [params.notes] - Optional notes about the operation
+   * @returns {Promise<Object>} Result object with operation details
+   * @throws {Error} If operation fails or would result in negative balance
+   */
+  async adjustCredits(params: {
+    userId: string,
+    adjustment: number,
+    adjustedBy: string,
+    expiryDays?: number,
+    notes?: string
+  }): Promise<{ success: boolean, adjustment: number, previousBalance: number, newBalance: number }> {
+    const { userId, adjustment, adjustedBy, expiryDays = 30, notes } = params;
+    
+    logger.info(`[CreditService.adjustCredits] Adjusting credits for user ${userId} by ${adjustment} (${adjustedBy})`);
+    
+    if (adjustment === 0) {
+      throw new Error('Adjustment amount cannot be zero');
+    }
+    
+    // Get current balance
+    const currentBalance = await this.getUserBalance(userId);
+    const newBalance = currentBalance.totalCredits + adjustment;
+    
+    if (newBalance < 0) {
+      throw new Error(`Adjustment would result in negative balance. Current: ${currentBalance.totalCredits}, Adjustment: ${adjustment}`);
+    }
+    
+    try {
+      if (adjustment > 0) {
+        // Positive adjustment - allocate credits
+        await this.allocateCredits({
+          userId,
+          credits: adjustment,
+          allocatedBy: adjustedBy,
+          expiryDays,
+          notes: notes || `Credit adjustment: +${adjustment}`
+        });
+        logger.info(`[CreditService.adjustCredits] Added ${adjustment} credits to user ${userId}`);
+      } else {
+        // Negative adjustment - deduct credits
+        await this.deductCredits(
+          userId,
+          Math.abs(adjustment)
+          //deductedBy: adjustedBy,
+          //notes: notes || `Credit adjustment: ${adjustment}`
+        );
+        logger.info(`[CreditService.adjustCredits] Removed ${Math.abs(adjustment)} credits from user ${userId}`);
+      }
+      
+      return {
+        success: true,
+        adjustment,
+        previousBalance: currentBalance.totalCredits,
+        newBalance
+      };
+    } catch (error) {
+      logger.error('[CreditService.adjustCredits] Error adjusting credits:', error);
+      throw new Error(`Failed to adjust credits: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
 }
 
 export default new CreditService();

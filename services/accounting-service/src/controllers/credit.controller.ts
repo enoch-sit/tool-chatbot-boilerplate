@@ -32,6 +32,273 @@ export class CreditController {
    *   - 401 Unauthorized: If no user authenticated
    *   - 500 Server Error: If retrieval fails
    */
+  /**
+   * Set absolute credit amount for a user (admin/supervisor only)
+   * POST /api/credits/set
+   * 
+   * Request body:
+   * {
+   *   "userId": string (required),
+   *   "credits": number (required),
+   *   "expiryDays": number (optional, default 30),
+   *   "notes": string (optional)
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { userId: string, previousCredits: number, newCredits: number, message: string }
+   *   - 400 Bad Request: If required fields are missing or credits is negative
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 404 Not Found: If user doesn't exist
+   *   - 500 Server Error: If operation fails
+   */
+  async setCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const { userId, credits, expiryDays, notes } = req.body;
+      
+      if (!userId || typeof credits !== 'number' || credits < 0) {
+        return res.status(400).json({ message: 'Valid userId and non-negative credits required' });
+      }
+      
+      // Resolve user account (similar to allocateCredits)
+      let targetUserAccount: UserAccount | null = null;
+      targetUserAccount = await UserAccount.findByPk(userId);
+      
+      if (!targetUserAccount) {
+        targetUserAccount = await UserAccountService.findByUsername(userId);
+      }
+      
+      if (!targetUserAccount) {
+        return res.status(404).json({ message: `User '${userId}' not found` });
+      }
+      
+      const actualUserIdForOperation = targetUserAccount.userId;
+      
+      // Get current balance before setting
+      const currentBalance = await CreditService.getUserBalance(actualUserIdForOperation);
+      
+      // Set absolute credit amount
+      const result = await CreditService.setAbsoluteCredits({
+        userId: actualUserIdForOperation,
+        credits,
+        setBy: req.user.userId,
+        expiryDays,
+        notes
+      });
+      
+      logger.info(`Credits set for user ${actualUserIdForOperation}: ${currentBalance.totalCredits} → ${credits}`);
+      
+      return res.status(200).json({
+        userId: actualUserIdForOperation,
+        previousCredits: currentBalance.totalCredits,
+        newCredits: credits,
+        message: `Credits set to ${credits} for user ${targetUserAccount.username || actualUserIdForOperation}`
+      });
+      
+    } catch (error) {
+      logger.error('Error setting credits:', error);
+      return res.status(500).json({ message: 'Failed to set credits' });
+    }
+  }
+
+  /**
+   * Remove/deduct credits from a user (admin/supervisor only)
+   * DELETE /api/credits/remove
+   * 
+   * Request body:
+   * {
+   *   "userId": string (required),
+   *   "credits": number (required),
+   *   "notes": string (optional)
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { userId: string, previousCredits: number, newCredits: number, removedCredits: number, message: string }
+   *   - 400 Bad Request: If required fields are missing, credits is negative, or insufficient credits
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 404 Not Found: If user doesn't exist
+   *   - 500 Server Error: If operation fails
+   */
+  async removeCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const { userId, credits, notes } = req.body;
+      
+      if (!userId || typeof credits !== 'number' || credits <= 0) {
+        return res.status(400).json({ message: 'Valid userId and positive credits amount required' });
+      }
+      
+      // Resolve user account
+      let targetUserAccount: UserAccount | null = null;
+      targetUserAccount = await UserAccount.findByPk(userId);
+      
+      if (!targetUserAccount) {
+        targetUserAccount = await UserAccountService.findByUsername(userId);
+      }
+      
+      if (!targetUserAccount) {
+        return res.status(404).json({ message: `User '${userId}' not found` });
+      }
+      
+      const actualUserIdForOperation = targetUserAccount.userId;
+      
+      // Check current balance
+      const currentBalance = await CreditService.getUserBalance(actualUserIdForOperation);
+      
+      if (currentBalance.totalCredits < credits) {
+        return res.status(400).json({ 
+          message: `Insufficient credits. User has ${currentBalance.totalCredits}, trying to remove ${credits}` 
+        });
+      }
+      
+      // Remove credits
+      const result = await CreditService.deductCredits(
+        actualUserIdForOperation,
+        credits
+        //deductedBy: req.user.userId,
+        //notes
+      );
+      
+      const newCredits = currentBalance.totalCredits - credits;
+      
+      logger.info(`Credits removed for user ${actualUserIdForOperation}: ${currentBalance.totalCredits} → ${newCredits} (removed ${credits})`);
+      
+      return res.status(200).json({
+        userId: actualUserIdForOperation,
+        previousCredits: currentBalance.totalCredits,
+        newCredits: newCredits,
+        removedCredits: credits,
+        message: `Removed ${credits} credits from user ${targetUserAccount.username || actualUserIdForOperation}`
+      });
+      
+    } catch (error) {
+      logger.error('Error removing credits:', error);
+      return res.status(500).json({ message: 'Failed to remove credits' });
+    }
+  }
+
+  /**
+   * Adjust credits for a user (admin/supervisor only)
+   * PUT /api/credits/adjust
+   * 
+   * Request body:
+   * {
+   *   "userId": string (required),
+   *   "adjustment": number (required), // positive to add, negative to subtract
+   *   "expiryDays": number (optional, only for positive adjustments),
+   *   "notes": string (optional)
+   * }
+   * 
+   * @param req Express request object
+   * @param res Express response object
+   * 
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { userId: string, previousCredits: number, newCredits: number, adjustment: number, message: string }
+   *   - 400 Bad Request: If required fields are missing or adjustment would result in negative balance
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 404 Not Found: If user doesn't exist
+   *   - 500 Server Error: If operation fails
+   */
+  async adjustCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      const { userId, adjustment, expiryDays, notes } = req.body;
+      
+      if (!userId || typeof adjustment !== 'number' || adjustment === 0) {
+        return res.status(400).json({ message: 'Valid userId and non-zero adjustment required' });
+      }
+      
+      // Resolve user account
+      let targetUserAccount: UserAccount | null = null;
+      targetUserAccount = await UserAccount.findByPk(userId);
+      
+      if (!targetUserAccount) {
+        targetUserAccount = await UserAccountService.findByUsername(userId);
+      }
+      
+      if (!targetUserAccount) {
+        return res.status(404).json({ message: `User '${userId}' not found` });
+      }
+      
+      const actualUserIdForOperation = targetUserAccount.userId;
+      
+      // Check current balance
+      const currentBalance = await CreditService.getUserBalance(actualUserIdForOperation);
+      const newCredits = currentBalance.totalCredits + adjustment;
+      
+      if (newCredits < 0) {
+        return res.status(400).json({ 
+          message: `Adjustment would result in negative balance. Current: ${currentBalance.totalCredits}, Adjustment: ${adjustment}` 
+        });
+      }
+      
+      // Perform adjustment
+      let result;
+      if (adjustment > 0) {
+        // Positive adjustment - allocate credits
+        result = await CreditService.allocateCredits({
+          userId: actualUserIdForOperation,
+          credits: adjustment,
+          allocatedBy: req.user.userId,
+          expiryDays,
+          notes: notes || `Credit adjustment: +${adjustment}`
+        });
+      } else {
+        // Negative adjustment - deduct credits
+        result = await CreditService.deductCredits(
+          actualUserIdForOperation,
+          Math.abs(adjustment)
+          
+        );
+      }
+      
+      const operation = adjustment > 0 ? 'added' : 'removed';
+      logger.info(`Credits adjusted for user ${actualUserIdForOperation}: ${currentBalance.totalCredits} → ${newCredits} (${operation} ${Math.abs(adjustment)})`);
+      
+      return res.status(200).json({
+        userId: actualUserIdForOperation,
+        previousCredits: currentBalance.totalCredits,
+        newCredits: newCredits,
+        adjustment: adjustment,
+        message: `Adjusted credits by ${adjustment} for user ${targetUserAccount.username || actualUserIdForOperation}`
+      });
+      
+    } catch (error) {
+      logger.error('Error adjusting credits:', error);
+      return res.status(500).json({ message: 'Failed to adjust credits' });
+    }
+  }
+
   async getUserBalance(req: Request, res: Response) {
     try {
       if (!req.user?.userId) {

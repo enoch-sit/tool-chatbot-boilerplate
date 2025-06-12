@@ -8,6 +8,13 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
+ADMIN_ROLE = 'admin'
+USER_ROLE = 'user'
+#   ADMIN_ROLE = 'admin',        // Highest privilege level - full system access
+#   SUPERVISOR_ROLE = 'supervisor', // Mid-level privilege - user management
+#   ENDUSER_ROLE = 'enduser',    // Base level access - standard user operations
+#   USER_ROLE = 'user' // Base level access - standard user operations
+
 async def authenticate_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> Dict:
     """Middleware to authenticate users based on JWT token"""
     
@@ -62,3 +69,23 @@ async def require_role(required_role: str):
             )
         return current_user
     return role_checker
+
+async def get_current_admin_user(
+    current_user: Dict = Depends(authenticate_user)
+) -> Dict:
+    """
+    Dependency to get current user and verify admin role.
+    
+    Returns:
+        Dict: Current user with admin privileges
+        
+    Raises:
+        HTTPException: If user is not admin
+    """
+    user_role = current_user.get('role')
+    if user_role != ADMIN_ROLE:
+        raise HTTPException(
+            status_code=403, 
+            detail="Admin access required for this operation"
+        )
+    return current_user

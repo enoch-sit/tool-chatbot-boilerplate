@@ -21,6 +21,12 @@ Handles all aspects of user credit balances.
   - `POST /api/credits/calculate`: Calculates the credit cost for an operation based on parameters like `modelId` and `tokens`.
 - **Allocate Credits**:
   - `POST /api/credits/allocate`: Administrators and supervisors can allocate credits to users. Requires `userId`, `credits`, and optionally `expiryDays` and `notes`.
+- **Set Absolute Credit Amount**:
+  - `POST /api/credits/set`: Administrators and supervisors can set the absolute credit amount for a user, replacing their current balance. Requires `userId`, `credits`, and optionally `expiryDays` and `notes`.
+- **Remove/Deduct Credits**:
+  - `DELETE /api/credits/remove`: Administrators and supervisors can remove or deduct a specific amount of credits from a user. Requires `userId`, `credits`, and optionally `notes`.
+- **Adjust Credits**:
+  - `PUT /api/credits/adjust`: Administrators and supervisors can adjust credits by a positive or negative amount. Positive values add credits, negative values subtract credits. Requires `userId`, `adjustment`, and optionally `expiryDays` (for positive adjustments) and `notes`.
 
 ### 2.2. Streaming Session Management
 
