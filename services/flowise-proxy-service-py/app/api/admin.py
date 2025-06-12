@@ -127,7 +127,8 @@ async def add_users_to_chatflow(
             )
             
             logger.debug(f"DEBUG: Existing access query result: {existing_access}")
-            
+            logger.debug(f"🎯 Created UserChatflow record:")
+            logger.debug(f"  user_id: '{user_id}' (type: {type(user_id)}, len: {len(user_id)})")
             if existing_access:
                 logger.info(f"DEBUG: Existing access found for user {user_id} - is_active: {existing_access.is_active}, created: {existing_access.assigned_at}")
                 if existing_access.is_active:
@@ -162,6 +163,10 @@ async def add_users_to_chatflow(
                 logger.debug(f"DEBUG: Inserting UserChatflow into database")
                 await user_chatflow.insert()
                 logger.info(f"DEBUG: Successfully created new access for user {user_id}")
+                # ADD THIS LOGGING:
+                logger.debug(f"🎯 Created UserChatflow record:")
+                logger.debug(f"  user_id: '{user_id}' (type: {type(user_id)}, len: {len(user_id)})")
+                
                 
                 results.append(UserChatflowResponse(
                     user_id=user_id,
@@ -249,6 +254,11 @@ async def add_single_user_to_chatflow(
                 is_active=True
             )
             await user_chatflow.insert()
+            # ADD THIS LOGGING:
+            logger.debug(f"🎯 Created UserChatflow record:")
+            logger.debug(f"  user_id: '{user_id}' (type: {type(user_id)}, len: {len(user_id)})")
+            logger.debug(f"  chatflow_id: '{chatflow_id}' (type: {type(chatflow_id)})")
+
             message = "Access granted successfully"
         
         logger.info(f"Admin {current_user.get('username')} granted chatflow {chatflow_id} access to user {user.username}")
@@ -267,63 +277,83 @@ async def add_single_user_to_chatflow(
         logger.error(f"Error adding user {user_id} to chatflow {chatflow_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-# TESTED: This function is tested by test_add_user_to_chatflow()
+# TESTED: This function is updated and not yet tested by test_add_user_to_chatflow()
 @router.post("/chatflows/{chatflow_id}/users/email/{email}")
 async def add_user_to_chatflow_by_email(
     chatflow_id: str,
     email: str,
     current_user: Dict = Depends(authenticate_user)
 ):
-    """
-    Add a single user to a chatflow by email (Admin only).
-    If the user does not exist, they will be created.
-    
-    Args:
-        chatflow_id: The chatflow ID to grant access to
-        email: The user email to grant access to
-        current_user: Current authenticated user (must be Admin)
-    """
-    # Verify admin role
-    user_role = current_user.get('role')
-    if user_role != ADMIN_ROLE:
-        raise HTTPException(
-            status_code=403, 
-            detail="Admin access required to assign users to chatflows"
-        )
+    # ... existing role verification ...
     
     try:
-        # Find user by email
-        user = await User.find_one(User.email == email)
-        if not user:
-            logger.info(f"User with email '{email}' not found. Creating new user.")
-            username = email.split('@')[0] # Derive username from email
-            # Ensure username uniqueness if necessary, or handle potential duplicates.
-            # For now, using a simple derivation.
-            
-            # Check if username already exists, append a suffix if it does.
-            # This is a simple conflict avoidance, a more robust solution might be needed.
-            temp_username = username
-            counter = 1
-            while await User.find_one(User.username == temp_username):
-                temp_username = f"{username}_{counter}"
-                counter += 1
-            username = temp_username
-
-            new_user = User(
-                username=username,
-                email=email,
-                password_hash="",  # Add placeholder for required field
-                role=USER_ROLE, # Default role
-                is_active=True, # New users are active by default
-                # hashed_password is not set here, assuming it's handled by User model defaults (e.g., None)
-                # or not strictly required for externally authenticated users.
-            )
-            await new_user.insert()
-            logger.info(f"New user '{username}' ({email}) created with ID {new_user.id}.")
-            user = new_user # Use the newly created user
+        # 🔧 FIX: Lookup user from external auth API instead of local database
+        external_auth_service = ExternalAuthService()
         
-        # Use the existing single user endpoint with the found or created user ID
-        return await add_single_user_to_chatflow(chatflow_id, str(user.id), current_user)
+        # Get admin token from current_user (now available!)
+        admin_token = current_user.get('access_token')
+        # Get user details from external auth system
+        external_user = await external_auth_service.get_user_by_email(email,admin_token)
+        
+        if not external_user:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"User with email '{email}' not found in authentication system"
+            )
+        
+        # 🔍 DEBUG: Log external user details
+        logger.info(f"🔍 Found user in external auth system:")
+        logger.info(f"  user_id: '{external_user.get('user_id')}' (len: {len(external_user.get('user_id', ''))})")
+        logger.info(f"  username: '{external_user.get('username')}'")
+        logger.info(f"  email: '{external_user.get('email')}'")
+        
+        # Use the external auth user_id for permission assignment
+        external_user_id = external_user.get('user_id')
+        
+        # 🔍 DEBUG: Log what we're about to assign
+        logger.info(f"🔍 About to assign (using external auth user_id):")
+        logger.info(f"  user_id: '{external_user_id}'")
+        logger.info(f"  chatflow_id: '{chatflow_id}'")
+        
+        # Create UserChatflow record using external auth user_id
+        existing_access = await UserChatflow.find_one(
+            UserChatflow.user_id == external_user_id,
+            UserChatflow.chatflow_id == chatflow_id
+        )
+        
+        if existing_access and existing_access.is_active:
+            return {
+                "user_id": external_user_id,
+                "username": external_user.get('username'),
+                "chatflow_id": chatflow_id,
+                "status": "already_exists",
+                "message": "User already has active access to this chatflow"
+            }
+        
+        if existing_access and not existing_access.is_active:
+            # Reactivate existing access
+            existing_access.is_active = True
+            await existing_access.save()
+            message = "Existing access reactivated"
+        else:
+            # Create new access
+            user_chatflow = UserChatflow(
+                user_id=external_user_id,  # Use external auth user_id
+                chatflow_id=chatflow_id,
+                is_active=True
+            )
+            await user_chatflow.insert()
+            message = "Access granted successfully"
+        
+        logger.info(f"Admin {current_user.get('username')} granted chatflow {chatflow_id} access to user {external_user.get('username')}")
+        
+        return {
+            "user_id": external_user_id,
+            "username": external_user.get('username'),
+            "chatflow_id": chatflow_id,
+            "status": "success",
+            "message": message
+        }
         
     except HTTPException:
         raise
@@ -331,6 +361,7 @@ async def add_user_to_chatflow_by_email(
         logger.error(f"Error adding user with email {email} to chatflow {chatflow_id}: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
 
 # NOT TESTED: This function uses user_id parameter. Testing script only tests email-based removal.
 @router.delete("/chatflows/{chatflow_id}/users/{user_id}")

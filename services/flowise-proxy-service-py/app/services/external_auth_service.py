@@ -2,6 +2,7 @@ import httpx
 import logging
 from typing import Dict, Optional
 from app.config import settings
+import urllib
 
 logger = logging.getLogger(__name__)
 
@@ -167,4 +168,69 @@ class ExternalAuthService:
             return None
         except Exception as e:
             logger.error(f"Unexpected error fetching users: {e}")
+            return None
+    
+    async def get_user_by_email(self, email: str, admin_token: str) -> Optional[Dict]:
+        """
+        Get user details from external auth API by email
+        
+        Args:
+            email: User's email address
+            admin_token: Admin JWT token for authentication
+            
+        Returns:
+            Dict containing user info, or None if not found
+        """
+        try:
+            # URL encode the email parameter
+            encoded_email = urllib.parse.quote(email)
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": f"Bearer {admin_token}"
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.auth_url}/api/admin/users/by-email/{encoded_email}",
+                    headers=headers,
+                    timeout=self.timeout
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    user_data = data.get('user', {})
+                    
+                    # Normalize the response format to match your needs
+                    return {
+                        'user_id': user_data.get('_id') or user_data.get('id'),
+                        'username': user_data.get('username'),
+                        'email': user_data.get('email'),
+                        'role': user_data.get('role'),
+                        'is_verified': user_data.get('isVerified', False),
+                        'created_at': user_data.get('createdAt'),
+                        'updated_at': user_data.get('updatedAt')
+                    }
+                elif response.status_code == 404:
+                    logger.info(f"User with email '{email}' not found in external auth system")
+                    return None
+                elif response.status_code == 401:
+                    logger.warning("Unauthorized: Invalid or expired admin token")
+                    return None
+                elif response.status_code == 403:
+                    logger.warning("Forbidden: Admin access required")
+                    return None
+                else:
+                    logger.error(f"External auth service returned {response.status_code}: {response.text}")
+                    return None
+                    
+        except httpx.ConnectError:
+            logger.error(f"Cannot connect to auth service at {self.auth_url}")
+            return None
+        except httpx.TimeoutException:
+            logger.error(f"Timeout connecting to auth service")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching user by email from external auth: {e}")
             return None

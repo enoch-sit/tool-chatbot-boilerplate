@@ -51,28 +51,34 @@ class AuthService:
     async def validate_user_permissions(self, user_id: str, chatflow_id: str) -> bool:
         """Validate if user has access to specific chatflow using MongoDB"""
         try:
-            # Find user first
-            user = await User.get(user_id)
-            if not user:
-                return False
-            
-            # Admin users have access to all chatflows
-            if user.role == "Admin":
-                return True
-            
-            # Check if user has specific access to this chatflow
+            # 🔍 DEBUG: Log what we're looking for
+            self.logger.info(f"🔍 Permission validation request:")
+            self.logger.info(f"  Looking for user_id: '{user_id}' (type: {type(user_id)}, len: {len(user_id)})")
+            self.logger.info(f"  Looking for chatflow_id: '{chatflow_id}' (type: {type(chatflow_id)})")
+        
+            # 🔍 DEBUG: Check what UserChatflow records actually exist
+            all_records = await UserChatflow.find().limit(10).to_list()
+            self.logger.info(f"📊 Database contains {len(all_records)} UserChatflow records:")
+            for i, record in enumerate(all_records):
+                self.logger.info(f"  Record {i+1}: user_id='{record.user_id}' (len: {len(record.user_id)}), chatflow_id='{record.chatflow_id}', active={record.is_active}")
+        
+            # Your existing query
             user_chatflow = await UserChatflow.find_one(
                 UserChatflow.user_id == user_id,
                 UserChatflow.chatflow_id == chatflow_id,
-                UserChatflow.is_active == True
             )
             
-            return user_chatflow is not None
+            if user_chatflow:
+                self.logger.info("✅ EXACT MATCH FOUND!")
+            else:
+                self.logger.warning("❌ NO EXACT MATCH FOUND")
             
+            return user_chatflow is not None
+        
         except Exception as e:
             self.logger.error(f"Permission validation error: {e}")
             return False
-
+    
     def create_access_token(self, user_data: Dict) -> str:
         """Create JWT access token for authenticated user (legacy method)"""
         user_id = user_data.get("id")

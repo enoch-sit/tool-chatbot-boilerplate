@@ -2,14 +2,22 @@ from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Dict
 from app.auth.jwt_handler import JWTHandler
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
 async def authenticate_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> Dict:
     """Middleware to authenticate users based on JWT token"""
+    
     try:
         token = credentials.credentials
         payload = JWTHandler.verify_access_token(token)
+        # After decoding the JWT
+        logger.debug(f"🔍 JWT token contents:")
+        logger.debug(f"  user_id: '{payload.get('user_id')}' (type: {type(payload.get('user_id'))}, len: {len(str(payload.get('user_id')))})")
+        logger.debug(f"  sub: '{payload.get('sub')}' (type: {type(payload.get('sub'))}, len: {len(str(payload.get('sub')))})")
         
         if payload is None:
             raise HTTPException(
@@ -30,6 +38,7 @@ async def authenticate_user(credentials: HTTPAuthorizationCredentials = Security
         # Normalize payload format
         normalized_payload = payload.copy()
         normalized_payload["user_id"] = user_id  # Ensure user_id is available for existing code
+        normalized_payload["access_token"] = token  # 🔧 ADD THIS: Store raw token for admin operations
         
         return normalized_payload
         

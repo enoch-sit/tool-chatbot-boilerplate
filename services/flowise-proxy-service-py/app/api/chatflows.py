@@ -3,6 +3,8 @@ from typing import List, Dict
 from app.auth.middleware import authenticate_user
 from app.services.flowise_service import FlowiseService
 from app.services.auth_service import AuthService
+from app.models.chatflow import UserChatflow, Chatflow
+from app.core.logging import logger
 
 router = APIRouter(prefix="/api/v1/chatflows", tags=["chatflows"])
 
@@ -118,4 +120,65 @@ async def get_chatflow_config(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve chatflow config: {str(e)}"
+        )
+
+@router.get("/my-chatflows", response_model=List[Dict])
+async def get_my_chatflows(
+    current_user: Dict = Depends(authenticate_user)
+):
+    """
+    Get list of chatflows accessible to the current user.
+    This endpoint returns chatflows from the local database that the user has access to.
+    """
+    try:
+        user_id = current_user.get('user_id')
+        
+        # Get user's active chatflow access records
+        user_chatflows = await UserChatflow.find(
+            UserChatflow.user_id == user_id,
+            UserChatflow.is_active == True
+        ).to_list()
+        
+        if not user_chatflows:
+            logger.info(f"No active chatflows found for user {user_id}")
+            return []
+        
+        # Extract chatflow IDs (these are flowise_ids stored in chatflow_id field)
+        chatflow_ids = [uc.chatflow_id for uc in user_chatflows]
+        
+        # Get chatflow details from local database
+        chatflows = await Chatflow.find(
+            Chatflow.flowise_id.in_(chatflow_ids),
+            Chatflow.sync_status != "deleted",  # Exclude deleted chatflows
+            Chatflow.deployed == True  # Only show deployed chatflows to users
+        ).to_list()
+        
+        # Create response with user-friendly information
+        result = []
+        for chatflow in chatflows:
+            # Find corresponding access record for additional info
+            access_record = next(
+                (uc for uc in user_chatflows if uc.chatflow_id == chatflow.flowise_id), 
+                None
+            )
+            
+            chatflow_dict = {
+                "id": chatflow.flowise_id,
+                "name": chatflow.name,
+                "description": chatflow.description,
+                "category": chatflow.category,
+                "type": chatflow.type,
+                "deployed": chatflow.deployed,
+                "assigned_at": access_record.assigned_at.isoformat() if access_record and access_record.assigned_at else None
+            }
+            result.append(chatflow_dict)
+        
+        logger.info(f"Returning {len(result)} accessible chatflows for user {user_id}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting chatflows for user {current_user.get('username', 'unknown')}: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Internal server error while retrieving your chatflows"
         )
