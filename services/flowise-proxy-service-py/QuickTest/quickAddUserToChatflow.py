@@ -17,6 +17,7 @@ import sys
 import os
 import datetime # Ensure datetime is imported
 import pymongo # For direct DB check
+import random # Added for random selection
 
 LOG_FILE = "chatflow_sync_test.log"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -613,34 +614,71 @@ def run_comprehensive_user_chatflow_tests():
         print("⚠️  Chatflow sync failed or reported errors. User assignment tests might be affected or use stale data.")
         # Decide if to proceed or not. Current logic proceeds.
 
+    # --- Dynamically Select TARGET_FLOWISE_ID ---
+    print("\\n--- Dynamically Selecting Target Flowise ID ---")
+    dynamic_target_flowise_id = None
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        response = requests.get(
+            f"{API_BASE_URL}/api/v1/admin/chatflows",
+            headers=headers,
+            params={"include_deleted": "false"} # Typically we want active chatflows
+        )
+        if response.status_code == 200:
+            all_chatflows = response.json()
+            # Filter for chatflows that have a non-empty flowise_id
+            eligible_chatflows = [cf for cf in all_chatflows if cf.get("flowise_id")]
+            if eligible_chatflows:
+                selected_chatflow = random.choice(eligible_chatflows)
+                dynamic_target_flowise_id = selected_chatflow.get("flowise_id")
+                print(f"✅ Randomly selected TARGET_FLOWISE_ID: {dynamic_target_flowise_id} (Name: {selected_chatflow.get('name')})")
+            else:
+                print("❌ No eligible chatflows found (with flowise_id) to select randomly.")
+        else:
+            print(f"❌ Failed to fetch chatflows for random selection: {response.status_code} - {response.text}")
+    except requests.RequestException as e:
+        print(f"❌ Request error while fetching chatflows for random selection: {e}")
+    except Exception as e:
+        print(f"❌ Unexpected error while fetching chatflows for random selection: {e}")
+
+    if not dynamic_target_flowise_id:
+        print("❌ CRITICAL: Could not dynamically select a TARGET_FLOWISE_ID. Aborting further tests that require it.")
+        # Optionally, could fall back to a hardcoded ID or a different strategy if needed.
+        # For now, we will let tests that depend on it fail or be skipped.
+        # However, the script's original logic for test_get_specific_chatflow might still find *an* ID if this fails.
+        # To make it cleaner, if dynamic selection fails, we should probably abort tests needing a *specific* ID.
+        # The current structure will try test_get_specific_chatflow without an ID if dynamic_target_flowise_id is None.
+
     # --- Direct Database Check ---
-    print("\\n--- Direct Database Check after Sync ---")
+    print("\\n--- Direct Database Check after Sync (using dynamically selected ID if available) ---")
     MONGODB_URL_TEST = "mongodb://testuser:testpass@localhost:27020/flowise_proxy_test"
     DB_NAME_TEST = "flowise_proxy_test"
-    TARGET_FLOWISE_ID = "99427295-8b85-4b90-85aa-a32294af6ae0" # The ID we are interested in
+    # TARGET_FLOWISE_ID = "99427295-8b85-4b90-85aa-a32294af6ae0" # The ID we are interested in - REMOVED HARDCODED
 
-    try:
-        client = pymongo.MongoClient(MONGODB_URL_TEST, serverSelectionTimeoutMS=5000)
-        db = client[DB_NAME_TEST]
-        chatflows_collection = db["chatflows"]
-        
-        # Check if the client connected successfully
-        client.admin.command('ping') 
-        print(f"Successfully connected to MongoDB: {MONGODB_URL_TEST}")
+    if dynamic_target_flowise_id:
+        try:
+            client = pymongo.MongoClient(MONGODB_URL_TEST, serverSelectionTimeoutMS=5000)
+            db = client[DB_NAME_TEST]
+            chatflows_collection = db["chatflows"]
+            
+            client.admin.command('ping') 
+            print(f"Successfully connected to MongoDB: {MONGODB_URL_TEST}")
 
-        db_chatflow = chatflows_collection.find_one({"flowise_id": TARGET_FLOWISE_ID})
-        if db_chatflow:
-            print(f"✅ Direct DB Check: Found chatflow with flowise_id '{TARGET_FLOWISE_ID}':")
-            print(f"   Name: {db_chatflow.get('name')}")
-            print(f"   ID in DB: {db_chatflow.get('_id')}")
-            print(f"   Synced At: {db_chatflow.get('synced_at')}")
-        else:
-            print(f"❌ Direct DB Check: Chatflow with flowise_id '{TARGET_FLOWWISE_ID}' NOT FOUND in the database.")
-        client.close()
-    except pymongo.errors.ServerSelectionTimeoutError as err:
-        print(f"❌ Direct DB Check: Could not connect to MongoDB at {MONGODB_URL_TEST}. Error: {err}")
-    except Exception as e:
-        print(f"❌ Direct DB Check: An error occurred: {e}")
+            db_chatflow = chatflows_collection.find_one({"flowise_id": dynamic_target_flowise_id})
+            if db_chatflow:
+                print(f"✅ Direct DB Check: Found chatflow with flowise_id '{dynamic_target_flowise_id}':")
+                print(f"   Name: {db_chatflow.get('name')}")
+                print(f"   ID in DB: {db_chatflow.get('_id')}")
+                print(f"   Synced At: {db_chatflow.get('synced_at')}")
+            else:
+                print(f"❌ Direct DB Check: Chatflow with flowise_id '{dynamic_target_flowise_id}' NOT FOUND in the database.")
+            client.close()
+        except pymongo.errors.ServerSelectionTimeoutError as err:
+            print(f"❌ Direct DB Check: Could not connect to MongoDB at {MONGODB_URL_TEST}. Error: {err}")
+        except Exception as e:
+            print(f"❌ Direct DB Check: An error occurred: {e}")
+    else:
+        print("ℹ️  Skipping Direct DB Check as no dynamic_target_flowise_id was selected.")
 
     # --- Add Delay ---
     delay_seconds = 0.5
@@ -648,29 +686,31 @@ def run_comprehensive_user_chatflow_tests():
     time.sleep(delay_seconds)
     
     # Get a chatflow to test with
-    # test_get_specific_chatflow now returns (bool_success, flowise_id_or_None)
-    # For this specific debug, let's try to use the TARGET_FLOWISE_ID if the general get fails or gets a different one.
-    get_chatflow_successful, obtained_test_chatflow_id = test_get_specific_chatflow(admin_token, flowise_id=TARGET_FLOWISE_ID) 
+    # Pass the dynamically selected ID to test_get_specific_chatflow
+    get_chatflow_successful, obtained_test_chatflow_id = test_get_specific_chatflow(admin_token, flowise_id=dynamic_target_flowise_id) 
     
     test_chatflow_id = None
-    if get_chatflow_successful and obtained_test_chatflow_id == TARGET_FLOWISE_ID:
+    if get_chatflow_successful and obtained_test_chatflow_id:
         test_chatflow_id = obtained_test_chatflow_id
-        print(f"✅ Successfully fetched the target chatflow for tests: {test_chatflow_id}")
-    elif get_chatflow_successful and obtained_test_chatflow_id:
-        print(f"⚠️  Successfully fetched a chatflow ({obtained_test_chatflow_id}), but it's not the primary target ID ({TARGET_FLOWISE_ID}). Will use this for subsequent tests if it's the only one available.")
-        test_chatflow_id = obtained_test_chatflow_id # Fallback to what was found
-        # Optionally, you could force the test to use TARGET_FLOWISE_ID if that's critical
-        # test_chatflow_id = TARGET_FLOWISE_ID 
-        # print(f"Forcing use of TARGET_FLOWISE_ID: {TARGET_FLOWISE_ID} for further tests despite get_specific_chatflow result.")
-    else: # Not successful or no ID returned
-        print(f"❌ CRITICAL: Failed to get specific chatflow for ID '{TARGET_FLOWISE_ID}'. Will attempt to find another.")
-        # Try to get any chatflow if the target one failed
-        get_chatflow_successful, test_chatflow_id = test_get_specific_chatflow(admin_token)
-        if not get_chatflow_successful or not test_chatflow_id:
-            print("❌ CRITICAL: Cannot obtain ANY valid chatflow ID for testing. Aborting user assignment tests.")
-            with open(LOG_PATH, "a") as log_file:
-                log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL: Failed to get any chatflow ID for testing.\\n")
-            return False
+        print(f"✅ Successfully fetched/validated chatflow for tests: {test_chatflow_id}")
+    # The original fallback logic if dynamic_target_flowise_id was None and test_get_specific_chatflow(admin_token) was called:
+    # else: # Not successful or no ID returned from the attempt with dynamic_target_flowise_id
+    #    print(f"❌ CRITICAL: Failed to get specific chatflow for ID '{flowise_id}'. Will attempt to find another if dynamic ID was not set.")
+    #    # Try to get any chatflow if the target one failed or wasn't set
+    #    get_chatflow_successful, test_chatflow_id = test_get_specific_chatflow(admin_token) # This tries to find *any*
+    #    if not get_chatflow_successful or not test_chatflow_id:
+    #        print("❌ CRITICAL: Cannot obtain ANY valid chatflow ID for testing. Aborting user assignment tests.")
+    #        with open(LOG_PATH, "a") as log_file:
+    #            log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL: Failed to get any chatflow ID for testing.\\n")
+    #        return False
+    #    else:
+    #        print(f"✅ Found a fallback chatflow ID for tests: {test_chatflow_id}")
+    # Simplified logic: if obtained_test_chatflow_id is None after the call, we abort.
+    if not test_chatflow_id:
+        print("❌ CRITICAL: Cannot obtain a valid chatflow ID for testing (either dynamic selection failed or subsequent fetch failed). Aborting user assignment tests.")
+        with open(LOG_PATH, "a") as log_file:
+            log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL: Failed to get a chatflow ID for testing.\\n")
+        return False
  
     
     print(f"✅ Proceeding with tests using Chatflow ID: {test_chatflow_id}")
@@ -714,7 +754,7 @@ def run_comprehensive_user_chatflow_tests():
     test_results["remove_user"] = test_remove_user_from_chatflow(admin_token, test_chatflow_id, REGULAR_USERS[0]["username"])
     test_results["list_users_after_remove"] = test_list_chatflow_users(admin_token, test_chatflow_id)
       # Print summary for basic user assignment tests
-    print("\n" + "=" * 60)
+    print("\\n" + "=" * 60)
     print("📊 USER ASSIGNMENT TEST SUMMARY")
     print("=" * 60)
     
@@ -727,300 +767,67 @@ def run_comprehensive_user_chatflow_tests():
         status = "✅ PASS" if result else "❌ FAIL"
         print(f"{test_name.replace('_', ' ').title()}: {status}")
     
-    print(f"\nUser Assignment Tests Result: {passed_tests}/{total_tests} tests passed")
+    print(f"\\nUser Assignment Tests Result: {passed_tests}/{total_tests} tests passed")
     print(f"Test Chatflow ID: {test_chatflow_id}")
     
-    if passed_tests == total_tests:
+    overall_passed = passed_tests == total_tests # Simplified overall_passed
+
+    if overall_passed: # Simplified condition
         print("🎉 All user assignment tests passed!")
     else:
         print("⚠️ Some user assignment tests failed.")
     
-    # Run cleanup and audit tests
-    print("\n" + "=" * 60)
-    print("🧹 RUNNING USER CLEANUP AND AUDIT TESTS")
-    print("=" * 60)
+    # Removed call to run_user_cleanup_tests and related summary logic
     
-    cleanup_tests_passed = run_user_cleanup_tests(admin_token, test_chatflow_id)
-    
-    # Calculate overall results
-    overall_passed = passed_tests == total_tests and cleanup_tests_passed
-    
-    # Print final summary
-    print("\n" + "=" * 60)
-    print("🎯 FINAL TEST SUMMARY")
+    # Print final summary for this script
+    print("\\n" + "=" * 60)
+    print("🎯 USER ASSIGNMENT TEST SUITE FINAL SUMMARY") # Changed title
     print("=" * 60)
     print(f"User Assignment Tests: {passed_tests}/{total_tests} passed")
-    print(f"Cleanup/Audit Tests: {'✅ PASS' if cleanup_tests_passed else '❌ FAIL'}")
-    print(f"Overall Result: {'✅ ALL TESTS PASSED' if overall_passed else '❌ SOME TESTS FAILED'}")
+    # Removed cleanup/audit test reporting lines
+    print(f"Overall Result for User Assignments: {'✅ ALL ASSIGNMENT TESTS PASSED' if overall_passed else '❌ SOME ASSIGNMENT TESTS FAILED'}")
     
     if overall_passed:
-        print("🎉 ALL TESTS PASSED! User-to-chatflow functionality is working correctly.")
+        print("🎉 ALL USER ASSIGNMENT TESTS PASSED! User-to-chatflow assignment functionality is working correctly.")
     else:
-        print("⚠️ Some tests failed. Please check the implementation.")
+        print("⚠️ Some user assignment tests failed. Please check the implementation.")
     
-    # Log final results
+    # Log final results for this script
     with open(LOG_PATH, "a") as log_file:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_file.write(
-            f"[{timestamp}] All tests completed: Assignment({passed_tests}/{total_tests}), "
-            f"Cleanup({'PASS' if cleanup_tests_passed else 'FAIL'}), "
-            f"Overall({'PASS' if overall_passed else 'FAIL'})\n"
+            f"[{timestamp}] User Assignment tests completed: Assignment({passed_tests}/{total_tests}), "
+            # f"Cleanup({'PASS' if cleanup_tests_passed else 'FAIL'}), " # Removed
+            f"Overall Assignment Result({'PASS' if overall_passed else 'FAIL'})\\n"
         )
     
     return overall_passed
 
 
-# User Cleanup and Audit Functions
-def test_audit_user_assignments(token, chatflow_id=None):
-    """Test the audit user assignments endpoint"""
-    print(f"\n--- Testing Audit User Assignments ---")
-    try:
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        # Build query parameters
-        params = {}
-        if chatflow_id:
-            params["chatflow_id"] = chatflow_id
-            print(f"Limiting audit to chatflow: {chatflow_id}")
-        
-        params["include_valid"] = "false"  # Only show problematic assignments by default
-        
-        response = requests.get(
-            f"{API_BASE_URL}/api/v1/admin/chatflows/audit-users",
-            headers=headers,
-            params=params
-        )
-        
-        if response.status_code == 200:
-            audit_result = response.json()
-            print(f"✅ Audit completed successfully")
-            print(f"📊 Total assignments: {audit_result.get('total_assignments', 0)}")
-            print(f"✅ Valid assignments: {audit_result.get('valid_assignments', 0)}")
-            print(f"❌ Invalid assignments: {audit_result.get('invalid_assignments', 0)}")
-            print(f"🏢 Chatflows affected: {audit_result.get('chatflows_affected', 0)}")
-            
-            # Show issue breakdown
-            issues = audit_result.get('assignments_by_issue_type', {})
-            if issues:
-                print(f"📋 Issue breakdown:")
-                for issue_type, count in issues.items():
-                    print(f"   {issue_type}: {count}")
-            
-            # Show recommendations
-            recommendations = audit_result.get('recommendations', [])
-            if recommendations:
-                print(f"💡 Recommendations:")
-                for rec in recommendations:
-                    print(f"   - {rec}")
-            
-            # Show some invalid assignment details (limited)
-            invalid_details = audit_result.get('invalid_user_details', [])
-            if invalid_details:
-                print(f"🔍 Sample invalid assignments (showing first 3):")
-                for i, detail in enumerate(invalid_details[:3]):
-                    print(f"   {i+1}. User ID: {detail.get('user_id')} -> Chatflow: {detail.get('chatflow_name', detail.get('chatflow_id'))}")
-                    print(f"      Issue: {detail.get('issue_type')} - {detail.get('details')}")
-            
-            # Log result
-            with open(LOG_PATH, "a") as log_file:
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Audit completed: {audit_result.get('invalid_assignments', 0)} invalid assignments found\n")
-            
-            return True, audit_result
-            
-        else:
-            print(f"❌ Audit failed: {response.status_code} - {response.text}")
-            with open(LOG_PATH, "a") as log_file:
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Audit failed: {response.status_code}\n")
-            return False, None
-            
-    except requests.RequestException as e:
-        print(f"❌ Request error during audit: {e}")
-        return False, None
-    except Exception as e:
-        print(f"❌ Unexpected error during audit: {e}")
-        return False, None
-
-
-def test_cleanup_user_assignments(token, action="deactivate_invalid", dry_run=True, chatflow_ids=None):
-    """Test the cleanup user assignments endpoint"""
-    action_desc = "DRY RUN - " if dry_run else ""
-    print(f"\n--- Testing Cleanup User Assignments ({action_desc}{action}) ---")
-    
-    try:
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        cleanup_request = {
-            "action": action,
-            "dry_run": dry_run,
-            "force": False
-        }
-        
-        if chatflow_ids:
-            cleanup_request["chatflow_ids"] = chatflow_ids
-            print(f"Limiting cleanup to chatflows: {chatflow_ids}")
-        
-        response = requests.post(
-            f"{API_BASE_URL}/api/v1/admin/chatflows/cleanup-users",
-            headers=headers,
-            json=cleanup_request
-        )
-        
-        if response.status_code == 200:
-            cleanup_result = response.json()
-            print(f"✅ Cleanup completed successfully")
-            print(f"📊 Total records processed: {cleanup_result.get('total_records_processed', 0)}")
-            print(f"❌ Invalid user IDs found: {cleanup_result.get('invalid_user_ids_found', 0)}")
-            print(f"🗑️ Records deleted: {cleanup_result.get('records_deleted', 0)}")
-            print(f"⏸️ Records deactivated: {cleanup_result.get('records_deactivated', 0)}")
-            print(f"🔄 Records reassigned: {cleanup_result.get('records_reassigned', 0)}")
-            print(f"⚠️ Errors: {cleanup_result.get('errors', 0)}")
-            
-            # Show error details if any
-            error_details = cleanup_result.get('error_details', [])
-            if error_details:
-                print(f"❌ Error details:")
-                for error in error_details[:5]:  # Show first 5 errors
-                    print(f"   - {error}")
-            
-            # Show some invalid assignment details (limited)
-            invalid_assignments = cleanup_result.get('invalid_assignments', [])
-            if invalid_assignments:
-                print(f"🔍 Sample processed assignments (showing first 3):")
-                for i, detail in enumerate(invalid_assignments[:3]):
-                    print(f"   {i+1}. User ID: {detail.get('user_id')} -> Chatflow: {detail.get('chatflow_name', detail.get('chatflow_id'))}")
-                    print(f"      Issue: {detail.get('issue_type')} - Action: {detail.get('suggested_action')}")
-            
-            # Log result
-            with open(LOG_PATH, "a") as log_file:
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_entry = f"[{timestamp}] Cleanup ({'dry-run' if dry_run else 'actual'}) - Action: {action}, "
-                log_entry += f"Processed: {cleanup_result.get('total_records_processed', 0)}, "
-                log_entry += f"Invalid: {cleanup_result.get('invalid_user_ids_found', 0)}\n"
-                log_file.write(log_entry)
-            
-            return True, cleanup_result
-            
-        else:
-            print(f"❌ Cleanup failed: {response.status_code} - {response.text}")
-            with open(LOG_PATH, "a") as log_file:
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Cleanup failed: {response.status_code}\n")
-            return False, None
-            
-    except requests.RequestException as e:
-        print(f"❌ Request error during cleanup: {e}")
-        return False, None
-    except Exception as e:
-        print(f"❌ Unexpected error during cleanup: {e}")
-        return False, None
-
-
-def run_user_cleanup_tests(admin_token, test_chatflow_id=None):
-    """Run user cleanup and audit tests"""
-    print("\n" + "=" * 60)
-    print("🧹 USER CLEANUP AND AUDIT TESTS")
-    print("=" * 60)
-    
-    test_results = {
-        "audit_all_assignments": False,
-        "audit_specific_chatflow": False,
-        "cleanup_dry_run_deactivate": False,
-        "cleanup_dry_run_delete": False,
-        "cleanup_dry_run_reassign": False,
-    }
-    
-    # Test 1: Audit all user assignments
-    print("\n🔍 Test 1: Audit All User Assignments")
-    test_results["audit_all_assignments"], audit_result = test_audit_user_assignments(admin_token)
-    
-    # Test 2: Audit specific chatflow (if we have one)
-    if test_chatflow_id:
-        print(f"\n🔍 Test 2: Audit Specific Chatflow ({test_chatflow_id})")
-        test_results["audit_specific_chatflow"], _ = test_audit_user_assignments(admin_token, test_chatflow_id)
-    else:
-        print("\n⏭️ Test 2: Skipped (no test chatflow ID available)")
-        test_results["audit_specific_chatflow"] = True  # Mark as passed since it's skipped
-    
-    # Test 3: Cleanup dry run - deactivate invalid
-    print("\n🧹 Test 3: Cleanup Dry Run - Deactivate Invalid")
-    test_results["cleanup_dry_run_deactivate"], _ = test_cleanup_user_assignments(
-        admin_token, 
-        action="deactivate_invalid", 
-        dry_run=True,
-        chatflow_ids=[test_chatflow_id] if test_chatflow_id else None
-    )
-    
-    # Test 4: Cleanup dry run - delete invalid
-    print("\n🧹 Test 4: Cleanup Dry Run - Delete Invalid")
-    test_results["cleanup_dry_run_delete"], _ = test_cleanup_user_assignments(
-        admin_token, 
-        action="delete_invalid", 
-        dry_run=True,
-        chatflow_ids=[test_chatflow_id] if test_chatflow_id else None
-    )
-    
-    # Test 5: Cleanup dry run - reassign by email
-    print("\n🧹 Test 5: Cleanup Dry Run - Reassign by Email")
-    test_results["cleanup_dry_run_reassign"], _ = test_cleanup_user_assignments(
-        admin_token, 
-        action="reassign_by_email", 
-        dry_run=True,
-        chatflow_ids=[test_chatflow_id] if test_chatflow_id else None
-    )
-    
-    # Print cleanup test summary
-    print("\n" + "=" * 60)
-    print("📊 CLEANUP TEST SUMMARY")
-    print("=" * 60)
-    
-    total_cleanup_tests = len(test_results)
-    passed_cleanup_tests = sum(test_results.values())
-    
-    for test_name, result in test_results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{status} - {test_name}")
-    
-    print(f"\nCleanup Tests Result: {passed_cleanup_tests}/{total_cleanup_tests} tests passed")
-    
-    if passed_cleanup_tests == total_cleanup_tests:
-        print("🎉 All cleanup tests passed!")
-    else:
-        print("⚠️ Some cleanup tests failed")
-    
-    # Log cleanup test results
-    with open(LOG_PATH, "a") as log_file:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_file.write(f"[{timestamp}] Cleanup tests completed: {passed_cleanup_tests}/{total_cleanup_tests} passed\n")
-    
-    return passed_cleanup_tests == total_cleanup_tests
+# User Cleanup and Audit Functions - REMOVED FROM HERE
 
 
 if __name__ == "__main__":
-    print("🚀 USER-TO-CHATFLOW COMPREHENSIVE TEST SUITE")
+    print("🚀 USER-TO-CHATFLOW ASSIGNMENT TEST SUITE") # Changed title
     print("=" * 60)
     print("Testing admin functionality for managing user access to chatflows")
-    print("This test suite includes:")
-    print("  • User-to-Chatflow Assignment Tests")
-    print("  • User Cleanup and Audit Tests")
-    print("  • Data Quality Validation")
+    # print("This test suite includes:") # Simplified description
+    # print("  • User-to-Chatflow Assignment Tests")
+    # print("  • User Cleanup and Audit Tests") # Removed
+    # print("  • Data Quality Validation") # Removed
     print(f"API Base URL: {API_BASE_URL}")
     print(f"Log file: {LOG_PATH}")
     print("=" * 60)
     
-    # Run comprehensive tests (now includes cleanup/audit tests)
+    # Run comprehensive tests (now only includes assignment tests)
     success = run_comprehensive_user_chatflow_tests()
     
     if success:
-        print(f"\n✅ All tests completed successfully!")
-        print("The Flowise Proxy Service user management functionality is working correctly.")
+        print(f"\\n✅ All user assignment tests completed successfully!") # Changed message
+        print("The Flowise Proxy Service user-to-chatflow assignment functionality appears to be working correctly.") # Changed message
         sys.exit(0)
     else:
-        print(f"\n❌ Some tests failed. Check the log file: {LOG_PATH}")
+        print(f"\\n❌ Some user assignment tests failed. Check the log file: {LOG_PATH}") # Changed message
         print("Please review the test output above for specific failures.")
         sys.exit(1)
 
