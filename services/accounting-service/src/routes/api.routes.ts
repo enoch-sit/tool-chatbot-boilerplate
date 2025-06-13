@@ -25,6 +25,7 @@ import { authenticateJWT, requireAdmin, requireSupervisor } from '../middleware/
 import CreditController from '../controllers/credit.controller';
 import StreamingSessionController from '../controllers/streaming-session.controller';
 import UsageController from '../controllers/usage.controller';
+import { UserAccountController } from '../controllers/UserAccountController';
 
 const router = Router();
 
@@ -158,30 +159,31 @@ router.get('/credits/balance/:userId', requireSupervisor, CreditController.getUs
 router.post('/credits/allocate', requireSupervisor, CreditController.allocateCredits);
 
 /**
- * Allocate credits to a user (admin and supervisors only)
- * POST /api/credits/allocate
- * 
- * Allocates credits to a specific user (admin/supervisor only). [20250522_10:11_test_credit_check.py]
- * 
- * Authentication: JWT required
- * Authorization: Admin or Supervisor role required
- * 
+ * Allocate credits to a user by email (Supervisor/Admin only)
+ * POST /api/credits/allocate-by-email
+ *
+ * Allocates a specified amount of credits to a user identified by their email.
+ *
+ * Authentication: JWT required, Supervisor/Admin role required
+ *
  * Request body:
- *   { 
- *     userId: string,
- *     credits: number,
- *     expiryDays: number (optional),
- *     notes: string (optional)
+ *   {
+ *     email: string,     // Email of the user to allocate credits to
+ *     credits: number,   // Amount of credits to allocate
+ *     expiryDays?: number, // Optional: Number of days until credits expire
+ *     notes?: string     // Optional: Notes for the allocation
  *   }
- * 
+ *
  * Response:
- *   201 Created: { id: string, userId: string, totalCredits: number, remainingCredits: number, expiresAt: string }
- *   400 Bad Request: If required fields are missing
+ *   200 OK: { message: string, allocationId: string }
+ *   400 Bad Request: If required fields are missing/invalid (e.g., invalid email format)
  *   401 Unauthorized: If no user authenticated
- *   403 Forbidden: If user lacks permission
+ *   403 Forbidden: If user is not a supervisor/admin
+ *   404 Not Found: If user with the given email is not found
  *   500 Server Error: If allocation fails
  */
-router.post('/credits/allocate', requireSupervisor, CreditController.allocateCredits);
+router.post('/credits/allocate-by-email', requireSupervisor, CreditController.allocateCreditsByEmail); // New controller method
+
 
 /**
  * Set absolute credit amount for a user (admin and supervisors only)
@@ -520,5 +522,38 @@ router.get('/usage/stats/:userId', requireSupervisor, UsageController.getUserSta
  *   500 Server Error: If retrieval fails
  */
 router.get('/usage/system-stats', requireAdmin, UsageController.getSystemStats);
+
+// ===== USER ACCOUNT MANAGEMENT ENDPOINTS (ADMIN) =====
+
+/**
+ * Create a new user account (Admin only)
+ * POST /api/admin/users
+ *
+ * Allows an administrator to create a new user account record in the Accounting service
+ * using a specific userId (UUID), typically obtained from the primary Authentication service.
+ *
+ * Authentication: JWT required, Admin role required
+ *
+ * Request body:
+ *   {
+ *     userId: string,       // Required: The UUID for the new user (must be unique)
+ *     email: string,        // Email address for the new user (must be unique)
+ *     username?: string,     // Optional: Username for the new user
+ *     role: string          // Role for the new user (e.g., 'enduser', 'supervisor', 'admin')
+ *   }
+ *
+ * Response:
+ *   201 Created: { userId: string, email: string, username: string, role: string, createdAt: date, updatedAt: date } - Details of the created user.
+ *   400 Bad Request: If required fields (userId, email, role) are missing or invalid (e.g., invalid UUID format for userId, invalid email format, invalid role).
+ *   401 Unauthorized: If the request lacks a valid JWT.
+ *   403 Forbidden: If the authenticated user is not an admin.
+ *   409 Conflict: If a user with the given userId or email already exists.
+ *   500 Internal Server Error: If an unexpected error occurs during account creation.
+ */
+router.post(
+    '/admin/users',
+    requireAdmin,
+    UserAccountController.createAccountByAdmin
+);
 
 export default router;

@@ -112,8 +112,8 @@ def get_admin_token():
 
 
 def allocate_credit_to_user(user, token):
-    """Allocate credit to a user using the admin token"""
-    print(f"\n--- Allocating credits to {user['username']} ---")
+    """Allocate credit to a user using the admin token by their email"""
+    print(f"\n--- Allocating credits to {user['username']} (email: {user['email']}) ---")
 
     # Default credit allocation amounts
     credit_amounts = {
@@ -127,23 +127,23 @@ def allocate_credit_to_user(user, token):
 
     try:
         response = requests.post(
-            f"{ACCOUNT_BASE_URL}/api/credits/allocate",
+            f"{ACCOUNT_BASE_URL}/api/credits/allocate-by-email",  # Updated endpoint
             headers={
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
             },
             json={
-                "userId": user.get("userId"),  # Assuming userId is available
+                "email": user["email"],  # Use email instead of userId
                 "credits": credit_amount,
                 "expiryDays": 365,  # Credits expire in 1 year
                 "notes": f"Initial credit allocation for {user['role']} user {user['username']}",
             },
         )
 
-        if response.status_code == 201:
+        if response.status_code == 201:  # Assuming 201 for successful creation/allocation
             data = response.json()
             print(
-                f"✅ Successfully allocated {credit_amount} credits to {user['username']}"
+                f"✅ Successfully allocated {credit_amount} credits to {user['username']} (email: {user['email']})"
             )
 
             # Log successful allocation
@@ -151,21 +151,21 @@ def allocate_credit_to_user(user, token):
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 log_file.write(
                     f"[{timestamp}] Allocated {credit_amount} credits to {user['role']}: "
-                    f"username='{user['username']}', email='{user['email']}'\n"
+                    f"username='{user['username']}', email='{user['email']}' via email endpoint\n"
                 )
             return True
         else:
             print(
-                f"❌ Failed to allocate credits to {user['username']}: {response.text}"
+                f"❌ Failed to allocate credits to {user['username']} (email: {user['email']}): {response.status_code} - {response.text}"
             )
             return False
 
     except requests.RequestException as e:
-        print(f"❌ Request error while allocating credits to {user['username']}: {e}")
+        print(f"❌ Request error while allocating credits to {user['username']} (email: {user['email']}): {e}")
         return False
     except Exception as e:
         print(
-            f"❌ Unexpected error while allocating credits to {user['username']}: {e}"
+            f"❌ Unexpected error while allocating credits to {user['username']} (email: {user['email']}): {e}"
         )
         return False
 
@@ -195,12 +195,6 @@ def main():
 
     # Allocate credits to each user
     for user in all_users:
-        # Note: In a real scenario, you would need to get the userId from the user management system
-        # For this example, we'll assume the userId is the same as username or needs to be fetched
-        user["userId"] = user[
-            "username"
-        ]  # Placeholder - adjust based on your user ID system
-
         success = allocate_credit_to_user(user, admin_token)
         if success:
             successful_allocations += 1

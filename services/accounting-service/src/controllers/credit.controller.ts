@@ -646,6 +646,116 @@ export class CreditController {
       return res.status(500).json({ message: 'Failed to allocate credits' });
     }
   }
+  /**
+   * Allocate credits to a user identified by their email address.
+   * Intended for use by supervisors or administrators.
+   * This method first looks up the user by email. If found, it ensures the user account
+   * and then proceeds with credit allocation.
+   *
+   * @param req Express Request object. Expected body: { email: string, credits: number, expiryDays?: number, notes?: string }
+   * @param res Express Response object.
+   */
+  async allocateCreditsByEmail(req: Request, res: Response) {
+    try {
+      // Step 1: Authentication and Authorization
+      if (!req.user?.userId) {
+        logger.warn('allocateCreditsByEmail - User not authenticated');
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+      
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        logger.warn(`allocateCreditsByEmail - Insufficient permissions for user ${req.user.userId} with role ${req.user.role}`);
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+      
+      // Step 2: Input Validation
+      const { email, credits, expiryDays, notes } = req.body;
+      
+      if (!email || typeof email !== 'string' || typeof credits !== 'number' || credits <= 0) {
+        logger.warn('allocateCreditsByEmail - Invalid input: Valid email and positive credits required', { body: req.body });
+        return res.status(400).json({ message: 'Valid email and positive credits required' });
+      }
+
+      // Basic email format validation (consider a more robust library for production)
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+          logger.warn('allocateCreditsByEmail - Invalid email format provided', { email });
+          return res.status(400).json({ message: 'Invalid email format.' });
+      }
+      
+      // Step 3: User Resolution by Email
+      let targetUserAccount: UserAccount | null = null;
+      // Assuming UserAccountService has a method to find by email.
+      // If UserAccount model can directly find by email, that can be used too.
+      try {
+        targetUserAccount = await UserAccountService.findByEmail(email);
+      } catch (findError: any) {
+        logger.error(`allocateCreditsByEmail - Error finding user by email '${email}':`, findError);
+        return res.status(500).json({ message: 'Error finding user by email.', error: findError instanceof Error ? findError.message : String(findError) });
+      }
+
+      if (!targetUserAccount) {
+        logger.warn(`allocateCreditsByEmail - Target user with email '${email}' not found. Cannot allocate credits.`);
+        return res.status(404).json({ message: `User with email '${email}' not found. Cannot allocate credits.` });
+      }
+      
+      // At this point, targetUserAccount is confirmed to be an existing user found by email.
+      // actualUserIdForAllocation will be the UUID of this user.
+      const actualUserIdForAllocation = targetUserAccount.userId;
+      logger.info(`allocateCreditsByEmail - User found by email '${email}'. Resolved userId: '${actualUserIdForAllocation}'.`);
+
+      // Step 4: Ensure User Account (following the pattern, though user is already found)
+      // This step ensures consistency with `allocateCredits` and handles any `findOrCreateUser` side-effects if defined.
+      // Since targetUserAccount is populated, findOrCreateUser should ideally just find the existing user.
+      try {
+        const userForDb = await UserAccountService.findOrCreateUser({
+            userId: actualUserIdForAllocation, // This is the UUID from the user found by email
+            username: targetUserAccount.username, // Username from the found user
+            email: targetUserAccount.email,       // Email from the found user (the one we searched by)
+            role: targetUserAccount.role          // Role from the found user
+        });
+        logger.info(`allocateCreditsByEmail - User account ensured for ID: ${userForDb.userId} (email: ${userForDb.email}) before credit allocation.`);
+
+      } catch (userError: any) {
+        logger.error('allocateCreditsByEmail - Failed to ensure user account (after finding by email):', userError);
+        return res.status(500).json({ 
+          message: 'Failed to allocate credits: User account processing failed after email lookup',
+          error: userError instanceof Error ? userError.message : String(userError)
+        });
+      }
+      
+      // Step 5: Credit Allocation
+      try {
+        const allocation = await CreditService.allocateCredits({
+          userId: actualUserIdForAllocation, // IMPORTANT: Use the resolved UUID userId
+          credits,
+          allocatedBy: req.user.userId, // This is the admin/supervisor's UUID from JWT
+          expiryDays,
+          notes
+        });
+        
+        logger.info(`allocateCreditsByEmail - Credit allocation successful for user ${actualUserIdForAllocation} (email: ${email})`, { allocationId: allocation.id });
+        
+        return res.status(201).json({
+          id: allocation.id,
+          userId: allocation.userId, // Should be actualUserIdForAllocation
+          email: email, // Include email in response for clarity
+          totalCredits: allocation.totalCredits,
+          remainingCredits: allocation.remainingCredits,
+          expiresAt: allocation.expiresAt
+        });
+      } catch (creditError: any) {
+        logger.error(`allocateCreditsByEmail - Credit allocation service error for user ${actualUserIdForAllocation} (email: ${email}):`, creditError);
+        return res.status(500).json({ 
+          message: 'Failed to allocate credits',
+          error: creditError instanceof Error ? creditError.message : String(creditError)
+        });
+      }
+    } catch (error: any) {
+      logger.error('allocateCreditsByEmail - General error in allocateCreditsByEmail:', error);
+      return res.status(500).json({ message: 'Failed to allocate credits due to an unexpected server error' });
+    }
+  }
 }
 
 export default new CreditController();

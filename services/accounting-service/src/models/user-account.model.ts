@@ -25,7 +25,8 @@ interface UserAccountAttributes {
   userId: string;  // This will be the user ID from Authentication service
   email: string;   // For identification
   username: string; // For identification
-  role: string;    // For permissions (admin, supervisor, user)
+  role: string;    // For permissions (admin, supervisor, user, enduser)
+  sub?: string;     // JWT subject claim from Authentication service
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -42,6 +43,7 @@ class UserAccount extends Model<UserAccountAttributes> implements UserAccountAtt
   public email!: string;    // User's email address
   public username!: string; // User's display name
   public role!: string;     // User's role (determines permissions)
+  public sub?: string;      // JWT subject claim
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -76,6 +78,13 @@ UserAccount.init({
     defaultValue: 'user',
     field: 'role',
     comment: 'User role (admin, supervisor, user, etc.)'
+  },
+  sub: { // New field for JWT subject
+    type: DataTypes.STRING(255),
+    allowNull: true, // Making it nullable for existing data and flexibility
+    unique: true,    // JWT sub should be unique
+    field: 'jwt_sub',
+    comment: 'JWT subject claim (sub) from the Authentication service'
   },
   createdAt: {
     type: DataTypes.DATE,
