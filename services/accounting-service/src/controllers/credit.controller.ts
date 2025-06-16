@@ -663,7 +663,7 @@ export class CreditController {
         return res.status(401).json({ message: 'User not authenticated' });
       }
       
-      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+      if (req.user.role !== 'admin') {
         logger.warn(`allocateCreditsByEmail - Insufficient permissions for user ${req.user.userId} with role ${req.user.role}`);
         return res.status(403).json({ message: 'Insufficient permissions' });
       }

@@ -11,6 +11,7 @@ import time
 import sys
 import os
 import datetime
+import urllib
 
 LOG_FILE = "add_credits.log"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -110,6 +111,137 @@ def get_admin_token():
 
     return None
 
+from typing import Dict, Optional, Any
+def get_user_by_email(email: str, admin_token: str) -> Optional[Dict[str, Any]]:
+    """
+    Test the GET /api/admin/users/by-email/:email endpoint
+    
+    Args:
+        email: User's email address
+        admin_token: Admin JWT token for authentication
+        
+    Returns:
+        Dict containing user info, or None if not found/error
+    """
+    print(f"\nTesting GET /api/admin/users/by-email/{email}")
+    
+    # URL encode the email
+    encoded_email = urllib.parse.quote(email, safe='')
+    url = f"{API_BASE_URL}/api/admin/users/by-email/{encoded_email}"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": f"Bearer {admin_token}"
+    }
+    
+    try:
+        print(f"Making request to: {url}")
+        print(f"Headers: Authorization: Bearer {admin_token[:20]}...")
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        print(f"Response Status: {response.status_code}")
+        print(f"Response Headers: {dict(response.headers)}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            print("✅ Request successful!")
+            print(f"Response: {json.dumps(data, indent=2)}")
+            
+            # Extract user data
+            user_data = data.get('user')
+            if user_data:
+                return {
+                    'user_id': user_data.get('_id'),
+                    'username': user_data.get('username'),
+                    'email': user_data.get('email'),
+                    'role': user_data.get('role'),
+                    'is_verified': user_data.get('isVerified', False),
+                    'created_at': user_data.get('createdAt'),
+                    'updated_at': user_data.get('updatedAt')
+                }
+            else:
+                print("⚠️ No user data in response")
+                return None
+                
+        elif response.status_code == 404:
+            print(f"❌ User not found: {email}")
+            try:
+                error_data = response.json()
+                print(f"Error details: {json.dumps(error_data, indent=2)}")
+            except:
+                print(f"Error response: {response.text}")
+            return None
+            
+        elif response.status_code == 401:
+            print("❌ Unauthorized - check admin token")
+            return None
+            
+        elif response.status_code == 403:
+            print("❌ Forbidden - admin access required")
+            return None
+            
+        else:
+            print(f"❌ Unexpected status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Request failed: {e}")
+        return None
+
+def create_user_account(admin_token, sub, email, role, username=None):
+    """
+    Creates a new user account by calling the /api/admin/users endpoint.
+
+    Args:
+        base_url (str): The base URL of the accounting service.
+        admin_token (str): The JWT token for an admin user.
+        sub (str): The unique ID (sub/subject) for the new user.
+        email (str): The email address for the new user.
+        role (str): The role for the new user (e.g., 'enduser', 'supervisor', 'admin').
+        username (str, optional): The username for the new user. Defaults to None.
+
+    Returns:
+        tuple: (status_code, response_data)
+               response_data will be a dict if JSON, otherwise raw text.
+               Returns (None, error_message_string) on request exception.
+    """
+    create_user_url = f"{ACCOUNT_BASE_URL}/api/admin/users"
+
+    headers = {
+        "Authorization": f"Bearer {admin_token}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "sub": sub,
+        "email": email,
+        "role": role
+    }
+
+    if username:
+        payload["username"] = username
+
+    print(f"Attempting to create user with payload: {json.dumps(payload, indent=2)}")
+    print(f"Target URL: {create_user_url}")
+
+    try:
+        response = requests.post(create_user_url, headers=headers, json=payload)
+        
+        response_data = None
+        try:
+            response_data = response.json()
+        except json.JSONDecodeError:
+            response_data = response.text
+            
+        return response.status_code, response_data
+
+    except requests.exceptions.RequestException as e:
+        error_message = f"An error occurred: {e}"
+        print(error_message)
+        return None, error_message
 
 def allocate_credit_to_user(user, token):
     """Allocate credit to a user using the admin token by their email"""
@@ -195,6 +327,14 @@ def main():
 
     # Allocate credits to each user
     for user in all_users:
+        user_data = get_user_by_email(email=user['email'], admin_token=admin_token)
+        response = create_user_account(
+            admin_token, 
+            user_data["user_id"], # This is actually the sub
+            user_data["email"], 
+            user_data["role"], 
+            user_data["username"]
+        )
         success = allocate_credit_to_user(user, admin_token)
         if success:
             successful_allocations += 1

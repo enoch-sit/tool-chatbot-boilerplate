@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "sourceMap": true, // for debug only DEBUG CONFIG
+    "inlineSources": true, // for debug only DEBUG CONFIG
     "target": "es2018",
     "module": "commonjs",
     "outDir": "./dist",
@@ -10,6 +12,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "types": ["node", "jest", "supertest"]
+
+    
   },
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules"]

@@ -17,6 +17,12 @@ import sequelize, { testConnection } from './config/sequelize';
 // Load environment variables
 dotenv.config();
 
+// console.log("DB_USER from env:", process.env.DB_USER);
+// console.log("DB_PASSWORD from env:", process.env.DB_PASSWORD);
+// console.log("DB_HOST from env:", process.env.DB_HOST);
+// console.log("DB_NAME from env:", process.env.DB_NAME);
+// console.log("DB_PORT from env:", process.env.DB_PORT);
+
 // Create Express app
 const app = express();
 const PORT = process.env.PORT || 3001;

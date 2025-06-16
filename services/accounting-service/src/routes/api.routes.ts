@@ -178,11 +178,11 @@ router.post('/credits/allocate', requireSupervisor, CreditController.allocateCre
  *   200 OK: { message: string, allocationId: string }
  *   400 Bad Request: If required fields are missing/invalid (e.g., invalid email format)
  *   401 Unauthorized: If no user authenticated
- *   403 Forbidden: If user is not a supervisor/admin
+ *   403 Forbidden: If user is not a admin
  *   404 Not Found: If user with the given email is not found
  *   500 Server Error: If allocation fails
  */
-router.post('/credits/allocate-by-email', requireSupervisor, CreditController.allocateCreditsByEmail); // New controller method
+router.post('/credits/allocate-by-email', requireAdmin, CreditController.allocateCreditsByEmail); // New controller method
 
 
 /**

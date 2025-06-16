@@ -75,6 +75,7 @@ interface JwtPayload {
  * @returns void, calls next() on success or returns error response
  */
 export const authenticateJWT = async (req: Request, res: Response, next: NextFunction) => {
+  //debugger;
   try {
     const authHeader = req.headers.authorization;
     
@@ -147,13 +148,73 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
  * @param next - Express next function
  * @returns void, calls next() if user is admin or returns 403 Forbidden
  */
-export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin access required' });
+export const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  //debugger;
+  try {
+    const authHeader = req.headers.authorization;
+    
+    // Check if Authorization header exists and has correct format
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authentication token required' });
+    }
+    
+    // Extract token from header (remove "Bearer " prefix)
+    const token = authHeader.split(' ')[1];
+    
+    // Verify token using shared JWT secret
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET!) as JwtPayload;
+    
+    // Ensure this is an access token, not a refresh token
+    if (decoded.type !== 'access') {
+      return res.status(401).json({ message: 'Invalid token type' });
+    }
+    
+    // Check if user has admin role
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    
+    // Find or create user account in accounting database using our service
+    try {
+      // This ensures our user database stays in sync with the auth service
+      await UserAccountService.findOrCreateUser({
+        userId: decoded.sub,
+        email: decoded.email,
+        username: decoded.username,
+        role: decoded.role
+      });
+      
+      // Attach user info to request object for use in route handlers
+      req.user = {
+        userId: decoded.sub,
+        username: decoded.username,
+        email: decoded.email,
+        role: decoded.role
+      };
+      
+      // Continue to the next middleware or route handler
+      next();
+    } catch (userError) {
+      console.error('Error processing user account:', userError);
+      return res.status(500).json({ message: 'Failed to process user account' });
+    }
+  } catch (error: unknown) {
+    // Handle specific JWT error types with appropriate responses
+    if (error instanceof Error) {
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ message: 'Token expired' });
+      }
+      
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ message: 'Invalid token' });
+      }
+    }
+    
+    // Catch-all for other authentication errors
+    console.error('JWT authentication error:', error);
+    return res.status(401).json({ message: 'Authentication failed' });
   }
-  next();
 };
-
 /**
  * Supervisor Role Middleware
  * 
