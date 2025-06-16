@@ -11,6 +11,7 @@ import time
 import sys
 import os
 import datetime
+from urllib.parse import quote
 
 LOG_FILE = "add_credits.log"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -115,8 +116,10 @@ def check_user_credits(admin_token, user_id, username, user_type):
     """Check credit balance for a specific user"""
     print(f"\n--- Checking credits for {user_type}: {username} ---")
     try:
+        # URL encode the user_id in case it's an email
+        encoded_user_id = quote(user_id, safe='')
         response = requests.get(
-            f"{ACCOUNT_BASE_URL}/api/credits/balance/{user_id}",
+            f"{ACCOUNT_BASE_URL}/api/credits/balance/{encoded_user_id}",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
 
@@ -175,7 +178,7 @@ def check_all_users_credits(admin_token):
     for user in all_users:
         # For this example, we'll use username as user_id
         # In a real system, you'd need to get the actual user ID from the auth service
-        user_id = user["username"]  # This should be replaced with actual user ID lookup
+        user_id = user["email"]  # This should be replaced with actual user ID lookup or email
         result = check_user_credits(
             admin_token, user_id, user["username"], user["role"]
         )

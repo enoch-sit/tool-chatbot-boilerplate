@@ -310,15 +310,13 @@ export class CreditController {
     } catch (error) {
       console.error('Error getting user balance:', error);
       return res.status(500).json({ message: 'Failed to retrieve credit balance' });
-    }
-  }
+    }  }
   
-  // 20250523_test_flow
   /**
    * Get a specific user's credit balance (admin/supervisor only)
    * GET /api/credits/balance/:userId
    * 
-   * @param req Express request object with userId param
+   * @param req Express request object with userId param (can be userId or email)
    * @param res Express response object
    * 
    * @returns {Promise<Response>} JSON response with:
@@ -326,6 +324,7 @@ export class CreditController {
    *   - 400 Bad Request: If userId is missing
    *   - 401 Unauthorized: If no user authenticated
    *   - 403 Forbidden: If user lacks permission
+   *   - 404 Not Found: If user not found
    *   - 500 Server Error: If retrieval fails
    */
   async getUserBalanceByAdmin(req: Request, res: Response) {
@@ -341,16 +340,30 @@ export class CreditController {
       const { userId } = req.params;
       
       if (!userId) {
-        return res.status(400).json({ message: 'User ID is required' });
+        return res.status(400).json({ message: 'User ID or email is required' });
+      }      
+      let targetUserId = userId;
+      
+      // Check if the parameter is an email (contains @ or URL-encoded %40)
+      if (userId.includes('@') || userId.includes('%40')) {
+        // Decode URL-encoded email if necessary
+        const email = decodeURIComponent(userId);
+        
+        // Look up user by email
+        const user = await UserAccountService.findByEmail(email);
+        if (!user) {
+          return res.status(404).json({ message: 'User not found with the provided email' });
+        }
+        targetUserId = user.userId;
+      } else {
+        // Check if target user exists by userId
+        const userExists = await UserAccountService.userExists(userId);
+        if (!userExists) {
+          return res.status(404).json({ message: 'User not found' });
+        }
       }
       
-      // Check if target user exists
-      const userExists = await UserAccountService.userExists(userId);
-      if (!userExists) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-      
-      const balanceInfo = await CreditService.getUserBalance(userId);
+      const balanceInfo = await CreditService.getUserBalance(targetUserId);
       return res.status(200).json(balanceInfo);
     } catch (error) {
       console.error('Error getting user balance by admin:', error);

@@ -14,7 +14,7 @@ Handles all aspects of user credit balances.
 
 - **Get User Credit Balance**:
   - `GET /api/credits/balance`: Authenticated users can retrieve their own credit balance.
-  - `GET /api/credits/balance/:userId`: Administrators and supervisors can retrieve the credit balance of a specific user.
+  - `GET /api/credits/balance/:userId`: Administrators and supervisors can retrieve the credit balance of a specific user. The `userId` parameter can be either a user ID or an email address (URL-encoded emails are automatically handled).
 - **Check Sufficient Credits**:
   - `POST /api/credits/check`: Allows services to verify if a user has enough credits for a requested operation before execution. Expects `requiredCredits` in the request body.
 - **Calculate Credit Cost**:

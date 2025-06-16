@@ -216,11 +216,11 @@ Handled by `CreditController`. Base path: `/api/credits`
 
 ### 4. Get a User's Credit Balance (Admin/Supervisors Only)
 - **Endpoint:** `GET /api/credits/balance/:userId`
-- **Description:** Returns a specific user's credit balance.
+- **Description:** Returns a specific user's credit balance. The `userId` parameter can be either a user ID or an email address.
 - **Authentication:** JWT required.
 - **Authorization:** `admin` or `supervisor` role required.
 - **Path Parameters:**
-    - `userId`: string - ID of the user to check.
+    - `userId`: string - ID or email of the user to check. Email addresses are automatically URL-decoded if needed (e.g., `user%40example.com` becomes `user@example.com`).
 - **Response (200 OK):**
   ```json
   {
@@ -232,8 +232,12 @@ Handled by `CreditController`. Base path: `/api/credits`
     - 400 Bad Request: If `userId` is missing.
     - 401 Unauthorized: If no user authenticated.
     - 403 Forbidden: If authenticated user lacks permission.
-    - 404 Not Found: If target user doesn't exist.
+    - 404 Not Found: If target user doesn't exist (specific message for email: "User not found with the provided email").
     - 500 Server Error: If retrieval fails.
+- **Usage Examples:**
+  - By User ID: `GET /api/credits/balance/68142f163a381f81e190342d`
+  - By Email: `GET /api/credits/balance/user@example.com`
+  - By URL-encoded Email: `GET /api/credits/balance/user%40example.com`
 - **Controller Function Snippet (from `credit.controller.ts`):**
   ```typescript
   // src/controllers/credit.controller.ts
