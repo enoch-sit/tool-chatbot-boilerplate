@@ -416,30 +416,24 @@ def test_add_user_to_chatflow(token, flowise_id, username):
     """Test adding a user to a chatflow"""
     print(f"\n--- Testing Add User '{username}' to Chatflow ---")
     try:
-        # First, get user_id by username
         headers = {"Authorization": f"Bearer {token}"}
-        
-        # Find user by email/username (assuming username matches email pattern)
         user_email = f"{username}@example.com" if "@" not in username else username
-        
-        # Use the correct endpoint format for adding user by email
+        # Use the correct endpoint and JSON body as per admin.py
+        payload = {"email": user_email}
         response = requests.post(
-            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}/users/email/{user_email}",
-            headers=headers
+            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}/users",
+            headers=headers,
+            json=payload
         )
-        
         if response.status_code == 200:
             data = response.json()
             print(f"✅ User '{username}' successfully added to chatflow {flowise_id}")
             print(f"📝 Response: {data.get('message', 'Success')}")
-            
-            # Log the assignment
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 log_file.write(
                     f"[{timestamp}] User '{username}' added to chatflow {flowise_id}\n"
                 )
-            
             return True
         elif response.status_code == 409:
             print(f"⚠️  User '{username}' already assigned to chatflow {flowise_id}")
@@ -456,7 +450,6 @@ def test_add_user_to_chatflow(token, flowise_id, username):
             print(f"❌ Failed to add user to chatflow: {response.status_code}")
             print(f"Response: {response.text}")
             return False
-            
     except requests.RequestException as e:
         print(f"❌ Request error: {e}")
         return False
@@ -512,62 +505,58 @@ def test_remove_user_from_chatflow(token, flowise_id, username):
     print(f"\n--- Testing Remove User '{username}' from Chatflow ---")
     try:
         headers = {"Authorization": f"Bearer {token}"}
-        
-        # Find user by email/username (assuming username matches email pattern)
         user_email = f"{username}@example.com" if "@" not in username else username
-        
-        # Use the correct endpoint format for removing user by email
         response = requests.delete(
-            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}/users/email/{user_email}",
-            headers=headers
+            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}/users",
+            headers=headers,
+            params={"email": user_email}
         )
-        
         if response.status_code == 200:
             data = response.json()
             print(f"✅ User '{username}' successfully removed from chatflow {flowise_id}")
             print(f"📝 Response: {data.get('message', 'Success')}")
-            
-            # Log the removal
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 log_file.write(
-                    f"[{timestamp}] User '{username}' removed from chatflow {flowise_id}\\n"
+                    f"[{timestamp}] User '{username}' removed from chatflow {flowise_id}\n"
                 )
-            
             return True
-        elif response.status_code == 409: # MODIFIED BLOCK FOR 409 HANDLING
+        elif response.status_code == 409:
             try:
                 error_data = response.json()
                 detail = error_data.get('detail', '').lower()
                 if 'already inactive' in detail or 'not assigned' in detail or 'user does not have access' in detail:
                     print(f"⚠️  User '{username}' access already inactive or not assigned to chatflow {flowise_id} (409). Considered success for removal/cleanup.")
-                    # Log this specific 409 case
                     with open(LOG_PATH, "a") as log_file:
                         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         log_file.write(
-                            f"[{timestamp}] User '{username}' on chatflow {flowise_id}: access already inactive or not assigned (409 treated as success for cleanup).\\n"
+                            f"[{timestamp}] User '{username}' on chatflow {flowise_id}: access already inactive or not assigned (409 treated as success for cleanup).\n"
                         )
-                    return True # Treat as success for cleanup purposes
+                    return True
                 else:
-                    # Other 409 errors are still failures
                     print(f"❌ Failed to remove user '{username}' from chatflow {flowise_id} (409 - unexpected detail): {response.status_code} - {response.text}")
                     return False
-            except ValueError: # If response is not JSON
+            except ValueError:
                 print(f"❌ Failed to remove user '{username}' from chatflow {flowise_id} (409 - non-JSON response): {response.text}")
                 return False
         elif response.status_code == 404:
             error_data = response.json() if response.headers.get('content-type') == 'application/json' else {}
             detail = error_data.get('detail', '')
             if 'user' in detail.lower():
-                print(f"❌ User '{username}' not found or not assigned to this chatflow")
+                print(f"⚠️  User '{username}' not found or not assigned to this chatflow (404). Treated as success for idempotency.")
+                with open(LOG_PATH, "a") as log_file:
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_file.write(
+                        f"[{timestamp}] User '{username}' not found or not assigned to chatflow {flowise_id} (404 treated as success for idempotency).\n"
+                    )
+                return True
             else:
                 print(f"❌ Chatflow {flowise_id} not found")
-            return False
+                return False
         else:
             print(f"❌ Failed to remove user from chatflow: {response.status_code}")
             print(f"Response: {response.text}")
             return False
-            
     except requests.RequestException as e:
         print(f"❌ Request error: {e}")
         return False

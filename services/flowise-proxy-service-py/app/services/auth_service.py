@@ -5,7 +5,7 @@ from datetime import datetime
 from app.config import settings
 from app.auth.jwt_handler import JWTHandler
 from app.models.user import User
-from app.models.chatflow import UserChatflow
+from app.models.chatflow import Chatflow, UserChatflow
 from app.models.refresh_token import RefreshToken
 
 
@@ -18,27 +18,30 @@ class AuthService:
     async def validate_user_permissions(self, user_id: str, chatflow_id: str) -> bool:
         """Validate if user has access to specific chatflow using MongoDB"""
         try:
-            # 🔍 DEBUG: Log what we're looking for
-            self.logger.info(f"🔍 Permission validation request:")
-            self.logger.info(f"  Looking for user_id: '{user_id}' (type: {type(user_id)}, len: {len(user_id)})")
-            self.logger.info(f"  Looking for chatflow_id: '{chatflow_id}' (type: {type(chatflow_id)})")
-        
-            # 🔍 DEBUG: Check what UserChatflow records actually exist
-            all_records = await UserChatflow.find().limit(10).to_list()
-            self.logger.info(f"📊 Database contains {len(all_records)} UserChatflow records:")
-            for i, record in enumerate(all_records):
-                self.logger.info(f"  Record {i+1}: user_id='{record.user_id}' (len: {len(record.user_id)}), chatflow_id='{record.chatflow_id}', active={record.is_active}")
-        
-            # Your existing query
+            # The chatflow_id passed here is the flowise_id from the API request
+            flowise_chatflow_id = chatflow_id
+
+            # 1. Find the internal chatflow document from the flowise_id
+            chatflow = await Chatflow.find_one(Chatflow.flowise_id == flowise_chatflow_id)
+            
+            if not chatflow:
+                self.logger.warning(f"Permission check: No chatflow found with flowise_id: {flowise_chatflow_id}")
+                return False
+                
+            # 2. Get the internal MongoDB _id as a string
+            internal_chatflow_id = str(chatflow.id)
+
+            # 3. Validate user has an active assignment to this internal chatflow_id
             user_chatflow = await UserChatflow.find_one(
-                UserChatflow.user_id == user_id,
-                UserChatflow.chatflow_id == chatflow_id,
+                UserChatflow.external_user_id == user_id,
+                UserChatflow.chatflow_id == internal_chatflow_id,
+                UserChatflow.is_active == True
             )
             
             if user_chatflow:
-                self.logger.info("✅ EXACT MATCH FOUND!")
+                self.logger.info(f"ACCESS GRANTED: User '{user_id}' has access to chatflow '{flowise_chatflow_id}'")
             else:
-                self.logger.warning("❌ NO EXACT MATCH FOUND")
+                self.logger.warning(f"ACCESS DENIED: User '{user_id}' does not have access to chatflow '{flowise_chatflow_id}' (internal id: {internal_chatflow_id})")
             
             return user_chatflow is not None
         

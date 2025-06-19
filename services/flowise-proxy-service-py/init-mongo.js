@@ -6,8 +6,8 @@ db = db.getSiblingDB('flowise_proxy_test');
 
 // Create a test user with read/write access to the test database
 db.createUser({
-  user: 'testuser',
-  pwd: 'testpass',
+  user: 'admin',
+  pwd: 'password',
   roles: [
     {
       role: 'readWrite',

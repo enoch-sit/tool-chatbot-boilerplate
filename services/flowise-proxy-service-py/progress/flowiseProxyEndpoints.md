@@ -108,21 +108,22 @@ The admin endpoints implement a **Single Source of Truth** architecture where ex
 
 **Description:** Add a user to a chatflow by email address. Admin only, enforced by `require_admin_role` dependency. This is the recommended approach for admin-controlled access.
 
-**Security Model:** 
+**Security Model:**
 * Admin looks up user in external auth system to verify existence
-* Creates local UserChatflow assignment record  
+* Creates local UserChatflow assignment record
 * User automatically gets local user record synced if doesn't exist
 * NO default access - explicit assignment required
 
-**Code Location:** `app/api/admin.py` - `add_user_to_chatflow_by_email()` function
+**Code Location:** `app/api/admin.py` - `add_user_to_chatflow()` function
 
 **Request Headers:**
 
 * `Authorization: Bearer <admin_access_token>`
+* `Content-Type: application/json`
 
 **Path Parameters:**
 
-* `chatflow_id` (string): The Flowise chatflow ID 
+* `chatflow_id` (string): The Flowise chatflow ID
 * `email` (string): User's email address
 
 **Request Body:** None
@@ -133,7 +134,7 @@ The admin endpoints implement a **Single Source of Truth** architecture where ex
 {
   "user_id": "6850d639b5db11d280849004",
   "username": "user1",
-  "email": "user1@example.com", 
+  "email": "user1@example.com",
   "chatflow_id": "e13cbaa3-c909-4570-8c49-78b45115f34a",
   "chatflow_name": "deepSearchAWS",
   "status": "success",
@@ -147,7 +148,7 @@ The admin endpoints implement a **Single Source of Truth** architecture where ex
 {
   "user_id": "6850d639b5db11d280849004",
   "username": "user1",
-  "chatflow_id": "e13cbaa3-c909-4570-8c49-78b45115f34a", 
+  "chatflow_id": "e13cbaa3-c909-4570-8c49-78b45115f34a",
   "status": "success",
   "message": "Existing access reactivated"
 }
@@ -163,7 +164,7 @@ The admin endpoints implement a **Single Source of Truth** architecture where ex
 * Supports both active and inactive state handling
 * Comprehensive audit logging
 
-**Code Location:** `app/api/admin.py` - `remove_user_from_chatflow_by_email()` function  
+**Code Location:** `app/api/admin.py` - `remove_user_from_chatflow()` function  
 
 **Request Headers:**
 
@@ -181,7 +182,7 @@ The admin endpoints implement a **Single Source of Truth** architecture where ex
 ```json
 {
   "user_id": "6850d639b5db11d280849004",
-  "username": "user1", 
+  "username": "user1",
   "email": "user1@example.com",
   "chatflow_id": "e13cbaa3-c909-4570-8c49-78b45115f34a",
   "chatflow_name": "deepSearchAWS",
@@ -197,6 +198,65 @@ The admin endpoints implement a **Single Source of Truth** architecture where ex
 {
   "detail": "User user1@example.com access to chatflow e13cbaa3-c909-4570-8c49-78b45115f34a is already inactive"
 }
+```
+
+### `POST /api/v1/admin/chatflows/{chatflow_id}/users/bulk-add`
+
+**Description:** Add multiple users to a chatflow in a single operation. Admin only, enforced by `require_admin_role` dependency.
+
+**Features:**
+* Bulk assignment with individual result tracking
+* Smart reactivation of previously removed users
+* Comprehensive error handling per user
+* Transaction-safe operations
+
+**Code Location:** `app/api/admin.py` - `bulk_add_users_to_chatflow()` function
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+* `Content-Type: application/json`
+
+**Path Parameters:**
+
+* `chatflow_id` (string): The Flowise chatflow ID
+
+**Request Body:**
+
+```json
+{
+  "emails": [
+    "user1@example.com",
+    "user2@example.com", 
+    "supervisor1@example.com"
+  ]
+}
+```
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "email": "user1@example.com",
+    "user_id": "6850d639b5db11d280849004",
+    "username": "user1", 
+    "status": "success",
+    "message": "Access granted successfully"
+  },
+  {
+    "email": "user2@example.com",
+    "user_id": "6850d639b5db11d280849005",
+    "username": "user2",
+    "status": "reactivated", 
+    "message": "Existing access reactivated"
+  },
+  {
+    "email": "invalid@example.com",
+    "status": "error",
+    "message": "User not found in external auth system"
+  }
+]
 ```
 
 ### `GET /api/v1/admin/chatflows/{chatflow_id}/users`

@@ -226,7 +226,7 @@ async def chat_predict(
             )
         
         # 5. Deduct credits before processing
-        if not await accounting_service.deduct_credits(user_id, cost, f"Chat request to {chatflow_id}"):
+        if not await accounting_service.deduct_credits(user_id, cost, user_token, f"Chat request to {chatflow_id}"):
             raise HTTPException(
                 status_code=402,
                 detail="Failed to deduct credits"

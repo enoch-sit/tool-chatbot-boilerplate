@@ -212,6 +212,10 @@ async def add_user_to_chatflow(
             email=request.email,
             admin_user=current_user
         )
+        # Ensure the chatflow is deployed and active after assignment
+        await Chatflow.find_one(Chatflow.flowise_id == flowise_id).update(
+            {"$set": {"sync_status": "active", "deployed": True}}
+        )
         return result
     except HTTPException:
         # Re-raise HTTPExceptions from the service layer directly

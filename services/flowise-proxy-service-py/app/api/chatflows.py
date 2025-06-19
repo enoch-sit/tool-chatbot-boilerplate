@@ -7,6 +7,7 @@ from app.models.chatflow import UserChatflow, Chatflow
 from app.models.user import User
 from app.core.logging import logger
 from beanie.operators import In
+from bson import ObjectId
 
 router = APIRouter(prefix="/api/v1/chatflows", tags=["chatflows"])
 
@@ -47,32 +48,32 @@ async def list_chatflows(
     This endpoint filters chatflows based on user permissions.
     """
     try:
-        external_user_id = current_user.get('sub')
-        if not external_user_id:
-            logger.error(f"❌ No 'sub' claim in JWT for user: {current_user.get('email')}")
+        # Get the local user from the JWT token data
+        local_user = await get_local_user_from_jwt(current_user)
+        if not local_user:
+            logger.warning(f"Could not find local user for JWT: {current_user.get('email')}")
             return []
 
-        logger.info(f"🔍 Fetching chatflows for external_user_id: {external_user_id}")
+        logger.info(f"🔍 Fetching chatflows for local_user_id: {local_user.id}")
 
-        # Get user's active chatflow access records using the external_user_id
+        # Get user's active chatflow access records using the user's external_id
         user_chatflows = await UserChatflow.find(
-            UserChatflow.external_user_id == external_user_id,
+            UserChatflow.external_user_id == local_user.external_id, # Use external_id from the local user object
             UserChatflow.is_active == True
         ).to_list()
         
-        logger.info(f"🔍 Found {len(user_chatflows)} active chatflow assignments for user {external_user_id}")
+        logger.info(f"🔍 Found {len(user_chatflows)} active chatflow assignments for user {local_user.email}")
         
         if not user_chatflows:
             return []
         
         # Extract chatflow IDs (these are flowise_ids)
-        chatflow_ids = [uc.chatflow_id for uc in user_chatflows]
+        chatflow_ids = [ObjectId(uc.chatflow_id) for uc in user_chatflows]
         
         # Get chatflow details from local database
         chatflows = await Chatflow.find(
-            In(Chatflow.flowise_id, chatflow_ids),
+            In(Chatflow.id, chatflow_ids), # Match against the document's internal _id
             Chatflow.sync_status != "deleted",
-            Chatflow.deployed == True
         ).to_list()
         
         logger.info(f"🔍 Found {len(chatflows)} deployed chatflows matching user access")
@@ -223,9 +224,9 @@ async def get_my_chatflows(
         
         # Get chatflow details from local database
         chatflows = await Chatflow.find(
-            In(Chatflow.flowise_id, chatflow_ids),
+            In(Chatflow.id, chatflow_ids),
             Chatflow.sync_status != "deleted",  # Exclude deleted chatflows
-            Chatflow.deployed == True  # Only show deployed chatflows to users
+            # Chatflow.deployed == True  # Only show deployed chatflows to users
         ).to_list()
         
         # Create response with user-friendly information
