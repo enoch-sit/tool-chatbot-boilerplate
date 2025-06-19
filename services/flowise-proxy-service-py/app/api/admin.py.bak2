@@ -269,28 +269,6 @@ async def sync_user_from_external_by_email(
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
-@router.post("/chatflows/{flowise_id}/users/bulk-add", response_model=BulkUserAssignmentResponse)
-async def bulk_add_users_to_chatflow(
-    flowise_id: str,
-    request: AddUsersByEmailRequest,
-    current_user: Dict = Depends(require_admin_role),
-    chatflow_service: ChatflowService = Depends(get_chatflow_service)
-):
-    """
-    Bulk add users to a chatflow by email (Admin only).
-    """
-    try:
-        return await chatflow_service.add_users_to_chatflow_by_email(
-            emails=request.emails,
-            flowise_id=flowise_id,
-            admin_user=current_user
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in bulk add users to chatflow {flowise_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
 # Untested endpoint preserved for backward compatibility.
 # Note: This now expects external_user_ids, not internal ones.
 # @router.post("/chatflows/add-users", response_model=BulkUserAssignmentResponse, deprecated=True)

@@ -49,13 +49,14 @@ class ChatflowSyncResult(BaseModel):
 
 # Keep existing UserChatflow for backward compatibility
 class UserChatflow(Document):
-    user_id: str = Field(..., index=True)  # Reference to User document id
+    external_user_id: str = Field(..., index=True)  # Reference to User's external_id (JWT sub)
     chatflow_id: str = Field(..., index=True)  # Reference to Chatflow document id
     is_active: bool = Field(default=True)
     assigned_at: datetime = Field(default_factory=datetime.utcnow)
+    assigned_by: Optional[str] = Field(None, description="Username of admin who assigned the user")
     
     class Settings:
         collection = "user_chatflows"
 
     def __repr__(self):
-        return f"<UserChatflow(user_id='{self.user_id}', chatflow_id='{self.chatflow_id}')>"
+        return f"<UserChatflow(external_user_id='{self.external_user_id}', chatflow_id='{self.chatflow_id}')>"

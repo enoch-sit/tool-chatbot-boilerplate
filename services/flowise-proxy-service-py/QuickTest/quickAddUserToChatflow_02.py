@@ -65,7 +65,6 @@ REGULAR_USERS = [
     },
 ]
 
-
 # Chatflow Management Functions
 def get_admin_token():
     """Log in as admin and get the access token"""
@@ -119,6 +118,66 @@ def get_admin_token():
         print(f"❌ Unexpected error: {e}")
 
     return None
+
+
+def test_sync_users_by_email(token, emails):
+    """Test syncing users by email from external auth to local DB"""
+    print("\\\\n--- Testing User Sync by Email ---")
+    if not emails:
+        print("No emails provided for user sync.")
+        return False
+
+    headers = {"Authorization": f"Bearer {token}"}
+    all_successful = True
+    successful_syncs = 0
+    failed_syncs = 0
+
+    for email in emails:
+        print(f"Attempting to sync user: {email}")
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/api/v1/admin/users/sync-by-email",
+                headers=headers,
+                json={"email": email}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                print(f"✅ User sync successful for {email}: {data.get('status')}")
+                with open(LOG_PATH, "a") as log_file:
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_file.write(
+                        f"[{timestamp}] User sync successful for {email}: {data.get('status')}\\\\n"
+                    )
+                successful_syncs += 1
+            elif response.status_code == 201: # Created
+                data = response.json()
+                print(f"✅ User created and synced for {email}: {data.get('status')}")
+                with open(LOG_PATH, "a") as log_file:
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_file.write(
+                        f"[{timestamp}] User created and synced for {email}: {data.get('status')}\\\\n"
+                    )
+                successful_syncs += 1
+            else:
+                print(f"❌ User sync failed for {email}: {response.status_code} - {response.text}")
+                with open(LOG_PATH, "a") as log_file:
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_file.write(
+                        f"[{timestamp}] User sync failed for {email}: {response.status_code} - {response.text}\\\\n"
+                    )
+                all_successful = False
+                failed_syncs +=1
+        except requests.RequestException as e:
+            print(f"❌ Request error during user sync for {email}: {e}")
+            all_successful = False
+            failed_syncs += 1
+        except Exception as e:
+            print(f"❌ Unexpected error during user sync for {email}: {e}")
+            all_successful = False
+            failed_syncs += 1
+    
+    print(f"📊 User Sync Summary: {successful_syncs} successful, {failed_syncs} failed.")
+    return all_successful
 
 
 def test_sync_chatflows(token):
@@ -519,69 +578,53 @@ def test_remove_user_from_chatflow(token, flowise_id, username):
 
 def test_bulk_add_users_to_chatflow(token, flowise_id, usernames):
     """Test adding multiple users to a chatflow"""
-    print(f"\\n--- Testing Bulk Add Users to Chatflow {flowise_id} ---")
+    print(f"\n--- Testing Bulk Add Users to Chatflow {flowise_id} ---")
     try:
         headers = {"Authorization": f"Bearer {token}"}
-        
         emails = [f"{username}@example.com" if "@" not in username else username for username in usernames]
-        
         payload = {
-            "emails": emails,
-            "chatflow_id": flowise_id 
+            "emails": emails
         }
-        
         response = requests.post(
-            f"{API_BASE_URL}/api/v1/admin/chatflows/add-users-by-email",
+            f"{API_BASE_URL}/api/v1/admin/chatflows/{flowise_id}/users/bulk-add",
             json=payload,
             headers=headers
         )
 
         if response.status_code == 200:
-            results = response.json()
-            print(f"✅ Bulk add users request processed for chatflow {flowise_id}. Response count: {len(results)}")
-            all_reported_success = True
-            if not results and emails: # If we sent emails but got no results, it's an issue.
-                print(f"⚠️  Bulk add response was empty but emails were provided: {', '.join(emails)}. This indicates a potential issue.")
-                all_reported_success = False
-            elif not results and not emails: # No emails sent, empty response is fine.
-                 print("✅ Bulk add response was empty as no emails were provided.")
-                 all_reported_success = True
-
-            for result_item in results: # Renamed to avoid conflict with outer 'result' variable if any
-                status = result_item.get('status')
-                message = result_item.get('message')
-                user_identifier = result_item.get('username', result_item.get('user_id', 'Unknown User'))
-                print(f"   - User: {user_identifier}, Status: {status}, Message: {message}")
-                if status != 'success' and status != 'reactivated':
-                    all_reported_success = False
-            
+            data = response.json()
+            print(f"✅ Bulk user assignment completed")
+            print(f"📊 Results:")
+            success_count = len(data.get('successful_assignments', []))
+            failed_count = len(data.get('failed_assignments', []))
+            print(f"   - Successfully added: {success_count}")
+            print(f"   - Failed: {failed_count}")
+            if data.get('failed_assignments'):
+                print("   - Failed emails:")
+                for failed in data['failed_assignments']:
+                    print(f"     - {failed.get('email')}: {failed.get('message')}")
+            # Log bulk assignment
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Bulk add for chatflow {flowise_id} (users: {', '.join(emails)}) API call status {response.status_code}. All individual results successful: {all_reported_success}\\n")
-            
-            return all_reported_success
+                log_file.write(
+                    f"[{timestamp}] Bulk assignment to chatflow {flowise_id}: "
+                    f"success={success_count}, "
+                    f"failed={failed_count}\n"
+                )
+            return failed_count == 0
         elif response.status_code == 404:
-            error_detail = "Unknown error"
-            try:
-                error_detail = response.json().get("detail", response.text)
-            except ValueError:
-                error_detail = response.text
-            print(f"❌ Bulk add users failed: Chatflow {flowise_id} or a resource not found (404). Detail: {error_detail}")
+            print(f"❌ Chatflow {flowise_id} not found")
             return False
         else:
-            error_detail = "Unknown error"
-            try:
-                error_detail = response.json().get("detail", response.text)
-            except ValueError:
-                error_detail = response.text
-            print(f"❌ Bulk add users failed with status code: {response.status_code}. Detail: {error_detail}")
+            print(f"❌ Failed bulk user assignment: {response.status_code}")
+            print(f"Response: {response.text}")
             return False
-            
+
     except requests.RequestException as e:
-        print(f"❌ Request error during bulk add for chatflow {flowise_id}: {e}")
+        print(f"❌ Request error: {e}")
         return False
     except Exception as e:
-        print(f"❌ Unexpected error during bulk add for chatflow {flowise_id}: {e}")
+        print(f"❌ Unexpected error: {e}")
         return False
 
 
@@ -614,8 +657,8 @@ def run_comprehensive_user_chatflow_tests():
         print("⚠️  Chatflow sync failed or reported errors. User assignment tests might be affected or use stale data.")
         # Decide if to proceed or not. Current logic proceeds.
 
-    # --- Dynamically Select TARGET_FLOWISE_ID ---
-    print("\\n--- Dynamically Selecting Target Flowise ID ---")
+    # --- Attempt to Dynamically Select Target Flowise ID (Optional) ---
+    print("\\n--- Attempting to Dynamically Select Target Flowise ID ---")
     dynamic_target_flowise_id = None
     try:
         headers = {"Authorization": f"Bearer {admin_token}"}
@@ -631,87 +674,26 @@ def run_comprehensive_user_chatflow_tests():
             if eligible_chatflows:
                 selected_chatflow = random.choice(eligible_chatflows)
                 dynamic_target_flowise_id = selected_chatflow.get("flowise_id")
-                print(f"✅ Randomly selected TARGET_FLOWISE_ID: {dynamic_target_flowise_id} (Name: {selected_chatflow.get('name')})")
+                print(f"✅ Dynamically selected a potential TARGET_FLOWISE_ID: {dynamic_target_flowise_id}")
             else:
-                print("❌ No eligible chatflows found (with flowise_id) to select randomly.")
+                print("⚠️ No eligible chatflows found for dynamic selection. Will attempt to get any chatflow.")
         else:
-            print(f"❌ Failed to fetch chatflows for random selection: {response.status_code} - {response.text}")
+            print(f"❌ Failed to fetch chatflows for dynamic selection: {response.status_code} - {response.text}. Will attempt to get any chatflow.")
     except requests.RequestException as e:
-        print(f"❌ Request error while fetching chatflows for random selection: {e}")
+        print(f"❌ Request error while fetching chatflows for dynamic selection: {e}. Will attempt to get any chatflow.")
     except Exception as e:
-        print(f"❌ Unexpected error while fetching chatflows for random selection: {e}")
+        print(f"❌ Unexpected error while fetching chatflows for dynamic selection: {e}. Will attempt to get any chatflow.")
 
-    if not dynamic_target_flowise_id:
-        print("❌ CRITICAL: Could not dynamically select a TARGET_FLOWISE_ID. Aborting further tests that require it.")
-        # Optionally, could fall back to a hardcoded ID or a different strategy if needed.
-        # For now, we will let tests that depend on it fail or be skipped.
-        # However, the script's original logic for test_get_specific_chatflow might still find *an* ID if this fails.
-        # To make it cleaner, if dynamic selection fails, we should probably abort tests needing a *specific* ID.
-        # The current structure will try test_get_specific_chatflow without an ID if dynamic_target_flowise_id is None.
+    # --- Get a specific chatflow (either the dynamically selected one or any available one) ---
+    # test_get_specific_chatflow will try to find one if dynamic_target_flowise_id is None
+    print(f"\\n--- Getting Chatflow Details (Target: {dynamic_target_flowise_id if dynamic_target_flowise_id else 'Any Available'}) ---")
+    get_chatflow_successful, test_chatflow_id = test_get_specific_chatflow(admin_token, dynamic_target_flowise_id)
 
-    # --- Direct Database Check ---
-    print("\\n--- Direct Database Check after Sync (using dynamically selected ID if available) ---")
-    MONGODB_URL_TEST = "mongodb://testuser:testpass@localhost:27020/flowise_proxy_test"
-    DB_NAME_TEST = "flowise_proxy_test"
-    # TARGET_FLOWISE_ID = "99427295-8b85-4b90-85aa-a32294af6ae0" # The ID we are interested in - REMOVED HARDCODED
-
-    if dynamic_target_flowise_id:
-        try:
-            client = pymongo.MongoClient(MONGODB_URL_TEST, serverSelectionTimeoutMS=5000)
-            db = client[DB_NAME_TEST]
-            chatflows_collection = db["chatflows"]
-            
-            client.admin.command('ping') 
-            print(f"Successfully connected to MongoDB: {MONGODB_URL_TEST}")
-
-            db_chatflow = chatflows_collection.find_one({"flowise_id": dynamic_target_flowise_id})
-            if db_chatflow:
-                print(f"✅ Direct DB Check: Found chatflow with flowise_id '{dynamic_target_flowise_id}':")
-                print(f"   Name: {db_chatflow.get('name')}")
-                print(f"   ID in DB: {db_chatflow.get('_id')}")
-                print(f"   Synced At: {db_chatflow.get('synced_at')}")
-            else:
-                print(f"❌ Direct DB Check: Chatflow with flowise_id '{dynamic_target_flowise_id}' NOT FOUND in the database.")
-            client.close()
-        except pymongo.errors.ServerSelectionTimeoutError as err:
-            print(f"❌ Direct DB Check: Could not connect to MongoDB at {MONGODB_URL_TEST}. Error: {err}")
-        except Exception as e:
-            print(f"❌ Direct DB Check: An error occurred: {e}")
-    else:
-        print("ℹ️  Skipping Direct DB Check as no dynamic_target_flowise_id was selected.")
-
-    # --- Add Delay ---
-    delay_seconds = 0.5
-    print(f"\\n--- Adding a delay of {delay_seconds} seconds ---")
-    time.sleep(delay_seconds)
-    
-    # Get a chatflow to test with
-    # Pass the dynamically selected ID to test_get_specific_chatflow
-    get_chatflow_successful, obtained_test_chatflow_id = test_get_specific_chatflow(admin_token, flowise_id=dynamic_target_flowise_id) 
-    
-    test_chatflow_id = None
-    if get_chatflow_successful and obtained_test_chatflow_id:
-        test_chatflow_id = obtained_test_chatflow_id
-        print(f"✅ Successfully fetched/validated chatflow for tests: {test_chatflow_id}")
-    # The original fallback logic if dynamic_target_flowise_id was None and test_get_specific_chatflow(admin_token) was called:
-    # else: # Not successful or no ID returned from the attempt with dynamic_target_flowise_id
-    #    print(f"❌ CRITICAL: Failed to get specific chatflow for ID '{flowise_id}'. Will attempt to find another if dynamic ID was not set.")
-    #    # Try to get any chatflow if the target one failed or wasn't set
-    #    get_chatflow_successful, test_chatflow_id = test_get_specific_chatflow(admin_token) # This tries to find *any*
-    #    if not get_chatflow_successful or not test_chatflow_id:
-    #        print("❌ CRITICAL: Cannot obtain ANY valid chatflow ID for testing. Aborting user assignment tests.")
-    #        with open(LOG_PATH, "a") as log_file:
-    #            log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL: Failed to get any chatflow ID for testing.\\n")
-    #        return False
-    #    else:
-    #        print(f"✅ Found a fallback chatflow ID for tests: {test_chatflow_id}")
-    # Simplified logic: if obtained_test_chatflow_id is None after the call, we abort.
-    if not test_chatflow_id:
-        print("❌ CRITICAL: Cannot obtain a valid chatflow ID for testing (either dynamic selection failed or subsequent fetch failed). Aborting user assignment tests.")
+    if not get_chatflow_successful or not test_chatflow_id:
+        print("❌ CRITICAL: Cannot obtain a valid chatflow ID for testing. Aborting user assignment tests.")
         with open(LOG_PATH, "a") as log_file:
-            log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL: Failed to get a chatflow ID for testing.\\n")
+            log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL: Failed to get any chatflow ID for testing.\\n")
         return False
- 
     
     print(f"✅ Proceeding with tests using Chatflow ID: {test_chatflow_id}")
     
@@ -808,27 +790,48 @@ def run_comprehensive_user_chatflow_tests():
 
 
 if __name__ == "__main__":
-    print("🚀 USER-TO-CHATFLOW ASSIGNMENT TEST SUITE") # Changed title
     print("=" * 60)
-    print("Testing admin functionality for managing user access to chatflows")
-    # print("This test suite includes:") # Simplified description
-    # print("  • User-to-Chatflow Assignment Tests")
-    # print("  • User Cleanup and Audit Tests") # Removed
-    # print("  • Data Quality Validation") # Removed
-    print(f"API Base URL: {API_BASE_URL}")
-    print(f"Log file: {LOG_PATH}")
+    print("🚀 USER-TO-CHATFLOW ASSIGNMENT TEST SUITE 🚀")
     print("=" * 60)
     
-    # Run comprehensive tests (now only includes assignment tests)
-    success = run_comprehensive_user_chatflow_tests()
+    # Initialize log file
+    with open(LOG_PATH, "w") as log_file:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_file.write(f"[{timestamp}] Starting user-to-chatflow assignment tests\\\\n")
     
-    if success:
-        print(f"\\n✅ All user assignment tests completed successfully!") # Changed message
-        print("The Flowise Proxy Service user-to-chatflow assignment functionality appears to be working correctly.") # Changed message
-        sys.exit(0)
+    # Get admin token
+    admin_token = get_admin_token()
+    if not admin_token:
+        print("❌ Critical: Could not obtain admin token. Aborting tests.")
+        with open(LOG_PATH, "a") as log_file:
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_file.write(f"[{timestamp}] Critical: Could not obtain admin token. Aborting tests.\\\\n")
+        sys.exit(1) # Exit if no token
+
+    # Emails for user sync
+    user_emails_to_sync = [user["email"] for user in SUPERVISOR_USERS] + [user["email"] for user in REGULAR_USERS]
+    
+    # Sync users by email first
+    print("\\\\n🔄 Syncing Users by Email...")
+    user_sync_successful = test_sync_users_by_email(admin_token, user_emails_to_sync)
+    if user_sync_successful:
+        print("✅ User sync process completed successfully.")
     else:
-        print(f"\\n❌ Some user assignment tests failed. Check the log file: {LOG_PATH}") # Changed message
-        print("Please review the test output above for specific failures.")
-        sys.exit(1)
+        print("⚠️ User sync process completed with some failures.")
+
+    # Then sync chatflows
+    print("\\\\n🔄 Syncing chatflows...")
+    sync_successful = test_sync_chatflows(admin_token) # Returns True or False
+    if not sync_successful:
+        print("❌ Critical: Chatflow sync failed. Some tests might not be meaningful. Continuing...")
+        # Decide if you want to abort or continue if chatflow sync fails
+        # For now, we'll log and continue
+
+    # Proceed with the rest of the tests
+    run_comprehensive_user_chatflow_tests()
+    
+    print("\\\\n" + "=" * 60)
+    print("✨ User-to-Chatflow Assignment Test Suite Finished ✨")
+    print("=" * 60)
 
 

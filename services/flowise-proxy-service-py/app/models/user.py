@@ -1,20 +1,25 @@
-from beanie import Document
-from pydantic import Field
+from beanie import Document, PydanticObjectId
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
 class User(Document):
-    username: str = Field(..., unique=True, index=True)
-    email: str = Field(..., unique=True, index=True)
-    password_hash: str = Field(...)
-    role: str = Field(default="User")
+    username: Optional[str] = Field(..., max_length=50)
+    email: Optional[EmailStr]
+    role: str = Field(default="user")
     is_active: bool = Field(default=True)
-    credits: int = Field(default=0)
+    external_id: Optional[str] = Field(None, index=True, unique=True, sparse=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     class Settings:
-        collection = "users"
-        
-    def __repr__(self):
-        return f"<User(username='{self.username}', email='{self.email}', role='{self.role}')>"
+        name = "users"
+        indexes = [
+            "external_id",
+        ]
+
+    class Config:
+        # This is the crucial part
+        json_encoders = {
+            PydanticObjectId: str,
+        }

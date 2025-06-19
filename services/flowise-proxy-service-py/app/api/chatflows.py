@@ -1,12 +1,42 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict
+from typing import List, Dict, Optional
 from app.auth.middleware import authenticate_user
 from app.services.flowise_service import FlowiseService
 from app.services.auth_service import AuthService
 from app.models.chatflow import UserChatflow, Chatflow
+from app.models.user import User
 from app.core.logging import logger
+from beanie.operators import In
 
 router = APIRouter(prefix="/api/v1/chatflows", tags=["chatflows"])
+
+async def get_local_user_from_jwt(current_user: Dict) -> Optional[User]:
+    """Helper function to get local user from JWT token data"""
+    user_email = current_user.get('email')
+    external_user_id = current_user.get('sub') or current_user.get('external_id')
+    
+    # Find the local user by external_id or email
+    local_user = None
+    if external_user_id:
+        local_user = await User.find_one(User.external_id == external_user_id)
+    
+    if not local_user and user_email:
+        local_user = await User.find_one(User.email == user_email)
+        
+    return local_user
+
+async def validate_user_chatflow_access(local_user_id: str, chatflow_id: str) -> bool:
+    """Validate if user has access to specific chatflow using local user ID"""
+    try:
+        user_chatflow = await UserChatflow.find_one(
+            UserChatflow.user_id == local_user_id,
+            UserChatflow.chatflow_id == chatflow_id,
+            UserChatflow.is_active == True
+        )
+        return user_chatflow is not None
+    except Exception as e:
+        logger.error(f"Error validating user chatflow access: {e}")
+        return False
 
 @router.get("/", response_model=List[Dict])
 async def list_chatflows(
@@ -17,36 +47,52 @@ async def list_chatflows(
     This endpoint filters chatflows based on user permissions.
     """
     try:
-        flowise_service = FlowiseService()
-        auth_service = AuthService()
+        external_user_id = current_user.get('sub')
+        if not external_user_id:
+            logger.error(f"❌ No 'sub' claim in JWT for user: {current_user.get('email')}")
+            return []
+
+        logger.info(f"🔍 Fetching chatflows for external_user_id: {external_user_id}")
+
+        # Get user's active chatflow access records using the external_user_id
+        user_chatflows = await UserChatflow.find(
+            UserChatflow.external_user_id == external_user_id,
+            UserChatflow.is_active == True
+        ).to_list()
         
-        # Get all chatflows from Flowise
-        all_chatflows = await flowise_service.list_chatflows()
+        logger.info(f"🔍 Found {len(user_chatflows)} active chatflow assignments for user {external_user_id}")
         
-        if all_chatflows is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Flowise service unavailable"
-            )
+        if not user_chatflows:
+            return []
         
-        # Filter chatflows based on user permissions
-        user_id = current_user.get("user_id")
-        accessible_chatflows = []
+        # Extract chatflow IDs (these are flowise_ids)
+        chatflow_ids = [uc.chatflow_id for uc in user_chatflows]
         
-        for chatflow in all_chatflows:
-            chatflow_id = chatflow.get("id")
-            if await auth_service.validate_user_permissions(user_id, chatflow_id):
-                accessible_chatflows.append(chatflow)
+        # Get chatflow details from local database
+        chatflows = await Chatflow.find(
+            In(Chatflow.flowise_id, chatflow_ids),
+            Chatflow.sync_status != "deleted",
+            Chatflow.deployed == True
+        ).to_list()
         
-        return accessible_chatflows
+        logger.info(f"🔍 Found {len(chatflows)} deployed chatflows matching user access")
         
-    except HTTPException:
-        raise
+        # Create response
+        result = [
+            {
+                "id": chatflow.flowise_id,
+                "name": chatflow.name,
+                "description": chatflow.description,
+                "is_public": chatflow.is_public
+            }
+            for chatflow in chatflows
+        ]
+        
+        return result
+
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve chatflows: {str(e)}"
-        )
+        logger.error(f"Error listing chatflows for user {current_user.get('email')}: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred while fetching chatflows.")
 
 @router.get("/{chatflow_id}")
 async def get_chatflow(
@@ -55,31 +101,46 @@ async def get_chatflow(
 ):
     """Get specific chatflow details if user has access"""
     try:
-        flowise_service = FlowiseService()
-        auth_service = AuthService()
-        user_id = current_user.get("user_id")
+        # FIXED: Use proper user ID resolution
+        local_user = await get_local_user_from_jwt(current_user)
+        if not local_user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found"
+            )
         
-        # Check user permissions
-        if not await auth_service.validate_user_permissions(user_id, chatflow_id):
+        # Check user permissions using local user ID
+        if not await validate_user_chatflow_access(str(local_user.id), chatflow_id):
             raise HTTPException(
                 status_code=403,
                 detail="Access denied to this chatflow"
             )
         
-        # Get chatflow details
-        chatflow = await flowise_service.get_chatflow(chatflow_id)
+        # Get chatflow details from local database first
+        chatflow = await Chatflow.find_one(Chatflow.flowise_id == chatflow_id)
         
-        if chatflow is None:
+        if not chatflow:
             raise HTTPException(
                 status_code=404,
                 detail="Chatflow not found"
             )
         
-        return chatflow
+        # Return chatflow details
+        return {
+            "id": chatflow.flowise_id,
+            "name": chatflow.name,
+            "description": chatflow.description,
+            "category": chatflow.category,
+            "type": chatflow.type,
+            "deployed": chatflow.deployed,
+            "created": chatflow.created.isoformat() if chatflow.created else None,
+            "updated": chatflow.updated.isoformat() if chatflow.updated else None
+        }
         
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error getting chatflow {chatflow_id}: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve chatflow: {str(e)}"
@@ -92,18 +153,23 @@ async def get_chatflow_config(
 ):
     """Get chatflow configuration if user has access"""
     try:
-        flowise_service = FlowiseService()
-        auth_service = AuthService()
-        user_id = current_user.get("user_id")
+        # FIXED: Use proper user ID resolution
+        local_user = await get_local_user_from_jwt(current_user)
+        if not local_user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found"
+            )
         
-        # Check user permissions
-        if not await auth_service.validate_user_permissions(user_id, chatflow_id):
+        # Check user permissions using local user ID
+        if not await validate_user_chatflow_access(str(local_user.id), chatflow_id):
             raise HTTPException(
                 status_code=403,
                 detail="Access denied to this chatflow"
             )
         
-        # Get chatflow config
+        # Get chatflow config from Flowise service
+        flowise_service = FlowiseService()
         config = await flowise_service.get_chatflow_config(chatflow_id)
         
         if config is None:
@@ -117,6 +183,7 @@ async def get_chatflow_config(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error getting chatflow config {chatflow_id}: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve chatflow config: {str(e)}"
@@ -131,16 +198,24 @@ async def get_my_chatflows(
     This endpoint returns chatflows from the local database that the user has access to.
     """
     try:
-        user_id = current_user.get('user_id')
+        # FIXED: Get the actual local user ID from the database (same logic as main endpoint)
+        local_user = await get_local_user_from_jwt(current_user)
         
-        # Get user's active chatflow access records
+        if not local_user:
+            logger.error(f"❌ Local user not found for JWT: {current_user}")
+            return []
+        
+        local_user_id = str(local_user.id)
+        logger.info(f"✅ My-chatflows: Found local user: {local_user.email} with local ID: {local_user_id}")
+        
+        # Get user's active chatflow access records using LOCAL user ID
         user_chatflows = await UserChatflow.find(
-            UserChatflow.user_id == user_id,
+            UserChatflow.user_id == local_user_id,  # Use local MongoDB ObjectId as string
             UserChatflow.is_active == True
         ).to_list()
         
         if not user_chatflows:
-            logger.info(f"No active chatflows found for user {user_id}")
+            logger.info(f"No active chatflows found for user {local_user_id}")
             return []
         
         # Extract chatflow IDs (these are flowise_ids stored in chatflow_id field)
@@ -148,7 +223,7 @@ async def get_my_chatflows(
         
         # Get chatflow details from local database
         chatflows = await Chatflow.find(
-            Chatflow.flowise_id.in_(chatflow_ids),
+            In(Chatflow.flowise_id, chatflow_ids),
             Chatflow.sync_status != "deleted",  # Exclude deleted chatflows
             Chatflow.deployed == True  # Only show deployed chatflows to users
         ).to_list()
@@ -173,7 +248,7 @@ async def get_my_chatflows(
             }
             result.append(chatflow_dict)
         
-        logger.info(f"Returning {len(result)} accessible chatflows for user {user_id}")
+        logger.info(f"✅ My-chatflows: Returning {len(result)} accessible chatflows for user {local_user.email}")
         return result
         
     except Exception as e:

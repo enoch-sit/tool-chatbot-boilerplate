@@ -421,156 +421,73 @@ These endpoints manage the association of users with specific chatflows.
 
 These endpoints are for managing the chatflows themselves.
 
+**Note on API Route Order**: In FastAPI, routes are matched in the order they are defined. To ensure correct behavior, specific paths (e.g., `/chatflows/sync`, `/chatflows/stats`, `/chatflows/audit-users`) should be defined in the router *before* more general paths with parameters (e.g., `/chatflows/{flowise_id}`). This documentation attempts to list them in a logical order that also respects this routing principle.
+
 ---
 
 ### Synchronize Chatflows from Flowise
 
-* **Endpoint**: `POST /api/v1/admin/chatflows/sync`
-* **Description**: Fetches all chatflows from the configured external Flowise instance and updates/creates corresponding records in the local database.
-* **Authentication**: Admin role required.
-* **Request Body**: None.
-* **Success Response** (`200 OK`): `ChatflowSyncResult`
+- **Endpoint**: `POST /api/v1/admin/chatflows/sync`
+- **Description**: Triggers a synchronization process that fetches all chatflows from the configured Flowise instance and updates the local database. This ensures the proxy service has the latest chatflow information.
+- **Authentication**: Admin role required.
+- **Request Body**: None.
+- **Success Response** (`200 OK`): `ChatflowSyncResult`
 
   ```json
   {
-    "created": 5,
-    "updated": 2,
-    "deleted": 0,
-    "total_fetched": 7,
-    "errors": 0,
-    "error_details": [],
-    "sync_timestamp": "YYYY-MM-DDTHH:MM:SS.ffffff"
+    "status": "success",
+    "message": "Chatflows synchronized successfully.",
+    "total_synced": 15,
+    "newly_added": 2,
+    "updated": 5,
+    "deleted_in_flowise_count": 1,
+    "errors": []
   }
   ```
 
-* **Notes**: The implementation details (e.g., how it handles deletions or conflicts) depend on the `ChatflowService`.
-**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
+- **Notes**: The implementation details (e.g., how it handles deletions or conflicts) depend on the `ChatflowService`.
 
 ---
 
 ### List All Chatflows
 
-* **Endpoint**: `GET /api/v1/admin/chatflows`
-* **Description**: Retrieves a list of all chatflows stored in the local database.
-* **Authentication**: Admin role required.
-* **Query Parameters**:
-  * `include_deleted` (boolean, optional, default: `false`): If `true`, includes chatflows that are marked as deleted.
-* **Success Response** (`200 OK`): `List[Chatflow]`
-
-  ```json
-  [
-    {
-      "id": "db_id_1",
-      "flowise_id": "flowise_chatflow_id_1",
-      "name": "Support Bot"
-      // ... other chatflow fields
-    },
-    {
-      "id": "db_id_2",
-      "flowise_id": "flowise_chatflow_id_2",
-      "name": "FAQ Assistant"
-      // ... other chatflow fields
-    }
-  ]
-  ```
-
-**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
+- **Endpoint**: `GET /api/v1/admin/chatflows`
+- **Description**: Retrieves a list of all chatflows stored in the local database. This is an administrative view and is not filtered by user permissions.
+- **Authentication**: Admin role required.
+- **Query Parameters**:
+  - `include_deleted` (boolean, optional, default: `false`): If `true`, includes chatflows that are marked as deleted.
+- **Success Response** (`200 OK`): `List[Chatflow]`
+  A list of chatflow objects, including their full details as stored in the proxy service database.
 
 ---
 
 ### Get Chatflow Statistics
 
-* **Endpoint**: `GET /api/v1/admin/chatflows/stats`
-* **Description**: Retrieves statistics about the chatflows, potentially including sync status, counts by status, etc.
-* **Authentication**: Admin role required.
-* **Success Response** (`200 OK`): JSON object with statistics. The exact structure is not defined in the provided code but might look like:
+- **Endpoint**: `GET /api/v1/admin/chatflows/stats`
+- **Description**: Retrieves statistics about the chatflows, such as total count, number of active users, etc.
+- **Authentication**: Admin role required.
+- **Success Response** (`200 OK`): JSON object with statistics. The exact structure is not defined in the provided code but might look like:
 
   ```json
   {
-    "total_chatflows": 10,
-    "active_chatflows": 8,
-    "inactive_chatflows": 1,
-    "deleted_chatflows": 1,
-    "last_sync_status": "success",
-    "last_sync_time": "datetime"
+    "total_chatflows": 25,
+    "active_chatflows": 20,
+    "chatflows_with_users": 15,
+    "average_users_per_chatflow": 3.5
   }
   ```
-
-**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
-
----
-
-### Get Chatflow by Flowise ID
-
-* **Endpoint**: `GET /api/v1/admin/chatflows/{flowise_id}`
-* **Description**: Retrieves detailed information for a specific chatflow using its Flowise ID.
-* **Authentication**: Admin role required.
-* **Path Parameters**:
-  * `flowise_id` (string, required): The Flowise ID of the chatflow.
-* **Success Response** (`200 OK`): `Chatflow` object.
-* **Error Responses**:
-  * `404 Not Found`: If no chatflow with the given `flowise_id` exists.
-**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
-
----
-
-### Force Delete a Chatflow
-
-* **Endpoint**: `DELETE /api/v1/admin/chatflows/{flowise_id}`
-* **Description**: Deletes a chatflow record from the local database. **Important**: This operation typically only removes the record locally and does NOT delete the actual chatflow from the external Flowise instance.
-* **Authentication**: Admin role required.
-* **Path Parameters**:
-  * `flowise_id` (string, required): The Flowise ID of the chatflow to delete.
-* **Success Response** (`200 OK` or `204 No Content`): Success message or no content.
-* **Notes**: The actual deletion logic and its implications (e.g., on data consistency, orphaned records) should be well understood before using this endpoint.
-
----
-
-### List Users Assigned to a Chatflow
-
-* **Endpoint**: `GET /api/v1/admin/chatflows/{flowise_id}/users`
-* **Description**: Retrieves a list of all users who are actively assigned to a specific chatflow.
-* **Authentication**: Admin role required.
-* **Path Parameters**:
-  * `flowise_id` (string, required): The Flowise ID of the chatflow.
-* **Success Response** (`200 OK`): `List[Dict]`
-  Each dictionary in the list contains details of an assigned user:
-
-  ```json
-  [
-    {
-      "user_id": "string",
-      "username": "string",
-      "email": "string",
-      "role": "string",
-      "assigned_at": "datetime",
-      "is_active_in_chatflow": true
-    }
-  ]
-  ```
-
-  If no users are assigned, an empty list `[]` is returned.
-* **Error Responses**:
-  * `404 Not Found`: If the chatflow with the given `flowise_id` does not exist.
-**Coverage:** Tested in `QuickTest/quickAddUserToChatflow.py`.
-
----
-
-## 5. User Cleanup & Data Quality API Endpoints
-
-These endpoints help manage legacy data from the migration to external auth integration.
 
 ---
 
 ### Audit User-Chatflow Assignments
 
-* **Endpoint**: `GET /api/v1/admin/chatflows/audit-users`
-* **Description**: Performs a read-only audit of UserChatflow records to identify potential data quality issues, such as user IDs that don't exist in the external auth system or mismatched identifiers from the legacy system.
-* **Authentication**: Admin role required. The admin's JWT token is used to verify users against the external auth API.
-* **Query Parameters**:
-  * `include_valid` (boolean, optional, default: `false`): Include valid user assignments in the audit results
-  * `chatflow_id` (string, optional): Limit audit to a specific chatflow ID
-* **Success Response** (`200 OK`): `UserAuditResult`
+- **Endpoint**: `GET /api/v1/admin/chatflows/audit-users`
+- **Description**: Performs a read-only audit of UserChatflow records to identify potential data quality issues, such as user IDs that don't exist in the external auth system or mismatched identifiers from the legacy system.
+- **Authentication**: Admin role required. The admin's JWT token is used to verify users against the external auth API.
+- **Query Parameters**:
+  - `include_valid` (boolean, optional, default: `false`): Include valid user assignments in the audit results
+  - `chatflow_id` (string, optional): Limit audit to a specific chatflow ID
+- **Success Response** (`200 OK`): `UserAuditResult`
 
   ```json
   {
@@ -594,7 +511,7 @@ These endpoints help manage legacy data from the migration to external auth inte
         "suggested_action": "delete_or_reassign"
       }
     ],
-    "audit_timestamp": "2025-06-12T10:30:00.000Z",
+    "audit_timestamp": "2025-06-13T10:30:00.000Z",
     "recommendations": [
       "Consider running cleanup with 'reassign_by_email' action for legacy records",
       "8 chatflows have invalid user assignments that may affect access control"
@@ -602,16 +519,16 @@ These endpoints help manage legacy data from the migration to external auth inte
   }
   ```
 
-* **Notes**: This is a safe, read-only operation that helps identify data quality issues before performing cleanup.
+- **Notes**: This is a safe, read-only operation that helps identify data quality issues before performing cleanup.
 
 ---
 
 ### Clean Up User-Chatflow Assignments
 
-* **Endpoint**: `POST /api/v1/admin/chatflows/cleanup-users`
-* **Description**: Performs cleanup operations on UserChatflow records to resolve data quality issues identified during the migration to external auth integration. **This operation can permanently modify or remove records**.
-* **Authentication**: Admin role required. The admin's JWT token is used to interact with the external auth API for user validation and reassignment.
-* **Request Body**: `UserCleanupRequest`
+- **Endpoint**: `POST /api/v1/admin/chatflows/cleanup-users`
+- **Description**: Performs cleanup operations on UserChatflow records to resolve data quality issues identified during the migration to external auth integration. **This operation can permanently modify or remove records**.
+- **Authentication**: Admin role required. The admin's JWT token is used to interact with the external auth API for user validation and reassignment.
+- **Request Body**: `UserCleanupRequest`
 
   ```json
   {
@@ -622,12 +539,12 @@ These endpoints help manage legacy data from the migration to external auth inte
   }
   ```
 
-* **Action Types**:
-  * `delete_invalid`: Permanently delete UserChatflow records with invalid user IDs
-  * `reassign_by_email`: Attempt to find users by email in external auth and update user_id
-  * `deactivate_invalid`: Set `is_active = false` for records with invalid user IDs
+- **Action Types**:
+  - `delete_invalid`: Permanently delete UserChatflow records with invalid user IDs
+  - `reassign_by_email`: Attempt to find users by email in external auth and update user_id
+  - `deactivate_invalid`: Set `is_active = false` for records with invalid user IDs
 
-* **Success Response** (`200 OK`): `UserCleanupResult`
+- **Success Response** (`200 OK`): `UserCleanupResult`
 
   ```json
   {
@@ -642,7 +559,7 @@ These endpoints help manage legacy data from the migration to external auth inte
       "Cannot reassign user without email information"
     ],
     "dry_run": false,
-    "cleanup_timestamp": "2025-06-12T10:45:00.000Z",
+    "cleanup_timestamp": "2025-06-13T10:45:00.000Z",
     "invalid_assignments": [
       {
         "user_chatflow_id": "uc_456",
@@ -656,17 +573,65 @@ These endpoints help manage legacy data from the migration to external auth inte
   }
   ```
 
-* **Important Warnings**:
+- **Important Warnings**:
   - **Data Loss Risk**: `delete_invalid` action permanently removes records
   - **Access Impact**: Cleanup may affect user access to chatflows
   - **External Dependencies**: Requires external auth API to be available for validation
   - **Backup Recommended**: Consider backing up UserChatflow table before running cleanup
 
-* **Best Practices**:
+- **Best Practices**:
   1. Always run with `dry_run: true` first to preview changes
   2. Use audit endpoint to understand scope of issues
   3. Start with `deactivate_invalid` action for safer cleanup
   4. Use `chatflow_ids` parameter to limit scope for testing
   5. Monitor error_details for external auth connectivity issues
+
+---
+
+### Get Chatflow by Flowise ID
+
+- **Endpoint**: `GET /api/v1/admin/chatflows/{flowise_id}`
+- **Description**: Retrieves detailed information for a specific chatflow using its Flowise ID.
+- **Authentication**: Admin role required.
+- **Path Parameters**:
+  - `flowise_id` (string, required): The Flowise ID of the chatflow.
+- **Success Response** (`200 OK`): `Chatflow` object.
+- **Error Responses**:
+  - `404 Not Found`: If no chatflow with the given `flowise_id` exists.
+
+---
+
+### Force Delete a Chatflow
+
+- **Endpoint**: `DELETE /api/v1/admin/chatflows/{flowise_id}`
+- **Description**: Forcibly deletes a chatflow record from the local proxy database. This does **not** delete the chatflow from the Flowise instance itself.
+- **Authentication**: Admin role required.
+- **Path Parameters**:
+  - `flowise_id` (string, required): The Flowise ID of the chatflow to delete.
+- **Success Response** (`200 OK` or `204 No Content`): Success message or no content.
+- **Notes**: The actual deletion logic and its implications (e.g., on data consistency, orphaned records) should be well understood before using this endpoint.
+
+---
+
+### List Users Assigned to a Chatflow
+
+- **Endpoint**: `GET /api/v1/admin/chatflows/{flowise_id}/users`
+- **Description**: Retrieves a list of all users who are actively assigned to a specific chatflow.
+- **Authentication**: Admin role required.
+- **Path Parameters**:
+  - `flowise_id` (string, required): The Flowise ID of the chatflow.
+- **Success Response** (`200 OK`): `List[Dict]`
+  A list of user objects, each containing details like `user_id`, `username`, `email`, `role`, `assigned_at`, `is_active_in_chatflow`.
+- **Error Responses**:
+  - `404 Not Found`: If the chatflow with the given `flowise_id` does not exist.
+
+---
+
+## 5. User Cleanup & Data Quality API Endpoints
+<!-- This section header is now redundant as its content has been moved. -->
+<!-- Consider removing this header or re-evaluating if other distinct admin endpoints belong here. -->
+
+<!-- The content for Audit User-Chatflow Assignments and Clean Up User-Chatflow Assignments -->
+<!-- has been moved to Section 4 to reflect a more accurate routing-aware order. -->
 
 ---

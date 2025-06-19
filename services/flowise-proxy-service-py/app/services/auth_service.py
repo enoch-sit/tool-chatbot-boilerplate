@@ -1,6 +1,5 @@
 import httpx
 import logging
-import bcrypt
 from typing import Dict, Optional
 from datetime import datetime
 from app.config import settings
@@ -15,38 +14,6 @@ class AuthService:
         self.jwt_handler = JWTHandler()
         self.logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.INFO)
-
-    async def authenticate_user(self, username: str, password: str) -> Optional[Dict]:
-        """Authenticate user using MongoDB database with bcrypt password verification"""
-        try:
-            # Find user in local MongoDB database
-            user = await User.find_one(User.username == username)
-            if not user:
-                self.logger.warning(f"User {username} not found in database")
-                return None
-            
-            if not user.is_active:
-                self.logger.warning(f"User {username} is not active")
-                return None
-            
-            # Verify password using bcrypt
-            if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
-                self.logger.warning(f"Invalid password for user {username}")
-                return None
-            
-            # Authentication successful
-            self.logger.info(f"User {username} authenticated successfully")
-            return {
-                "id": str(user.id),
-                "username": user.username,
-                "email": user.email,
-                "role": user.role,
-                "credits": user.credits
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Auth service error during authentication: {e}")
-            return None
 
     async def validate_user_permissions(self, user_id: str, chatflow_id: str) -> bool:
         """Validate if user has access to specific chatflow using MongoDB"""

@@ -296,3 +296,66 @@ class ExternalAuthService:
         except Exception as e:
             logger.error(f"Error fetching user by ID from external auth: {e}")
             return None
+    
+    async def check_user_exists(self, external_user_id: str, admin_token: Optional[str] = None) -> bool:
+        """
+        Check if a user still exists in the external auth system.
+        This is critical for security - prevents deleted users from accessing the system.
+        
+        Args:
+            external_user_id: The external auth system's user ID
+            admin_token: Admin token for checking user existence (optional)
+            
+        Returns:
+            bool: True if user exists and is active, False otherwise
+        """
+        try:
+            headers = {
+                "Accept": "application/json"
+            }
+            
+            # If admin token provided, use it for authentication
+            if admin_token:
+                headers["Authorization"] = f"Bearer {admin_token}"
+            
+            async with httpx.AsyncClient() as client:
+                # Try to get user info by ID
+                response = await client.get(
+                    f"{self.auth_url}/api/auth/users/{external_user_id}",
+                    headers=headers,
+                    timeout=self.timeout
+                )
+                
+                if response.status_code == 200:
+                    user_data = response.json()
+                    # Check if user exists and is not deleted/disabled
+                    is_active = user_data.get("active", True)  # Default to True if not specified
+                    is_deleted = user_data.get("deleted", False)
+                    
+                    exists_and_active = is_active and not is_deleted
+                    logger.debug(f"✅ User {external_user_id} exists in external auth: active={is_active}, deleted={is_deleted}")
+                    return exists_and_active
+                elif response.status_code == 404:
+                    # User not found
+                    logger.warning(f"🚨 User {external_user_id} not found in external auth system")
+                    return False
+                elif response.status_code == 401:
+                    # Unauthorized - might be token issue or endpoint not available
+                    logger.warning(f"⚠️ Unauthorized when checking user {external_user_id} - token may be invalid or endpoint restricted")
+                    # For admin users performing system operations, we might want to be more lenient
+                    # Return None to indicate "unknown" rather than definitively False
+                    raise Exception(f"Authorization failed when checking user existence (401)")
+                else:
+                    # Other error - log but fail secure
+                    logger.error(f"❌ Error checking user existence (status {response.status_code}): {response.text}")
+                    raise Exception(f"External auth service returned {response.status_code}")
+                    
+        except httpx.ConnectError:
+            logger.error(f"🔌 Cannot connect to external auth service at {self.auth_url}")
+            raise Exception("Cannot connect to external auth service")
+        except httpx.TimeoutException:
+            logger.error(f"⏰ Timeout checking user existence for {external_user_id}")
+            raise Exception("Timeout connecting to external auth service")
+        except Exception as e:
+            logger.error(f"❌ Exception checking user existence for {external_user_id}: {e}")
+            raise e

@@ -172,6 +172,101 @@ def test_cleanup_user_assignments(token, action="deactivate_invalid", dry_run=Tr
         print(f"❌ Unexpected error during cleanup: {e}")
         return False, None
 
+def test_sync_users_by_email(token, emails):
+    """Test syncing users by email from external auth to local DB"""
+    print("\\\\n--- Testing User Sync by Email ---")
+    if not emails:
+        print("No emails provided for user sync.")
+        return False
+
+    # Use ADMIN_USER, SUPERVISOR_USERS, REGULAR_USERS defined in the imported quickAddUserToChatflow
+    # For this script, we might want to define them locally or ensure they are accessible
+    # For now, assuming they are available if this script is run after quickAddUserToChatflow or similar setup.
+    # If not, these would need to be defined or passed in.
+
+    headers = {"Authorization": f"Bearer {token}"}
+    all_successful = True
+    successful_syncs = 0
+    failed_syncs = 0
+
+    for email in emails:
+        print(f"Attempting to sync user: {email}")
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/api/v1/admin/users/sync-by-email",
+                headers=headers,
+                json={"email": email}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                print(f"✅ User sync successful for {email}: {data.get('status')}")
+                with open(LOG_PATH, "a") as log_file:
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_file.write(
+                        f"[{timestamp}] User sync successful for {email}: {data.get('status')}\\\\n"
+                    )
+                successful_syncs += 1
+            elif response.status_code == 201: # Created
+                data = response.json()
+                print(f"✅ User created and synced for {email}: {data.get('status')}")
+                with open(LOG_PATH, "a") as log_file:
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_file.write(
+                        f"[{timestamp}] User created and synced for {email}: {data.get('status')}\\\\n"
+                    )
+                successful_syncs += 1
+            else:
+                print(f"❌ User sync failed for {email}: {response.status_code} - {response.text}")
+                with open(LOG_PATH, "a") as log_file:
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_file.write(
+                        f"[{timestamp}] User sync failed for {email}: {response.status_code} - {response.text}\\\\n"
+                    )
+                all_successful = False
+                failed_syncs +=1
+        except requests.RequestException as e:
+            print(f"❌ Request error during user sync for {email}: {e}")
+            all_successful = False
+            failed_syncs += 1
+        except Exception as e:
+            print(f"❌ Unexpected error during user sync for {email}: {e}")
+            all_successful = False
+            failed_syncs += 1
+    
+    print(f"📊 User Sync Summary: {successful_syncs} successful, {failed_syncs} failed.")
+    return all_successful
+
+def test_sync_chatflows(token):
+    """Test syncing chatflows from Flowise endpoint to database"""
+    print("\\\\n--- Testing Chatflow Sync ---")
+    try:
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.post(
+            f"{API_BASE_URL}/api/v1/admin/chatflows/sync",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print("✅ Chatflow sync successful")
+            print(f"📊 Sync Results: total_fetched={data.get('total_fetched',0)}, created={data.get('created',0)}, updated={data.get('updated',0)}, deleted={data.get('deleted',0)}, errors={data.get('errors',0)}")
+            with open(LOG_PATH, "a") as log_file: # Use the local LOG_PATH for this script
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                log_file.write(f"[{timestamp}] Chatflow sync completed: {json.dumps(data)}\\\\n")
+            return True
+        else:
+            print(f"❌ Chatflow sync failed: {response.status_code} - {response.text}")
+            with open(LOG_PATH, "a") as log_file:
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                log_file.write(f"[{timestamp}] Chatflow sync failed: {response.status_code} - {response.text}\\\\n")
+            return False
+    except requests.RequestException as e:
+        print(f"❌ Request error during chatflow sync: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Unexpected error during chatflow sync: {e}")
+        return False
+
 def run_all_audit_cleanup_tests():
     """Run all user cleanup and audit tests"""
     print("\\n" + "=" * 60)
@@ -186,8 +281,32 @@ def run_all_audit_cleanup_tests():
     if not admin_token:
         print("❌ CRITICAL: Cannot proceed without admin token. Aborting tests.")
         with open(LOG_PATH, "a") as log_file:
-            log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL: Failed to get admin token.\\n")
+            log_file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] CRITICAL: Failed to get admin token.\\\\n")
         return False
+
+    # Define user emails for sync - it's better to have these lists available directly or imported reliably
+    # For this example, let's assume some representative emails if not available from import
+    try:
+        from quickAddUserToChatflow import SUPERVISOR_USERS, REGULAR_USERS, ADMIN_USER
+        user_emails_to_sync = [ADMIN_USER["email"]] + [user["email"] for user in SUPERVISOR_USERS] + [user["email"] for user in REGULAR_USERS]
+    except ImportError:
+        print("⚠️ Warning: Could not import user lists from quickAddUserToChatflow. Using placeholder emails for sync.")
+        user_emails_to_sync = ["admin@example.com", "supervisor1@example.com", "user1@example.com"]
+
+
+    # Sync users by email first
+    print("\\\\n🔄 Syncing Users by Email...")
+    user_sync_successful = test_sync_users_by_email(admin_token, user_emails_to_sync)
+    if user_sync_successful:
+        print("✅ User sync process completed successfully.")
+    else:
+        print("⚠️ User sync process completed with some failures.")
+
+    # Then sync chatflows
+    print("\\\\n🔄 Syncing chatflows...")
+    sync_successful = test_sync_chatflows(admin_token)
+    if not sync_successful:
+        print("❌ Critical: Chatflow sync failed. Audit results might not be accurate. Continuing...")
 
     # Attempt to get a specific chatflow ID to use in tests.
     # The imported test_get_specific_chatflow function will attempt to find an

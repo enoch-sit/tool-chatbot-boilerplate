@@ -3,8 +3,10 @@ from datetime import datetime, timedelta
 from app.database import get_database
 from app.services.flowise_service import FlowiseService
 from app.services.chatflow_service import ChatflowService
+from app.services.external_auth_service import ExternalAuthService # Import the missing service
 from app.core.logging import logger
 from app.config import settings
+import traceback
 
 class ChatflowSyncTask:
     def __init__(self):
@@ -34,26 +36,26 @@ class ChatflowSyncTask:
 
     async def sync_chatflows(self):
         """
-        Perform chatflow synchronization
+        Synchronize chatflows from Flowise API to local database
         """
+        logger.info("Starting scheduled chatflow sync")
         try:
-            logger.info("Starting scheduled chatflow sync")
-            
             db = await get_database()
+            # The correct way to check for a valid db object is to compare with None.
+            if db is None:
+                logger.error("Database connection not available for scheduled sync.")
+                return
+            
             flowise_service = FlowiseService()
-            chatflow_service = ChatflowService(db, flowise_service)
+            external_auth_service = ExternalAuthService() # Instantiate the service
+            # Provide all three required arguments to the constructor
+            chatflow_service = ChatflowService(db, flowise_service, external_auth_service)
             
             result = await chatflow_service.sync_chatflows_from_flowise()
-            self.last_sync = datetime.utcnow()
-            
-            logger.info(
-                f"Scheduled sync completed: {result.created} created, "
-                f"{result.updated} updated, {result.deleted} deleted, "
-                f"{result.errors} errors"
-            )
-            
+            logger.info(f"Scheduled chatflow sync completed: {result.created} added, {result.updated} updated, {result.deleted} deleted.")
         except Exception as e:
-            logger.error(f"Scheduled chatflow sync failed: {str(e)}")
+            logger.error(f"Scheduled chatflow sync failed: {e}")
+            logger.error(traceback.format_exc())
 
     def stop_periodic_sync(self):
         """

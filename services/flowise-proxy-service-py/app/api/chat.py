@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List # Added List
 from app.auth.middleware import authenticate_user
 from app.services.flowise_service import FlowiseService
 from app.services.accounting_service import AccountingService
@@ -9,6 +9,7 @@ from app.services.external_auth_service import ExternalAuthService
 from app.auth.jwt_handler import JWTHandler
 from flowise import Flowise, PredictionData
 from app.config import settings
+from app.models.chatflow import UserChatflow # Added UserChatflow import
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -27,6 +28,10 @@ class RefreshTokenRequest(BaseModel):
 class RevokeTokenRequest(BaseModel):
     token_id: Optional[str] = None  # Specific token to revoke
     all_tokens: Optional[bool] = False  # If True, revoke all user tokens
+
+class MyAssignedChatflowsResponse(BaseModel):
+    assigned_chatflow_ids: List[str]
+    count: int
 
 @router.post("/authenticate")
 async def authenticate(auth_request: AuthRequest, request: Request):
@@ -195,6 +200,7 @@ async def chat_predict(
         accounting_service = AccountingService()
         auth_service = AuthService()
         
+        user_token = current_user.get("access_token")
         user_id = current_user.get("user_id")
         chatflow_id = chat_request.chatflow_id
         
@@ -212,7 +218,7 @@ async def chat_predict(
         cost = await accounting_service.get_chatflow_cost(chatflow_id)
         
         # 4. Check user credits
-        user_credits = await accounting_service.check_user_credits(user_id)
+        user_credits = await accounting_service.check_user_credits(user_id, user_token)
         if user_credits is None or user_credits < cost:
             raise HTTPException(
                 status_code=402,
@@ -314,4 +320,34 @@ async def get_user_credits(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve credits: {str(e)}"
+        )
+
+@router.get("/my-assigned-chatflows", response_model=MyAssignedChatflowsResponse)
+async def get_my_assigned_chatflows(
+    current_user: Dict = Depends(authenticate_user)
+):
+    """Get a list of chatflow IDs the current authenticated user is actively assigned to."""
+    try:
+        user_id = current_user.get("user_id")
+        if not user_id:
+            # This should ideally not happen if authenticate_user works correctly
+            raise HTTPException(status_code=400, detail="User ID not found in token")
+
+        active_assignments = await UserChatflow.find(
+            UserChatflow.user_id == user_id,
+            UserChatflow.is_active == True
+        ).to_list()
+
+        assigned_chatflow_ids = [assignment.chatflow_id for assignment in active_assignments]
+        
+        return {
+            "assigned_chatflow_ids": assigned_chatflow_ids,
+            "count": len(assigned_chatflow_ids)
+        }
+
+    except Exception as e:
+        # Consider more specific error logging if needed
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve assigned chatflows: {str(e)}"
         )

@@ -4,22 +4,59 @@
 
 ### `POST /chat/authenticate`
 
-**Description:** User authentication with JWT token creation.
+**Description:** User authentication with JWT token creation using external auth service.
+
+**Security Model:** Single Source of Truth - External auth provides authoritative user validation.
 
 **Code Location:** `app/api/chat.py` - `authenticate()` function (lines 32-61)
 
 **Request Headers:**
 
 * `Content-Type: application/json`
-* *(Potentially others like `Accept: application/json`)*
+* `Accept: application/json`
 
 **Request Body:**
 
-* *(Example: `{ "username": "user", "password": "password" }` or `{ "api_key": "your_api_key" }`)*
+```json
+{
+  "username": "user1",
+  "password": "password123"
+}
+```
 
 **Response (200 OK):**
 
-* *(Example: `{ "access_token": "jwt_access_token", "refresh_token": "jwt_refresh_token" }`)*
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "user": {
+    "id": "68142f163a381f81e190342d",
+    "username": "user1",
+    "email": "user1@example.com",
+    "isVerified": true,
+    "role": "enduser"
+  },
+  "message": "Login successful"
+}
+```
+
+**JWT Payload Structure:**
+
+```json
+{
+  "sub": "68142f163a381f81e190342d",
+  "username": "user1", 
+  "email": "user1@example.com",
+  "type": "access",
+  "role": "enduser",
+  "iat": 1750128124,
+  "exp": 1750129024
+}
+```
+
+**Auto-Sync Behavior:** First authentication automatically creates local user record with NO chatflow access by default.
 
 ### `POST /chat/refresh`
 
@@ -63,93 +100,214 @@
 
 ## Admin Endpoints
 
-### `POST /api/admin/chatflows/add-users`
+### Enhanced User-to-Chatflow Management
 
-**Code Location:** `app/api/admin.py` - `add_users_to_chatflow()` function (lines 26-111)
+The admin endpoints implement a **Single Source of Truth** architecture where external auth is authoritative for user identity, while local database manages chatflow access permissions. Access to these endpoints is generally restricted to administrators, enforced by the `require_admin_role` dependency.
 
-**Description:** Add multiple users to a chatflow (Admin only).
+### `POST /api/v1/admin/chatflows/{chatflow_id}/users/email/{email}`
+
+**Description:** Add a user to a chatflow by email address. Admin only, enforced by `require_admin_role` dependency. This is the recommended approach for admin-controlled access.
+
+**Security Model:** 
+* Admin looks up user in external auth system to verify existence
+* Creates local UserChatflow assignment record  
+* User automatically gets local user record synced if doesn't exist
+* NO default access - explicit assignment required
+
+**Code Location:** `app/api/admin.py` - `add_user_to_chatflow_by_email()` function
 
 **Request Headers:**
 
 * `Authorization: Bearer <admin_access_token>`
-* `Content-Type: application/json`
 
-**Request Body:**
+**Path Parameters:**
 
-* `{ "user_ids": ["user_id_1", "user_id_2", "user_id_3"], "chatflow_id": "chatflow_123" }`
+* `chatflow_id` (string): The Flowise chatflow ID 
+* `email` (string): User's email address
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "user_id": "6850d639b5db11d280849004",
+  "username": "user1",
+  "email": "user1@example.com", 
+  "chatflow_id": "e13cbaa3-c909-4570-8c49-78b45115f34a",
+  "chatflow_name": "deepSearchAWS",
+  "status": "success",
+  "message": "Access granted successfully"
+}
+```
+
+**Response (Reactivation):**
+
+```json
+{
+  "user_id": "6850d639b5db11d280849004",
+  "username": "user1",
+  "chatflow_id": "e13cbaa3-c909-4570-8c49-78b45115f34a", 
+  "status": "success",
+  "message": "Existing access reactivated"
+}
+```
+
+### `DELETE /api/v1/admin/chatflows/{chatflow_id}/users/email/{email}`
+
+**Description:** Remove a user from a chatflow by email address. Admin only, enforced by `require_admin_role` dependency.
+
+**Security Features:**
+* Prevents admins from removing other admins (unless super admin)
+* Validates user exists before removal
+* Supports both active and inactive state handling
+* Comprehensive audit logging
+
+**Code Location:** `app/api/admin.py` - `remove_user_from_chatflow_by_email()` function  
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Path Parameters:**
+
+* `chatflow_id` (string): The Flowise chatflow ID
+* `email` (string): User's email address
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "user_id": "6850d639b5db11d280849004",
+  "username": "user1", 
+  "email": "user1@example.com",
+  "chatflow_id": "e13cbaa3-c909-4570-8c49-78b45115f34a",
+  "chatflow_name": "deepSearchAWS",
+  "status": "success",
+  "message": "User access revoked successfully",
+  "removed_at": "2025-06-17T02:43:05.882000"
+}
+```
+
+**Response (409 - Already Inactive):**
+
+```json
+{
+  "detail": "User user1@example.com access to chatflow e13cbaa3-c909-4570-8c49-78b45115f34a is already inactive"
+}
+```
+
+### `GET /api/v1/admin/chatflows/{chatflow_id}/users`
+
+**Description:** List all users assigned to a specific chatflow. Admin only, enforced by `require_admin_role` dependency.
+
+**Code Location:** `app/api/admin.py` - `list_chatflow_users()` function
+
+**Request Headers:**
+
+* `Authorization: Bearer <admin_access_token>`
+
+**Path Parameters:**
+
+* `chatflow_id` (string): The Flowise chatflow ID
+
+**Query Parameters:**
+
+* `include_inactive` (optional, boolean): Include inactive assignments (default: false)
+
+**Request Body:** None
 
 **Response (200 OK):**
 
 ```json
 [
   {
-    "user_id": "user_id_1",
-    "username": "username1",
-    "status": "success",
-    "message": "Access granted successfully"
+    "user_id": "6850d639b5db11d280849004",
+    "username": "user1",
+    "email": "user1@example.com", 
+    "role": "enduser",
+    "is_active": true,
+    "assigned_at": "2025-06-17T02:43:05.882000",
+    "assigned_by": "admin@example.com"
   },
   {
-    "user_id": "user_id_2", 
-    "username": "username2",
-    "status": "skipped",
-    "message": "User already has active access to this chatflow"
+    "user_id": "6850d639b5db11d280849005", 
+    "username": "supervisor1",
+    "email": "supervisor1@example.com",
+    "role": "supervisor", 
+    "is_active": true,
+    "assigned_at": "2025-06-17T02:43:20.592000",
+    "assigned_by": "admin@example.com"
   }
 ]
 ```
 
-### `POST /api/admin/chatflows/{chatflow_id}/users/{user_id}`
+### `POST /api/v1/admin/chatflows/{chatflow_id}/users/bulk`
 
-**Code Location:** `app/api/admin.py` - `add_single_user_to_chatflow()` function (lines 113-167)
+**Description:** Add multiple users to a chatflow in a single operation. Admin only, enforced by `require_admin_role` dependency.
 
-**Description:** Add a single user to a chatflow (Admin only).
+**Features:**
+* Bulk assignment with individual result tracking
+* Smart reactivation of previously removed users
+* Comprehensive error handling per user
+* Transaction-safe operations
+
+**Code Location:** `app/api/admin.py` - `bulk_add_users_to_chatflow()` function
 
 **Request Headers:**
 
 * `Authorization: Bearer <admin_access_token>`
+* `Content-Type: application/json`
 
-**Request Body:** None
+**Path Parameters:**
 
-**Response (200 OK):**
+* `chatflow_id` (string): The Flowise chatflow ID
+
+**Request Body:**
 
 ```json
 {
-  "user_id": "user_id_1",
-  "username": "username1",
-  "chatflow_id": "chatflow_123",
-  "status": "success",
-  "message": "Access granted successfully"
+  "emails": [
+    "user1@example.com",
+    "user2@example.com", 
+    "supervisor1@example.com"
+  ]
 }
 ```
 
-### `DELETE /api/admin/chatflows/{chatflow_id}/users/{user_id}`
-
-**Code Location:** `app/api/admin.py` - `remove_user_from_chatflow()` function (lines 169-223)
-
-**Description:** Remove a user from a chatflow (Admin only).
-
-**Request Headers:**
-
-* `Authorization: Bearer <admin_access_token>`
-
-**Request Body:** None
-
 **Response (200 OK):**
 
 ```json
-{
-  "user_id": "user_id_1",
-  "username": "username1", 
-  "chatflow_id": "chatflow_123",
-  "status": "success",
-  "message": "Access revoked successfully"
-}
+[
+  {
+    "email": "user1@example.com",
+    "user_id": "6850d639b5db11d280849004",
+    "username": "user1", 
+    "status": "success",
+    "message": "Access granted successfully"
+  },
+  {
+    "email": "user2@example.com",
+    "user_id": "6850d639b5db11d280849005",
+    "username": "user2",
+    "status": "reactivated", 
+    "message": "Existing access reactivated"
+  },
+  {
+    "email": "invalid@example.com",
+    "status": "error",
+    "message": "User not found in external auth system"
+  }
+]
 ```
 
 ### `GET /api/admin/users`
 
-**Code Location:** `app/api/admin.py` - `list_all_users()` function (lines 225-269)
+**Description:** List all users. Admin only, enforced by `require_admin_role` dependency.
 
-**Description:** List all users (Admin only).
+**Code Location:** `app/api/admin.py` - `list_all_users()` function (lines 225-269)
 
 **Request Headers:**
 
@@ -176,9 +334,9 @@
 
 ### `GET /api/admin/users/{user_id}/chatflows`
 
-**Code Location:** `app/api/admin.py` - `list_user_chatflows()` function (lines 271-327)
+**Description:** List all chatflows accessible to a specific user. Admin only, enforced by `require_admin_role` dependency.
 
-**Description:** List all chatflows accessible to a specific user (Admin only).
+**Code Location:** `app/api/admin.py` - `list_user_chatflows()` function (lines 271-327)
 
 **Request Headers:**
 
@@ -204,15 +362,9 @@
 ```
 
 ### `POST /api/admin/users/sync`
+**Description:** Sync users with external auth service. Admin only, enforced by `require_admin_role` dependency. This endpoint fetches all users from the external auth service and synchronizes them with the local database.
 
 **Code Location:** `app/api/admin.py` - `sync_users_with_external_auth()` function (lines 350-475)
-
-**Description:** Sync users with external auth service (Admin only). This endpoint fetches all users from the external auth service and synchronizes them with the local database.
-
-**Functionality:**
-- Creates new users that exist in external auth but not locally
-- Updates existing users with current information from external auth
-- Deactivates users that no longer exist in external auth
 
 **Request Headers:**
 
@@ -247,9 +399,9 @@
 
 ### `POST /api/admin/chatflows/sync`
 
-**Code Location:** `app/api/admin.py` - `sync_chatflows_from_flowise()` function
+**Description:** Synchronize chatflows from Flowise API to local database. Admin only, enforced by `require_admin_role` dependency.
 
-**Description:** Synchronize chatflows from Flowise API to local database (Admin only).
+**Code Location:** `app/api/admin.py` - `sync_chatflows_from_flowise()` function
 
 **Request Headers:**
 
@@ -281,9 +433,9 @@
 
 ### `GET /api/admin/chatflows`
 
-**Code Location:** `app/api/admin.py` - `list_all_chatflows()` function
+**Description:** List all chatflows stored in the local database. Admin only, enforced by `require_admin_role` dependency.
 
-**Description:** List all chatflows stored in the local database (Admin only).
+**Code Location:** `app/api/admin.py` - `list_all_chatflows()` function
 
 **Request Headers:**
 
@@ -337,9 +489,9 @@
 
 ### `GET /api/admin/chatflows/stats`
 
-**Code Location:** `app/api/admin.py` - `get_chatflow_stats()` function
+**Description:** Get chatflow statistics including sync status. Admin only, enforced by `require_admin_role` dependency.
 
-**Description:** Get chatflow statistics including sync status (Admin only).
+**Code Location:** `app/api/admin.py` - `get_chatflow_stats()` function
 
 **Request Headers:**
 
@@ -361,9 +513,9 @@
 
 ### `GET /api/admin/chatflows/{flowise_id}`
 
-**Code Location:** `app/api/admin.py` - `get_chatflow_by_id()` function
+**Description:** Get a specific chatflow by its Flowise ID. Admin only, enforced by `require_admin_role` dependency.
 
-**Description:** Get a specific chatflow by its Flowise ID (Admin only).
+**Code Location:** `app/api/admin.py` - `get_chatflow_by_id()` function
 
 **Request Headers:**
 
@@ -423,9 +575,9 @@
 
 ### `DELETE /api/admin/chatflows/{flowise_id}`
 
-**Code Location:** `app/api/admin.py` - `force_delete_chatflow()` function
+**Description:** Force delete a chatflow from the local database. This does not delete the chatflow from Flowise. Admin only, enforced by `require_admin_role` dependency.
 
-**Description:** Force delete a chatflow from the local database. This does not delete the chatflow from Flowise (Admin only).
+**Code Location:** `app/api/admin.py` - `force_delete_chatflow()` function
 
 **Request Headers:**
 
@@ -453,13 +605,111 @@
 }
 ```
 
-## Chatflow Endpoints
+### `GET /api/v1/admin/chatflows/audit-users`
+**Description:** Audit UserChatflow records to identify mismatches with external auth system. Admin only, enforced by `require_admin_role` dependency.
+**Code Location:** `app/api/admin.py` - `audit_user_chatflow_assignments()` function
+**Request Headers:**
+* `Authorization: Bearer <admin_access_token>`
 
-### `GET /chatflows/`
+### `POST /api/v1/admin/chatflows/cleanup-users`
+**Description:** Clean up legacy UserChatflow records with invalid or mismatched user IDs. Admin only, enforced by `require_admin_role` dependency.
+**Code Location:** `app/api/admin.py` - `cleanup_user_chatflow_assignments()` function
+**Request Headers:**
+* `Authorization: Bearer <admin_access_token>`
 
-**Code Location:** `app/api/chatflows.py` - `list_chatflows()` function (lines 10-22)
+### `POST /api/v1/admin/users/sync-by-email`
+**Description:** Manually synchronizes a single user's data from the external authentication system to the local database based on their email. Admin only, enforced by `require_admin_role` dependency.
+**Code Location:** `app/api/admin.py` - `sync_user_from_external_by_email()` function
+**Request Headers:**
+* `Authorization: Bearer <admin_access_token>`
 
-**Description:** List chatflows available to the authenticated user.
+## Chatflow Endpoints (User-Facing)
+
+### Enhanced Security Model
+
+All user endpoints implement **Multi-Layer Security**:
+
+1. **JWT Validation:** Verify token signature and expiration
+2. **External User Validation:** Confirm user still exists in external auth system  
+3. **Local User Status:** Verify local user account is active
+4. **Resource Authorization:** Check specific chatflow access permissions
+
+### `GET /api/v1/chatflows`
+
+**Description:** List chatflows accessible to the authenticated user. Uses the **Hybrid User Sync** model - auto-creates local user records but only returns chatflows explicitly assigned by admin.
+
+**Security Model:** 
+* No default access to any chatflows
+* Returns only chatflows where UserChatflow.is_active = True
+* Links external JWT identity to local chatflow permissions
+
+**Code Location:** `app/api/chatflows.py` - `list_chatflows()` function
+
+**Request Headers:**
+
+* `Authorization: Bearer <access_token>`
+
+**Request Body:** None
+
+**Response (200 OK) - With Access:**
+
+```json
+[
+  {
+    "id": "e13cbaa3-c909-4570-8c49-78b45115f34a",
+    "name": "deepSearchAWS", 
+    "description": "",
+    "category": null,
+    "type": "AGENTFLOW",
+    "deployed": true,
+    "assigned_at": "2025-06-17T02:43:05.882000"
+  }
+]
+```
+
+**Response (200 OK) - No Access:**
+
+```json
+[]
+```
+
+**Implementation Details:**
+
+```python
+# 1. Extract external user ID from JWT
+external_user_id = current_user.get('sub')
+
+# 2. Find/create local user record  
+local_user = await User.find_one(User.external_id == external_user_id)
+if not local_user:
+    local_user = await sync_external_user_to_local(current_user)
+
+# 3. Get only assigned chatflows
+user_chatflows = await UserChatflow.find(
+    UserChatflow.user_id == str(local_user.id),
+    UserChatflow.is_active == True
+).to_list()
+```
+
+### `GET /api/v1/chatflows/my-chatflows`
+
+**Description:** Alternative endpoint with same functionality as `/api/v1/chatflows` but with explicit naming for clarity. *(This entry seems to be a duplicate or an alternative name for `/api/v1/chatflows`. The new endpoint is `/api/v1/chat/my-assigned-chatflows` and is distinct)*
+
+**Code Location:** `app/api/chatflows.py` - `get_my_chatflows()` function
+
+**Request Headers:**
+
+* `Authorization: Bearer <access_token>`
+
+**Request Body:** None
+
+**Response:** Same as `/api/v1/chatflows` endpoint
+
+### `GET /api/v1/chat/my-assigned-chatflows`
+
+**Description:** Get a list of chatflow IDs the current authenticated user is actively assigned to.
+
+**Code Location:** `app/api/chat.py` - `get_my_assigned_chatflows()` function
 
 **Request Headers:**
 
@@ -469,39 +719,90 @@
 
 **Response (200 OK):**
 
-* *(Example: `[ { "id": "chatflow_id_1", "name": "Chatflow One" }, { "id": "chatflow_id_2", "name": "Chatflow Two" } ]`)*
+```json
+{
+  "assigned_chatflow_ids": ["chatflow_id_1", "chatflow_id_2"],
+  "count": 2
+}
+```
 
-### `GET /chatflows/{chatflow_id}`
+### `GET /api/v1/chatflows/{chatflow_id}`
 
-**Code Location:** `app/api/chatflows.py` - `get_chatflow()` function (lines 24-36)
+**Description:** Get specific chatflow details if user has access.
 
-**Description:** Get specific chatflow details.
+**Security:** Validates user has active assignment to the specific chatflow before returning details.
 
-**Request Headers:**
-
-* `Authorization: Bearer <access_token>`
-
-**Request Body:** None
-
-**Response (200 OK):**
-
-* *(Example: `{ "id": "chatflow_id_1", "name": "Chatflow One", "details": "..." }`)*
-
-### `GET /chatflows/{chatflow_id}/config`
-
-**Code Location:** `app/api/chatflows.py` - `get_chatflow_config()` function (lines 38-50)
-
-**Description:** Get chatflow configuration.
+**Code Location:** `app/api/chatflows.py` - `get_chatflow()` function
 
 **Request Headers:**
 
 * `Authorization: Bearer <access_token>`
 
+**Path Parameters:**
+
+* `chatflow_id` (string): The Flowise chatflow ID
+
 **Request Body:** None
 
 **Response (200 OK):**
 
-* *(Example: `{ "config_param1": "value1", "config_param2": "value2" }`)*
+```json
+{
+  "id": "e13cbaa3-c909-4570-8c49-78b45115f34a",
+  "name": "deepSearchAWS",
+  "description": "",
+  "category": null, 
+  "type": "AGENTFLOW",
+  "deployed": true,
+  "created": "2025-05-28T08:46:05.186000",
+  "updated": "2025-06-17T01:07:57.978000"
+}
+```
+
+**Response (403 Forbidden):**
+
+```json
+{
+  "detail": "Access denied to this chatflow"
+}
+```
+
+### `GET /api/v1/chatflows/{chatflow_id}/config`
+
+**Description:** Get chatflow configuration if user has access.
+
+**Security:** Same access control as individual chatflow endpoint.
+
+**Code Location:** `app/api/chatflows.py` - `get_chatflow_config()` function
+
+**Request Headers:**
+
+* `Authorization: Bearer <access_token>`
+
+**Path Parameters:**
+
+* `chatflow_id` (string): The Flowise chatflow ID
+
+**Request Body:** None
+
+**Response (200 OK):**
+
+```json
+{
+  "welcomeMessage": "Hello! How can I help you?",
+  "backgroundColor": "#ffffff",
+  "fontSize": 14,
+  "poweredByTextColor": "#303235",
+  "botMessage": {
+    "backgroundColor": "#f7f8ff",
+    "textColor": "#303235"
+  },
+  "userMessage": {
+    "backgroundColor": "#3B81F6", 
+    "textColor": "#ffffff"
+  }
+}
+```
 
 ## Chat Endpoints
 
@@ -767,4 +1068,51 @@ This service implements a complete proxy solution with JWT authentication, role-
 - `guide/mongodb_migration.py` - Database migration utilities
 - `guide/validate_hs256_jwt.py` - JWT validation tools
 
-This architecture provides a complete, production-ready proxy service with comprehensive authentication, authorization, credit management, and seamless integration with the Flowise AI platform.
+## 🛡️ Security Architecture
+
+### Multi-Layer Authentication Model
+
+The system implements a comprehensive security model with multiple validation layers:
+
+#### Layer 1: JWT Token Validation
+* Verify token signature using HS256 algorithm
+* Check token expiration timestamps
+* Validate token structure and required claims
+
+#### Layer 2: External User Validation 
+* Real-time check if user still exists in external auth system
+* Prevents access by users deleted from external auth
+* Fail-secure approach - deny access if validation fails
+
+#### Layer 3: Local User Status Check
+* Verify local user account is still active
+* Handles cases where admin deactivated user locally
+* Prevents access by deactivated users
+
+#### Layer 4: Resource-Level Authorization
+* Check specific chatflow access permissions
+* Validates UserChatflow.is_active status
+* Implements principle of least privilege
+
+### External User Removal Handling
+
+**Threat:** External auth system removes a user, but they still have active JWT tokens.
+
+**Mitigation:**
+1. **Real-time Validation:** Every request validates user existence in external auth
+2. **Immediate Deactivation:** Local user and all permissions deactivated instantly  
+3. **Cascade Cleanup:** All UserChatflow assignments marked inactive
+4. **Audit Logging:** Security events logged for compliance
+
+```python
+# Security flow example:
+async def validate_external_user_status(external_user_id: str) -> bool:
+    try:
+        user_exists = await external_auth_service.check_user_exists(external_user_id)
+        if not user_exists:
+            await deactivate_removed_external_user(local_user)
+            return False
+        return True
+    except Exception:
+        return False  # Fail secure
+```

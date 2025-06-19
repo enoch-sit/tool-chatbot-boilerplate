@@ -49,6 +49,19 @@ async def connect_to_mongo():
         )
         
         logger.info(f"Successfully connected to MongoDB and initialized Beanie (call_id: {call_instance_id}, init_count: {database.init_count})")
+
+        # !!! START DEBUGGING CODE !!!
+        try:
+            logger.info(f"!!! DEBUG: Attempting to access User.external_id post-init. Type: {type(User.external_id)}")
+            # If the above works, User.external_id is a Beanie query field.
+            # You could also log its representation if needed:
+            # logger.info(f"!!! DEBUG: Representation of User.external_id: {repr(User.external_id)}")
+        except AttributeError as e:
+            logger.error(f"!!! DEBUG: AttributeError accessing User.external_id post-init: {e}")
+        except Exception as e:
+            logger.error(f"!!! DEBUG: Other error accessing User.external_id post-init: {e}")
+        # !!! END DEBUGGING CODE !!!
+        
         logger.info(f"Using database: {settings.MONGODB_DATABASE_NAME} (call_id: {call_instance_id})")
         # logger.info("Beanie initialization completed") # Covered by the message above
         
