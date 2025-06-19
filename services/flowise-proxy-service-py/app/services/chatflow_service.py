@@ -177,7 +177,7 @@ class ChatflowService:
             if existing_assignment:
                 if not existing_assignment.is_active:
                     existing_assignment.is_active = True
-                    existing_assignment.updated_at = datetime.utcnow()
+                    existing_assignment.assigned_at = datetime.utcnow()
                     await existing_assignment.save()
                     status = "Reactivated"
                     message = "Existing inactive assignment has been reactivated."
@@ -232,7 +232,7 @@ class ChatflowService:
                 if existing_assignment:
                     if not existing_assignment.is_active:
                         existing_assignment.is_active = True
-                        existing_assignment.updated_at = datetime.utcnow()
+                        existing_assignment.assigned_at = datetime.utcnow()
                         await existing_assignment.save()
                         status = "Reactivated"
                         message = "Existing inactive assignment has been reactivated."
