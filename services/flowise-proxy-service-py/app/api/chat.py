@@ -226,7 +226,7 @@ async def chat_predict(
             )
         
         # 5. Deduct credits before processing
-        if not await accounting_service.deduct_credits(user_id, cost, user_token, f"Chat request to {chatflow_id}"):
+        if not await accounting_service.deduct_credits(user_id, cost, user_token):
             raise HTTPException(
                 status_code=402,
                 detail="Failed to deduct credits"
@@ -254,14 +254,14 @@ async def chat_predict(
             
             if not response_received or not full_response:
                 # Log failed transaction but don't refund credits automatically
-                await accounting_service.log_transaction(user_id, chatflow_id, cost, False)
+                await accounting_service.log_transaction(user_id, "chat", chatflow_id, cost, False)
                 raise HTTPException(
                     status_code=503,
                     detail="Chat service unavailable"
                 )
             
             # 7. Log successful transaction
-            await accounting_service.log_transaction(user_id, chatflow_id, cost, True)
+            await accounting_service.log_transaction(user_id, "chat", chatflow_id, cost, True)
             
             # 8. Return consolidated response
             return {
@@ -277,7 +277,7 @@ async def chat_predict(
             
         except Exception as processing_error:
             # Log failed processing
-            await accounting_service.log_transaction(user_id, chatflow_id, cost, False)
+            await accounting_service.log_transaction(user_id, "chat", chatflow_id, cost, False)
             raise HTTPException(
                 status_code=500,
                 detail=f"Chat processing failed: {str(processing_error)}"

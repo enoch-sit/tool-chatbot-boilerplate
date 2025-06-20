@@ -36,7 +36,7 @@ class AccountingService:
             print(f"Unexpected accounting error (check_user_credits): {e}")
             return None
 
-    async def deduct_credits(self, user_id: str, amount: int, user_token: str, reason: str = "Chat request") -> bool:
+    async def deduct_credits(self, user_id: str, amount: int, user_token: str) -> bool:
         """Deduct credits from user account via the accounting service."""
         if amount <= 0:
             print("Deduct credits amount must be positive.")
@@ -44,19 +44,20 @@ class AccountingService:
         try:
             async with httpx.AsyncClient() as client:
                 headers = {"Authorization": f"Bearer {user_token}"}
-                response = await client.put( # Corrected HTTP method
-                    f"{self.accounting_url}/api/credits/adjust", # Corrected endpoint
-                    json={
-                        "userId": user_id,
-                        "adjustment": -amount,  # Use negative adjustment for deduction
-                        "notes": reason
-                    },
+                response = await client.post(
+                    f"{self.accounting_url}/api/credits/deduct",
+                    json={"credits": amount},
                     timeout=30.0,
                     headers=headers
                 )
                 
                 if response.status_code == 200:
-                    return True
+                    data = response.json()
+                    if data.get("success"):
+                        return True
+                    else:
+                        print(f"Credit deduction failed for {user_id}: {data.get('message')}")
+                        return False
                 else:
                     print(f"Credit deduction error for {user_id}: {response.status_code} - {response.text}")
                     return False
