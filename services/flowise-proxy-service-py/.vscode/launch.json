@@ -1,0 +1,87 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",    "configurations": [
+        {
+            "name": "Debug Admin API (Uvicorn CLI - DEBUG Level)", // Renamed for clarity
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn", // <--- CHANGE: Use uvicorn module
+            "args": [ // <--- CHANGE: Add arguments for uvicorn
+                "app.main:app",
+                "--host", "0.0.0.0",
+                //"${config:python.env.HOST}", // Read from .env.test via settings
+                "--port", "8000",
+                //"${config:python.env.PORT}", // Read from .env.test via settings
+                "--log-level",
+                "debug", // Can also use ${config:python.env.LOG_LEVEL} if it's just 'debug'
+                "--reload" // Optional: add --reload for development convenience
+            ],
+            "jinja": true,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env.test", // envFile will set HOST and PORT
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+                // LOG_LEVEL is now passed as an arg to uvicorn, but can be kept here too if other parts of your app use it
+            }
+        },
+        {
+            "name": "Python Debugger: FastAPI (Test DB)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/main.py",
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
+            "jinja": true,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env.test",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "LOG_LEVEL": "DEBUG"
+            }
+        },
+        {
+            "name": "Python Debugger: FastAPI (Production-like)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/main.py",
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
+            "jinja": true,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "LOG_LEVEL": "INFO"
+            }
+        },
+        {
+    "name": "Debug Admin API (DEBUG Level)",
+    "type": "debugpy",
+    "request": "launch",
+    "program": "${workspaceFolder}/app/main.py",
+    "python": "${workspaceFolder}/venv/Scripts/python.exe",
+    "jinja": true,
+    "cwd": "${workspaceFolder}",
+    "envFile": "${workspaceFolder}/.env.test",
+    "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "LOG_LEVEL": "DEBUG"
+    },
+    "console": "integratedTerminal"
+},
+        {
+            "name": "Debug Admin API (ERROR Only)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/main.py",
+            "python": "${workspaceFolder}/venv/Scripts/python.exe",
+            "jinja": true,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env.test",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "LOG_LEVEL": "ERROR"
+            }
+        }
+    ]
+}
