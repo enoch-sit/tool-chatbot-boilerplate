@@ -4,8 +4,8 @@ import subprocess
 import time
 import sys
 import os
-import datetime # Ensure datetime is imported
-import pymongo # For direct DB check
+import datetime  # Ensure datetime is imported
+import pymongo  # For direct DB check
 
 LOG_FILE = "chatflow_sync_test.log"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +57,7 @@ REGULAR_USERS = [
 # login through API_BASE_URL
 # List the chatflow that he/she have access to [previously given by Admin]
 
+
 def get_user_token(user):
     """Log in as a specified user and get the access token"""
     print(f"\n--- Getting access token for user: {user['username']} ---")
@@ -77,7 +78,9 @@ def get_user_token(user):
             else:
                 print(f"❌ No access token in response for {user['username']}")
         else:
-            print(f"❌ Failed to get token for {user['username']}: {response.status_code} {response.text}")
+            print(
+                f"❌ Failed to get token for {user['username']}: {response.status_code} {response.text}"
+            )
     except requests.RequestException as e:
         print(f"❌ Request error: {e}")
     except Exception as e:
@@ -108,7 +111,9 @@ def list_accessible_chatflows(token, username):
                 print(f"No accessible chatflows for {username}.")
                 return None
         else:
-            print(f"❌ Failed to list chatflows for {username}: {response.status_code} {response.text}")
+            print(
+                f"❌ Failed to list chatflows for {username}: {response.status_code} {response.text}"
+            )
             return None
     except requests.RequestException as e:
         print(f"❌ Request error while listing chatflows for {username}: {e}")
@@ -117,12 +122,15 @@ def list_accessible_chatflows(token, username):
         print(f"❌ Unexpected error while listing chatflows for {username}: {e}")
         return None
 
+
 def create_chat_session(token, username, chatflow_id, topic="Test Session"):
     """
     Creates a new chat session for the user and chatflow.
     Returns the session_id if successful.
     """
-    print(f"\n--- Creating chat session for user: {username} on chatflow: {chatflow_id} ---")
+    print(
+        f"\n--- Creating chat session for user: {username} on chatflow: {chatflow_id} ---"
+    )
     if not token:
         print("❌ Cannot create session without a token.")
         return None
@@ -132,14 +140,11 @@ def create_chat_session(token, username, chatflow_id, topic="Test Session"):
 
     session_url = f"{API_BASE_URL}/api/v1/chat/sessions"
     headers = {"Authorization": f"Bearer {token}"}
-    payload = {
-        "chatflow_id": chatflow_id,
-        "topic": topic
-    }
+    payload = {"chatflow_id": chatflow_id, "topic": topic}
 
     try:
         response = requests.post(session_url, headers=headers, json=payload)
-        if response.status_code == 201: # Created
+        if response.status_code == 201:  # Created
             data = response.json()
             session_id = data.get("session_id")
             if session_id:
@@ -152,7 +157,9 @@ def create_chat_session(token, username, chatflow_id, topic="Test Session"):
                 print(f"❌ Session created but no session_id in response: {data}")
                 return None
         else:
-            print(f"❌ Failed to create session: {response.status_code} {response.text}")
+            print(
+                f"❌ Failed to create session: {response.status_code} {response.text}"
+            )
             return None
     except requests.RequestException as e:
         print(f"❌ Request error while creating session: {e}")
@@ -161,13 +168,18 @@ def create_chat_session(token, username, chatflow_id, topic="Test Session"):
         print(f"❌ Unexpected error while creating session: {e}")
         return None
 
-def test_chat_predict_stream_with_session(token, username, chatflow_id, session_id, question):
+
+def test_chat_predict_stream_with_session(
+    token, username, chatflow_id, session_id, question
+):
     """
     Tests the chat predict stream endpoint using a specific session_id.
     """
     print(f"\n--- Testing chat predict STREAM with session_id for user: {username} ---")
     if not all([token, chatflow_id, session_id]):
-        print("❌ Cannot test predict stream without token, chatflow_id, and session_id.")
+        print(
+            "❌ Cannot test predict stream without token, chatflow_id, and session_id."
+        )
         return
 
     predict_url = f"{API_BASE_URL}/api/v1/chat/predict/stream"
@@ -175,20 +187,22 @@ def test_chat_predict_stream_with_session(token, username, chatflow_id, session_
     payload = {
         "chatflow_id": chatflow_id,
         "question": question,
-        "sessionId": session_id  # Pass the created session ID here
+        "sessionId": session_id,  # Pass the created session ID here
     }
 
     try:
         print(f"   Using Session ID: {session_id}")
         print(f"   Question: {question}")
-        response = requests.post(predict_url, headers=headers, json=payload, stream=True)
-        
+        response = requests.post(
+            predict_url, headers=headers, json=payload, stream=True
+        )
+
         if response.status_code == 200:
             print(f"✅ Stream started successfully for {username}. Chunks:")
             full_response = ""
             for chunk in response.iter_content(chunk_size=None):
                 if chunk:
-                    decoded_chunk = chunk.decode('utf-8')
+                    decoded_chunk = chunk.decode("utf-8")
                     print(decoded_chunk, end="", flush=True)
                     full_response += decoded_chunk
             print("\n--- End of Stream ---")
@@ -202,6 +216,7 @@ def test_chat_predict_stream_with_session(token, username, chatflow_id, session_
     except Exception as e:
         print(f"❌ Unexpected error during prediction stream: {e}")
 
+
 # Main execution
 if __name__ == "__main__":
     print("=" * 60)
@@ -210,18 +225,23 @@ if __name__ == "__main__":
 
     # Use the first regular user for the test
     test_user = REGULAR_USERS[0]
-    
+
     # 1. Get user token
     user_token = get_user_token(test_user)
-    
+
     if user_token:
         # 2. List accessible chatflows to get a valid chatflow_id
         chatflow_id = list_accessible_chatflows(user_token, test_user["username"])
-        
+
         if chatflow_id:
             # 3. Create a new chat session
-            session_id = create_chat_session(user_token, test_user["username"], chatflow_id, topic="My First API Session")
-            
+            session_id = create_chat_session(
+                user_token,
+                test_user["username"],
+                chatflow_id,
+                topic="My First API Session",
+            )
+
             if session_id:
                 # 4. Use the created session to ask a question
                 test_chat_predict_stream_with_session(
@@ -229,24 +249,28 @@ if __name__ == "__main__":
                     test_user["username"],
                     chatflow_id,
                     session_id,
-                    "Hello, this is the first message in our new session. Can you remember this session ID?"
+                    "Hello, this is the first message in our new session. My Name is John",
                 )
-                
+
                 # 5. Ask a follow-up question in the same session
                 test_chat_predict_stream_with_session(
                     user_token,
                     test_user["username"],
                     chatflow_id,
                     session_id,
-                    "This is the second message. What was the first thing I said?"
+                    "This is the second message. Do you remember my name?",
                 )
             else:
                 print("❌ Could not create a session, skipping chat test.")
         else:
-            print(f"❌ No accessible chatflows for user {test_user['username']}, skipping session and chat tests.")
+            print(
+                f"❌ No accessible chatflows for user {test_user['username']}, skipping session and chat tests."
+            )
             print("   Please ensure the user is assigned to a chatflow by an admin.")
     else:
-        print(f"❌ Could not get token for user {test_user['username']}. Aborting test.")
+        print(
+            f"❌ Could not get token for user {test_user['username']}. Aborting test."
+        )
 
     print("\n" + "=" * 60)
     print("✨ Test Suite Finished ✨")
