@@ -21,5 +21,6 @@ db.createCollection('users');
 db.createCollection('chatflows');
 db.createCollection('user_chatflows');
 db.createCollection('refresh_tokens');
+db.createCollection('chat_sessions'); // Add the new collection
 
 print('Test database initialized successfully');

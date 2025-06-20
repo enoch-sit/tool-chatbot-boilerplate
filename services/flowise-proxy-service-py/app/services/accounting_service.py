@@ -7,7 +7,7 @@ class AccountingService:
         self.accounting_url = settings.ACCOUNTING_SERVICE_URL.rstrip('/') # Ensure no trailing slash
 
     async def get_chatflow_cost(self, chat_flow_id) -> Optional[int]:
-        return 100
+        return 1
 
     async def check_user_credits(self, user_id: str, user_token) -> Optional[int]:
         """Check user's available credits via the accounting service."""

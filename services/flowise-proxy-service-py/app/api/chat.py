@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Dict, Any, Optional, List # Added List
+from typing import Dict, Any, Optional, List, AsyncGenerator
 from app.auth.middleware import authenticate_user
 from app.services.flowise_service import FlowiseService
 from app.services.accounting_service import AccountingService
@@ -10,28 +11,61 @@ from app.auth.jwt_handler import JWTHandler
 from flowise import Flowise, PredictionData
 from app.config import settings
 from app.models.chatflow import UserChatflow # Added UserChatflow import
+from app.models.chat_session import ChatSession # Import the new session model
+import time
+import uuid
+import hashlib
+from datetime import datetime
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
 class ChatRequest(BaseModel):
-    chatflow_id: str
     question: str
-    overrideConfig: Dict[str, Any] = {}
+    chatflow_id: str
+    overrideConfig: Optional[Dict[str, Any]] = None
+    history: Optional[List[Dict[str, Any]]] = None
+    # The client can provide a session ID to maintain conversation context
+    sessionId: Optional[str] = None
 
 class AuthRequest(BaseModel):
     username: str
     password: str
 
-class RefreshTokenRequest(BaseModel):
+class RefreshRequest(BaseModel):
     refresh_token: str
 
 class RevokeTokenRequest(BaseModel):
-    token_id: Optional[str] = None  # Specific token to revoke
-    all_tokens: Optional[bool] = False  # If True, revoke all user tokens
+    token_id: Optional[str] = None
+    all_tokens: Optional[bool] = False
 
 class MyAssignedChatflowsResponse(BaseModel):
     assigned_chatflow_ids: List[str]
     count: int
+
+class CreateSessionRequest(BaseModel):
+    chatflow_id: str
+    topic: Optional[str] = None
+
+class SessionResponse(BaseModel):
+    session_id: str
+    chatflow_id: str
+    user_id: str
+    topic: Optional[str]
+    created_at: datetime
+
+# Create deterministic but UUID-formatted session ID with timestamp
+def create_session_id(user_id, chatflow_id):
+    # Create a namespace UUID (version 5)
+    namespace = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
+    
+    # Get current timestamp
+    timestamp = int(time.time()*1000)
+    
+    # Combine user_id, chatflow_id, and timestamp
+    seed = f"{user_id}:{chatflow_id}:{timestamp}"
+    
+    # Generate a UUID based on the namespace and seed
+    return str(uuid.uuid5(namespace, seed))
 
 @router.post("/authenticate")
 async def authenticate(auth_request: AuthRequest, request: Request):
@@ -70,7 +104,7 @@ async def authenticate(auth_request: AuthRequest, request: Request):
         )
 
 @router.post("/refresh")
-async def refresh_token(refresh_request: RefreshTokenRequest, request: Request):
+async def refresh_token(refresh_request: RefreshRequest, request: Request):
     """
     Refresh access token using external auth service - NO MIDDLEWARE DEPENDENCY
     This endpoint does not use authenticate_user middleware to avoid circular dependency.
@@ -291,6 +325,105 @@ async def chat_predict(
             detail=f"Request failed: {str(e)}"
         )
 
+@router.post("/predict/stream")
+async def chat_predict_stream(
+    chat_request: ChatRequest,
+    current_user: Dict = Depends(authenticate_user)
+):
+    
+    try:
+        # Initialize services
+        accounting_service = AccountingService()
+        auth_service = AuthService()
+        
+        user_token = current_user.get("access_token")
+        user_id = current_user.get("user_id")
+        chatflow_id = chat_request.chatflow_id
+        
+        # 1. Validate user has access to chatflow
+        if not await auth_service.validate_user_permissions(user_id, chatflow_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied to this chatflow"
+            )
+        
+        # 2. Initialize Flowise client directly
+        flowise_client = Flowise(settings.FLOWISE_API_URL, settings.FLOWISE_API_KEY)
+        
+        # 3. Get chatflow cost
+        cost = await accounting_service.get_chatflow_cost(chatflow_id)
+        
+        # 4. Check user credits
+        user_credits = await accounting_service.check_user_credits(user_id, user_token)
+        if user_credits is None or user_credits < cost:
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient credits"
+            )
+        
+        # 5. Deduct credits before processing
+        if not await accounting_service.deduct_credits(user_id, cost, user_token):
+            raise HTTPException(
+                status_code=402,
+                detail="Failed to deduct credits"
+            )
+
+        async def stream_generator():
+            
+            try:
+                # Ensure sessionId is passed to maintain conversation context
+
+                # Use provided sessionId or generate a compatible one
+                session_id = chat_request.sessionId
+                if not session_id:
+                    # Use time-based session ID generation
+                    session_id = create_session_id(user_id, chatflow_id)
+                
+                override_config = chat_request.overrideConfig or {}
+                override_config["sessionId"] = session_id
+
+                # Create prediction using Flowise library with streaming enabled
+                completion = flowise_client.create_prediction(
+                    PredictionData(
+                        chatflowId=chatflow_id,
+                        question=chat_request.question,
+                        streaming=True,
+                        history=chat_request.history,  # Pass history if provided
+                        overrideConfig=override_config
+                    )
+                )
+                
+                # Collect all streaming chunks into a complete response
+                response_received = False
+                for chunk in completion:
+                    if chunk:
+                        yield str(chunk)
+                        response_received = True
+                
+                if not response_received:
+                    # Log failed transaction but don't refund credits automatically
+                    await accounting_service.log_transaction(user_id, "chat", chatflow_id, cost, False)
+                else:
+                    # 7. Log successful transaction
+                    await accounting_service.log_transaction(user_id, "chat", chatflow_id, cost, True)
+
+            except Exception as processing_error:
+                # Log failed processing
+                await accounting_service.log_transaction(user_id, "chat", chatflow_id, cost, False)
+                # We cannot raise HTTPException here as the response has already started streaming.
+                # Instead, we can log the error. The client will see a prematurely closed connection.
+                print(f"Chat processing failed: {str(processing_error)}")
+
+        return StreamingResponse(stream_generator(), media_type="text/plain")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Request failed: {str(e)}"
+        )
+
 @router.get("/credits")
 async def get_user_credits(
     current_user: Dict = Depends(authenticate_user)
@@ -350,4 +483,49 @@ async def get_my_assigned_chatflows(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve assigned chatflows: {str(e)}"
+        )
+
+@router.post("/sessions", response_model=SessionResponse, status_code=201)
+async def create_chat_session(
+    session_request: CreateSessionRequest,
+    current_user: Dict = Depends(authenticate_user)
+):
+    """
+    Creates a new chat session for a user with a specific chatflow.
+    This endpoint validates user permissions before creating the session.
+    """
+    try:
+        auth_service = AuthService()
+        user_id = current_user.get("user_id")
+        chatflow_id = session_request.chatflow_id
+
+        # 1. Validate user has access to the chatflow before creating a session
+        if not await auth_service.validate_user_permissions(user_id, chatflow_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied to this chatflow"
+            )
+
+        # 2. Create and store the new session
+        new_session = ChatSession(
+            user_id=user_id,
+            chatflow_id=chatflow_id,
+            topic=session_request.topic
+        )
+        await new_session.insert()
+
+        return SessionResponse(
+            session_id=new_session.session_id,
+            chatflow_id=new_session.chatflow_id,
+            user_id=new_session.user_id,
+            topic=new_session.topic,
+            created_at=new_session.created_at
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create session: {str(e)}"
         )

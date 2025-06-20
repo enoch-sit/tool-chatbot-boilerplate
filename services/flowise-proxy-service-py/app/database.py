@@ -4,6 +4,7 @@ from app.config import settings
 from app.models.user import User
 from app.models.chatflow import Chatflow, UserChatflow
 from app.models.refresh_token import RefreshToken
+from app.models.chat_session import ChatSession # Added import
 import logging
 import uuid # Added import
 
@@ -45,7 +46,7 @@ async def connect_to_mongo():
         # Initialize beanie with the document models
         await init_beanie(
             database=database.database,
-            document_models=[User, Chatflow, UserChatflow, RefreshToken]
+            document_models=[User, Chatflow, UserChatflow, RefreshToken, ChatSession]
         )
         
         logger.info(f"Successfully connected to MongoDB and initialized Beanie (call_id: {call_instance_id}, init_count: {database.init_count})")
