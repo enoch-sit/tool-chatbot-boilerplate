@@ -73,6 +73,21 @@ router.use('/usage', authenticateJWT);
 router.get('/credits/balance', CreditController.getUserBalance);
 
 /**
+ * Get current user's total credit balance
+ * GET /api/credits/total-balance
+ *
+ * Returns the authenticated user's total credit balance.
+ *
+ * Authentication: JWT required
+ *
+ * Response:
+ *   200 OK: { totalCredits: number }
+ *   401 Unauthorized: If no user authenticated
+ *   500 Server Error: If retrieval fails
+ */
+router.get('/credits/total-balance', CreditController.getTotalCreditBalance);
+
+/**
  * Check if user has sufficient credits
  * POST /api/credits/check
  * 
@@ -109,6 +124,27 @@ router.post('/credits/check', CreditController.checkCredits);
  *   500 Server Error: If calculation fails
  */
 router.post('/credits/calculate', CreditController.calculateCredits);
+
+/**
+ * Deduct credits from the authenticated user's own account.
+ * POST /api/credits/deduct
+ *
+ * Allows a user to deduct a specified amount of credits from their own balance.
+ *
+ * Authentication: JWT required
+ *
+ * Request body:
+ *   {
+ *     "credits": number (required)
+ *   }
+ *
+ * Response:
+ *   200 OK: { success: boolean, message: string, remainingBalance: number }
+ *   400 Bad Request: If 'credits' is missing, invalid, or exceeds balance.
+ *   401 Unauthorized: If no user authenticated.
+ *   500 Server Error: If deduction fails.
+ */
+router.post('/credits/deduct', CreditController.deductUserCredits);
 
 /**
  * Get a user's credit balance (admin and supervisors only)
@@ -264,6 +300,23 @@ router.delete('/credits/remove', requireSupervisor, CreditController.removeCredi
  *   500 Server Error: If operation fails
  */
 router.put('/credits/adjust', requireSupervisor, CreditController.adjustCredits);
+
+/**
+ * Get all credit allocations for all users (admin and supervisors only)
+ * GET /api/credits/allocations/all
+ *
+ * Returns a list of all credit allocations, ordered by user.
+ *
+ * Authentication: JWT required
+ * Authorization: Admin or Supervisor role required
+ *
+ * Response:
+ *   200 OK: { allocations: Array }
+ *   401 Unauthorized: If no user authenticated
+ *   403 Forbidden: If user lacks permission
+ *   500 Server Error: If retrieval fails
+ */
+router.get('/credits/allocations/all', requireSupervisor, CreditController.getAllAllocations);
 
 // ===== STREAMING SESSION ENDPOINTS =====
 

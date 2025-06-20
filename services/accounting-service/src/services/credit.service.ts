@@ -20,6 +20,7 @@ import { Op } from 'sequelize';
 import CreditAllocation from '../models/credit-allocation.model';
 import PricingRule from '../models/credit-allocation.model'; // Will create this later
 import UserAccountService from './user-account.service';
+import UserAccount from '../models/user-account.model';
 import logger from '../utils/logger'; // Import the logger
 
 export class CreditService {
@@ -77,6 +78,31 @@ export class CreditService {
     };
   }
   
+  /**
+   * Get the total credit balance for a user.
+   * @param userId The ID of the user.
+   * @returns The total credit balance.
+   */
+  async getCreditBalance(userId: string): Promise<number> {
+    const { totalCredits } = await this.getUserBalance(userId);
+    return totalCredits;
+  }
+
+  /**
+   * Get all credit allocations for all users, ordered by userId.
+   * @returns {Promise<CreditAllocation[]>} A promise that resolves to an array of credit allocations.
+   */
+  async getAllAllocations(): Promise<any[]> {
+    const allocations = await CreditAllocation.findAll({
+      include: [{
+        model: UserAccount,
+        attributes: ['username', 'email']
+      }],
+      order: [['userId', 'ASC'], ['expiresAt', 'ASC']]
+    });
+    return allocations;
+  }
+
   // 20250523_test_flow
   /**
    * Check if user has sufficient credits for an operation
@@ -217,7 +243,7 @@ export class CreditService {
     for (const allocation of allocations) {
       if (remainingToDeduct <= 0) break;
       
-      const deductFromThis = Math.min(allocation.remainingCredits, remainingToDeduct);
+      const deductFromThis = Math.abs(Math.min(allocation.remainingCredits, remainingToDeduct));
       allocation.remainingCredits -= deductFromThis;
       remainingToDeduct -= deductFromThis;
       

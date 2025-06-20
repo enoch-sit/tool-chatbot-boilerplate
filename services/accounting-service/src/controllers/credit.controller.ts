@@ -523,6 +523,37 @@ export class CreditController {
       return res.status(500).json({ message: 'Failed to calculate credits' });
     }
   }
+
+  async deductUserCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      const { credits } = req.body;
+
+      if (typeof credits !== 'number' || credits <= 0) {
+        return res.status(400).json({ message: 'Valid, positive credits amount required' });
+      }
+
+      const success = await CreditService.deductCredits(req.user.userId, credits);
+
+      if (!success) {
+        return res.status(400).json({ message: 'Insufficient credits' });
+      }
+
+      const balanceInfo = await CreditService.getUserBalance(req.user.userId);
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully deducted ${credits} credits.`,
+        remainingBalance: balanceInfo.totalCredits
+      });
+    } catch (error) {
+      logger.error('Error deducting user credits:', error);
+      return res.status(500).json({ message: 'Failed to deduct credits' });
+    }
+  }
   
   // 20250523_test_flow
   /**
@@ -767,6 +798,65 @@ export class CreditController {
     } catch (error: any) {
       logger.error('allocateCreditsByEmail - General error in allocateCreditsByEmail:', error);
       return res.status(500).json({ message: 'Failed to allocate credits due to an unexpected server error' });
+    }
+  }
+
+  /**
+   * Get current user's total credit balance
+   * GET /api/credits/total-balance
+   *
+   * @param req Express request object (requires authenticated user)
+   * @param res Express response object
+   *
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { totalCredits: number }
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 500 Server Error: If retrieval fails
+   */
+  async getTotalCreditBalance(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      const totalCredits = await CreditService.getCreditBalance(req.user.userId);
+
+      return res.status(200).json({ totalCredits });
+    } catch (error) {
+      logger.error(`Error getting total credit balance for user ${req.user?.userId}:`, error);
+      return res.status(500).json({ message: 'Failed to get total credit balance' });
+    }
+  }
+
+  /**
+   * Get all credit allocations for all users (admin/supervisor only)
+   * GET /api/credits/allocations/all
+   *
+   * @param req Express request object
+   * @param res Express response object
+   *
+   * @returns {Promise<Response>} JSON response with:
+   *   - 200 OK: { allocations: Array }
+   *   - 401 Unauthorized: If no user authenticated
+   *   - 403 Forbidden: If user lacks permission
+   *   - 500 Server Error: If retrieval fails
+   */
+  async getAllAllocations(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+
+      const allocations = await CreditService.getAllAllocations();
+
+      return res.status(200).json({ allocations });
+    } catch (error) {
+      logger.error('Error getting all credit allocations:', error);
+      return res.status(500).json({ message: 'Failed to get all credit allocations' });
     }
   }
 }

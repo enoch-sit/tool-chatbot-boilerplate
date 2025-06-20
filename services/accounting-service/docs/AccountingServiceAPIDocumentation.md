@@ -214,7 +214,66 @@ Handled by `CreditController`. Base path: `/api/credits`
   // ...existing code...
   ```
 
-### 4. Get a User's Credit Balance (Admin/Supervisors Only)
+### 4. Deduct Credits From Own Account
+- **Endpoint:** `POST /api/credits/deduct`
+- **Description:** Allows an authenticated user to deduct a specified amount of credits from their own balance.
+- **Authentication:** JWT required.
+- **Request Body:**
+  ```json
+  {
+    "credits": "number"
+  }
+  ```
+- **Response (200 OK):**
+  ```json
+  {
+    "success": "boolean",
+    "message": "string",
+    "remainingBalance": "number"
+  }
+  ```
+- **Error Responses:**
+    - 400 Bad Request: If `credits` is missing, invalid, or exceeds the user's current balance.
+    - 401 Unauthorized: If no user is authenticated.
+    - 500 Server Error: If the deduction fails.
+- **Controller Function Snippet (from `credit.controller.ts`):**
+  ```typescript
+  // src/controllers/credit.controller.ts
+  // ...existing code...
+  async deductUserCredits(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      const { credits } = req.body;
+
+      if (typeof credits !== 'number' || credits <= 0) {
+        return res.status(400).json({ message: 'Valid, positive credits amount required' });
+      }
+
+      const success = await CreditService.deductCredits(req.user.userId, credits);
+
+      if (!success) {
+        return res.status(400).json({ message: 'Insufficient credits' });
+      }
+
+      const balanceInfo = await CreditService.getUserBalance(req.user.userId);
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully deducted ${credits} credits.`,
+        remainingBalance: balanceInfo.totalCredits
+      });
+    } catch (error) {
+      logger.error('Error deducting user credits:', error);
+      return res.status(500).json({ message: 'Failed to deduct credits' });
+    }
+  }
+  // ...existing code...
+  ```
+
+### 5. Get a User's Credit Balance (Admin/Supervisors Only)
 - **Endpoint:** `GET /api/credits/balance/:userId`
 - **Description:** Returns a specific user's credit balance. The `userId` parameter can be either a user ID or an email address.
 - **Authentication:** JWT required.
@@ -268,89 +327,6 @@ Handled by `CreditController`. Base path: `/api/credits`
     } catch (error) {
       console.error('Error getting user balance by admin:', error);
       return res.status(500).json({ message: 'Failed to retrieve credit balance' });
-    }
-  }
-  // ...existing code...
-  ```
-
-### 5. Allocate Credits to a User (Admin/Supervisors Only)
-- **Endpoint:** `POST /api/credits/allocate`
-- **Description:** Allocates credits to a specific user.
-- **Authentication:** JWT required.
-- **Authorization:** `admin` or `supervisor` role required.
-- **Request Body:**
-  ```json
-  {
-    "userId": "string",         // ID of the user to receive credits
-    "credits": "number",        // Amount of credits to allocate
-    "expiryDays": "number",     // Optional: Days until credits expire (default: 30)
-    "notes": "string"           // Optional: Notes about the allocation
-  }
-  ```
-- **Response (201 Created):**
-  ```json
-  {
-    "id": "string",             // ID of the credit allocation record
-    "userId": "string",
-    "totalCredits": "number",   // Credits allocated in this transaction
-    "remainingCredits": "number",// Remaining credits in this allocation (same as totalCredits initially)
-    "expiresAt": "string"       // ISO date string of when the allocation expires
-  }
-  ```
-- **Error Responses:**
-    - 400 Bad Request: If required fields are missing/invalid.
-    - 401 Unauthorized: If no user authenticated.
-    - 403 Forbidden: If authenticated user lacks permission.
-    - 404 Not Found: If target user for allocation doesn't exist (behavior may vary based on implementation, might create user).
-    - 500 Server Error: If allocation fails.
-- **Controller Function Snippet (from `credit.controller.ts`):**
-  ```typescript
-  // src/controllers/credit.controller.ts
-  // ...existing code...
-  async allocateCredits(req: Request, res: Response) {
-    try {
-      if (!req.user?.userId) {
-        return res.status(401).json({ message: 'User not authenticated' });
-      }
-      
-      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
-        return res.status(403).json({ message: 'Insufficient permissions' });
-      }
-      
-      const { userId, credits, expiryDays, notes } = req.body;
-      
-      if (!userId || typeof credits !== 'number' || credits <= 0) {
-        return res.status(400).json({ message: 'Valid userId and credits required' });
-      }
-      
-      // ... logic to find or create user (targetUserAccount, actualUserIdForAllocation) ...
-      // This part involves resolving userId which might be a username or UUID.
-
-      const actualUserIdForAllocation = targetUserAccount ? targetUserAccount.userId : userId; // Simplified for snippet
-      // ... ensure user account exists ...
-
-      try {
-        const allocation = await CreditService.allocateCredits({
-          userId: actualUserIdForAllocation,
-          credits,
-          allocatedBy: req.user.userId, // Admin/supervisor performing allocation
-          expiryDays,
-          notes
-        });
-        
-        console.log(`Credit allocation successful: ${JSON.stringify(allocation)}`);
-        
-        return res.status(201).json({
-          id: allocation.id,
-          userId: allocation.userId,
-          totalCredits: allocation.totalCredits,
-          remainingCredits: allocation.remainingCredits,
-          expiresAt: allocation.expiresAt
-        });      } catch (creditError) {
-        // ... error handling ...
-      }
-    } catch (error) {
-      // ... error handling ...
     }
   }
   // ...existing code...
@@ -524,6 +500,61 @@ Handled by `CreditController`. Base path: `/api/credits`
   }
   // ...existing code...
   ```
+
+### 9. Get All Credit Allocations (Admin/Supervisors Only)
+- **Endpoint:** `GET /api/credits/allocations/all`
+- **Description:** Retrieves a list of all credit allocations for all users, ordered by user ID and then by expiration date.
+- **Authentication:** JWT required.
+- **Authorization:** `admin` or `supervisor` role required.
+- **Request:** None
+- **Response (200 OK):**
+  ```json
+  {
+    "allocations": [
+      {
+        "id": "number",
+        "userId": "string",
+        "totalCredits": "number",
+        "remainingCredits": "number",
+        "allocatedBy": "string",
+        "allocatedAt": "string",
+        "expiresAt": "string",
+        "notes": "string",
+        "UserAccount": {
+          "username": "string",
+          "email": "string"
+        }
+      }
+    ]
+  }
+  ```
+- **Error Responses:**
+    - 401 Unauthorized: If no user authenticated.
+    - 403 Forbidden: If authenticated user lacks permission.
+    - 500 Server Error: If retrieval fails.
+- **Controller Function Snippet (from `credit.controller.ts`):**
+  ```typescript
+  // src/controllers/credit.controller.ts
+  // ...existing code...
+  async getAllAllocations(req: Request, res: Response) {
+    try {
+      if (!req.user?.userId) {
+        return res.status(401).json({ message: 'User not authenticated' });
+      }
+
+      if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+
+      const allocations = await CreditService.getAllAllocations();
+
+      return res.status(200).json({ allocations });
+    } catch (error) {
+      logger.error('Error getting all credit allocations:', error);
+      return res.status(500).json({ message: 'Failed to get all credit allocations' });
+    }
+  }
+  // ...existing code...
   ```
 
 ---
@@ -837,7 +868,7 @@ Handled by `StreamingSessionController`. Base path: `/api/streaming-sessions`
         return res.status(403).json({ message: 'Insufficient permissions' });
       }
 
-      const minutes = req.query.minutes ? parseInt(req.query.minutes as string) : undefined; // Example: 60 minutes default
+      const minutes = req.query.minutes ? parseInt(req.query.minutes as string) : undefined; // Assuming default is handled in service
       if (minutes !== undefined && (isNaN(minutes) || minutes <=0)) {
         return res.status(400).json({ message: 'Invalid minutes parameter' });
       }
