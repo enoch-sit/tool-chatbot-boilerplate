@@ -4,8 +4,8 @@ import subprocess
 import time
 import sys
 import os
-import datetime # Ensure datetime is imported
-import pymongo # For direct DB check
+import datetime  # Ensure datetime is imported
+import pymongo  # For direct DB check
 
 LOG_FILE = "chatflow_sync_test.log"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +57,7 @@ REGULAR_USERS = [
 # login through API_BASE_URL
 # List the chatflow that he/she have access to [previously given by Admin]
 
+
 def get_user_token(user):
     """Log in as a specified user and get the access token"""
     print(f"\n--- Getting access token for user: {user['username']} ---")
@@ -77,7 +78,9 @@ def get_user_token(user):
             else:
                 print(f"❌ No access token in response for {user['username']}")
         else:
-            print(f"❌ Failed to get token for {user['username']}: {response.status_code} {response.text}")
+            print(
+                f"❌ Failed to get token for {user['username']}: {response.status_code} {response.text}"
+            )
     except requests.RequestException as e:
         print(f"❌ Request error: {e}")
     except Exception as e:
@@ -108,7 +111,9 @@ def list_accessible_chatflows(token, username):
                 print(f"No accessible chatflows for {username}.")
                 return None
         else:
-            print(f"❌ Failed to list chatflows for {username}: {response.status_code} {response.text}")
+            print(
+                f"❌ Failed to list chatflows for {username}: {response.status_code} {response.text}"
+            )
             return None
     except requests.RequestException as e:
         print(f"❌ Request error while listing chatflows for {username}: {e}")
@@ -122,7 +127,9 @@ def test_chat_predict(token, username, chatflow_id, question):
     """
     Tests the chat predict endpoint for a given chatflow_id and question.
     """
-    print(f"\n--- Testing chat predict for user: {username} on chatflow: {chatflow_id} ---")
+    print(
+        f"\n--- Testing chat predict for user: {username} on chatflow: {chatflow_id} ---"
+    )
     if not token:
         print("❌ Cannot test predict without a token.")
         return
@@ -149,13 +156,17 @@ def test_chat_predict(token, username, chatflow_id, question):
             with open(LOG_PATH, "a") as log_file:
                 log_file.write(f"{log_entry_prefix} FAIL\n{response.text}\n")
     except requests.RequestException as e:
-        print(f"❌ Request error during prediction for {username} on chatflow {chatflow_id}: {e}")
+        print(
+            f"❌ Request error during prediction for {username} on chatflow {chatflow_id}: {e}"
+        )
         with open(LOG_PATH, "a") as log_file:
             log_file.write(
                 f"[{timestamp}] User '{username}' predicting on chatflow '{chatflow_id}': Request error: {e}\n"
             )
     except Exception as e:
-        print(f"❌ Unexpected error during prediction for {username} on chatflow {chatflow_id}: {e}")
+        print(
+            f"❌ Unexpected error during prediction for {username} on chatflow {chatflow_id}: {e}"
+        )
         with open(LOG_PATH, "a") as log_file:
             log_file.write(
                 f"[{timestamp}] User '{username}' predicting on chatflow '{chatflow_id}': Unexpected error: {e}\n"
@@ -166,7 +177,9 @@ def test_chat_predict_stream(token, username, chatflow_id, question):
     """
     Tests the chat predict stream endpoint for a given chatflow_id and question.
     """
-    print(f"\n--- Testing chat predict STREAM for user: {username} on chatflow: {chatflow_id} ---")
+    print(
+        f"\n--- Testing chat predict STREAM for user: {username} on chatflow: {chatflow_id} ---"
+    )
     if not token:
         print("❌ Cannot test predict stream without a token.")
         return
@@ -181,7 +194,9 @@ def test_chat_predict_stream(token, username, chatflow_id, question):
     }
     try:
         # Use stream=True to handle the streaming response
-        response = requests.post(predict_url, headers=headers, json=payload, stream=True)
+        response = requests.post(
+            predict_url, headers=headers, json=payload, stream=True
+        )
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_entry_prefix = f"[{timestamp}] User '{username}' streaming on chatflow '{chatflow_id}' with question '{question}':"
 
@@ -189,45 +204,67 @@ def test_chat_predict_stream(token, username, chatflow_id, question):
             print(f"✅ Stream started successfully for {username}. Chunks:")
             full_response = ""
             # Iterate over the response chunks
-            for chunk in response.iter_content(chunk_size=None): # Use iter_content for raw bytes
+            for chunk in response.iter_content(
+                chunk_size=None
+            ):  # Use iter_content for raw bytes
                 if chunk:
-                    decoded_chunk = chunk.decode('utf-8') # Decode bytes to string
-                    print(decoded_chunk, end="", flush=True) # Print chunk without newline, flush to show immediately
+                    decoded_chunk = chunk.decode("utf-8")  # Decode bytes to string
+                    print(
+                        decoded_chunk, end="", flush=True
+                    )  # Print chunk without newline, flush to show immediately
                     full_response += decoded_chunk
-            print("\n--- End of Stream ---") # Print a newline at the end
-            
+            print("\n--- End of Stream ---")  # Print a newline at the end
+
             with open(LOG_PATH, "a") as log_file:
-                log_file.write(f"{log_entry_prefix} SUCCESS - Full response: {full_response}\n")
+                log_file.write(
+                    f"{log_entry_prefix} SUCCESS - Full response: {full_response}\n"
+                )
         else:
-            print(f"❌ Prediction stream failed for {username} on chatflow {chatflow_id}: {response.status_code}")
+            print(
+                f"❌ Prediction stream failed for {username} on chatflow {chatflow_id}: {response.status_code}"
+            )
             error_message = response.text
             print(f"   Error: {error_message}")
             with open(LOG_PATH, "a") as log_file:
-                log_file.write(f"{log_entry_prefix} FAILED - Status: {response.status_code}, Error: {error_message}\n")
+                log_file.write(
+                    f"{log_entry_prefix} FAILED - Status: {response.status_code}, Error: {error_message}\n"
+                )
 
     except requests.RequestException as e:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"❌ Request error during prediction stream for {username} on chatflow {chatflow_id}: {e}")
+        print(
+            f"❌ Request error during prediction stream for {username} on chatflow {chatflow_id}: {e}"
+        )
         with open(LOG_PATH, "a") as log_file:
-            log_file.write(f"[{timestamp}] User '{username}' predicting on chatflow '{chatflow_id}': Request error: {e}\n")
+            log_file.write(
+                f"[{timestamp}] User '{username}' predicting on chatflow '{chatflow_id}': Request error: {e}\n"
+            )
     except Exception as e:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"❌ Unexpected error during prediction stream for {username} on chatflow {chatflow_id}: {e}")
+        print(
+            f"❌ Unexpected error during prediction stream for {username} on chatflow {chatflow_id}: {e}"
+        )
         with open(LOG_PATH, "a") as log_file:
-            log_file.write(f"[{timestamp}] User '{username}' predicting on chatflow '{chatflow_id}': Unexpected error: {e}\n")
+            log_file.write(
+                f"[{timestamp}] User '{username}' predicting on chatflow '{chatflow_id}': Unexpected error: {e}\n"
+            )
 
 
 # Main execution
 if __name__ == "__main__":
-    
+
     # User login and tests
     for user in REGULAR_USERS:
         user_token = get_user_token(user)
         if user_token:
             chatflow_id = list_accessible_chatflows(user_token, user["username"])
             if chatflow_id:
-                test_chat_predict(user_token, user["username"], chatflow_id, "Hello, can you help me?")
-                test_chat_predict_stream(user_token, user["username"], chatflow_id, "Tell me a story.")
+                test_chat_predict(
+                    user_token, user["username"], chatflow_id, "Hello, can you help me?"
+                )
+                test_chat_predict_stream(
+                    user_token, user["username"], chatflow_id, "Tell me a story."
+                )
             else:
                 print(f"❌ No accessible chatflows for user {user['username']}.")
         else:

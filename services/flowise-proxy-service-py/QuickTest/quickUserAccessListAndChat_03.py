@@ -4,8 +4,8 @@ import subprocess
 import time
 import sys
 import os
-import datetime # Ensure datetime is imported
-import pymongo # For direct DB check
+import datetime  # Ensure datetime is imported
+import pymongo  # For direct DB check
 
 LOG_FILE = "chatflow_sync_test.log"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +57,7 @@ REGULAR_USERS = [
 # login through API_BASE_URL
 # List the chatflow that he/she have access to [previously given by Admin]
 
+
 def get_user_token(user):
     """Log in as a specified user and get the access token"""
     print(f"\n--- Getting access token for user: {user['username']} ---")
@@ -77,7 +78,9 @@ def get_user_token(user):
             else:
                 print(f"❌ No access token in response for {user['username']}")
         else:
-            print(f"❌ Failed to get token for {user['username']}: {response.status_code} {response.text}")
+            print(
+                f"❌ Failed to get token for {user['username']}: {response.status_code} {response.text}"
+            )
     except requests.RequestException as e:
         print(f"❌ Request error: {e}")
     except Exception as e:
@@ -108,7 +111,9 @@ def list_accessible_chatflows(token, username):
                 print(f"No accessible chatflows for {username}.")
                 return None
         else:
-            print(f"❌ Failed to list chatflows for {username}: {response.status_code} {response.text}")
+            print(
+                f"❌ Failed to list chatflows for {username}: {response.status_code} {response.text}"
+            )
             return None
     except requests.RequestException as e:
         print(f"❌ Request error while listing chatflows for {username}: {e}")
@@ -122,7 +127,9 @@ def test_chat_predict(token, username, chatflow_id, question):
     """
     Tests the chat predict endpoint for a given chatflow_id and question.
     """
-    print(f"\n--- Testing chat predict for user: {username} on chatflow: {chatflow_id} ---")
+    print(
+        f"\n--- Testing chat predict for user: {username} on chatflow: {chatflow_id} ---"
+    )
     if not token:
         print("❌ Cannot test predict without a token.")
         return
@@ -149,11 +156,15 @@ def test_chat_predict(token, username, chatflow_id, question):
             with open(LOG_PATH, "a") as log_file:
                 log_file.write(f"{log_entry_prefix} FAIL\n{response.text}\n")
     except requests.RequestException as e:
-        print(f"❌ Request error during prediction for {username} on chatflow {chatflow_id}: {e}")
+        print(
+            f"❌ Request error during prediction for {username} on chatflow {chatflow_id}: {e}"
+        )
         with open(LOG_PATH, "a") as log_file:
             log_file.write(f"Request error: {e}\n")
     except Exception as e:
-        print(f"❌ Unexpected error during prediction for {username} on chatflow {chatflow_id}: {e}")
+        print(
+            f"❌ Unexpected error during prediction for {username} on chatflow {chatflow_id}: {e}"
+        )
         with open(LOG_PATH, "a") as log_file:
             log_file.write(f"Unexpected error: {e}\n")
 
@@ -214,44 +225,52 @@ def get_admin_token():
 
     return None
 
+
 def list_all_chatflows_as_admin(token):
     """Test listing all chatflows from database as admin"""
     print("\n--- Listing All Chatflows (Admin) ---")
     try:
         headers = {"Authorization": f"Bearer {token}"}
-        
+
         # Test without deleted chatflows
         response = requests.get(
-            f"{API_BASE_URL}/api/v1/admin/chatflows",
-            headers=headers
+            f"{API_BASE_URL}/api/v1/admin/chatflows", headers=headers
         )
-        
+
         if response.status_code == 200:
             chatflows = response.json()
             print(f"✅ Retrieved {len(chatflows)} active chatflows")
-            
+
             # Display all chatflows for verification
             for i, chatflow in enumerate(chatflows):
-                print(f"  {i+1}. ID: {chatflow.get('flowise_id', 'N/A')}, Name: {chatflow.get('name', 'N/A')}")
-            
+                print(
+                    f"  {i+1}. ID: {chatflow.get('flowise_id', 'N/A')}, Name: {chatflow.get('name', 'N/A')}"
+                )
+
             # Log result
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Admin listed {len(chatflows)} chatflows\n")
-            
+                log_file.write(
+                    f"[{timestamp}] Admin listed {len(chatflows)} chatflows\n"
+                )
+
             # Return the first chatflow's flowise_id for assignment testing
             if chatflows:
-                return chatflows[0].get('flowise_id')
+                return chatflows[0].get("flowise_id")
             else:
                 print("ℹ️ No chatflows available for assignment")
                 return None
         else:
-            print(f"❌ Failed to list chatflows: {response.status_code} - {response.text}")
+            print(
+                f"❌ Failed to list chatflows: {response.status_code} - {response.text}"
+            )
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Admin failed to list chatflows: {response.status_code}\n")
+                log_file.write(
+                    f"[{timestamp}] Admin failed to list chatflows: {response.status_code}\n"
+                )
             return None
-            
+
     except requests.RequestException as e:
         print(f"❌ Request error during chatflow listing: {e}")
         with open(LOG_PATH, "a") as log_file:
@@ -262,8 +281,11 @@ def list_all_chatflows_as_admin(token):
         print(f"❌ Unexpected error during chatflow listing: {e}")
         with open(LOG_PATH, "a") as log_file:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_file.write(f"[{timestamp}] Admin chatflow listing unexpected error: {e}\n")
+            log_file.write(
+                f"[{timestamp}] Admin chatflow listing unexpected error: {e}\n"
+            )
         return None
+
 
 def assign_user_to_chatflow_by_email(token, chatflow_id, user_email):
     """Assign a user to a chatflow using their email address (corrected for admin.py)"""
@@ -275,21 +297,29 @@ def assign_user_to_chatflow_by_email(token, chatflow_id, user_email):
         response = requests.post(
             f"{API_BASE_URL}/api/v1/admin/chatflows/{chatflow_id}/users",
             headers=headers,
-            json=payload
+            json=payload,
         )
         if response.status_code == 200:
             data = response.json()
-            print(f"✅ Successfully assigned user '{user_email}' to chatflow '{chatflow_id}'")
+            print(
+                f"✅ Successfully assigned user '{user_email}' to chatflow '{chatflow_id}'"
+            )
             print(f"   Assignment details: {json.dumps(data, indent=2)}")
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Admin assigned user '{user_email}' to chatflow '{chatflow_id}'\n")
+                log_file.write(
+                    f"[{timestamp}] Admin assigned user '{user_email}' to chatflow '{chatflow_id}'\n"
+                )
             return True
         else:
-            print(f"❌ Failed to assign user to chatflow: {response.status_code} - {response.text}")
+            print(
+                f"❌ Failed to assign user to chatflow: {response.status_code} - {response.text}"
+            )
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Admin failed to assign user '{user_email}' to chatflow '{chatflow_id}': {response.status_code}\n")
+                log_file.write(
+                    f"[{timestamp}] Admin failed to assign user '{user_email}' to chatflow '{chatflow_id}': {response.status_code}\n"
+                )
             return False
     except requests.RequestException as e:
         print(f"❌ Request error during user assignment: {e}")
@@ -301,19 +331,24 @@ def assign_user_to_chatflow_by_email(token, chatflow_id, user_email):
         print(f"❌ Unexpected error during user assignment: {e}")
         with open(LOG_PATH, "a") as log_file:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_file.write(f"[{timestamp}] Admin user assignment unexpected error: {e}\n")
+            log_file.write(
+                f"[{timestamp}] Admin user assignment unexpected error: {e}\n"
+            )
         return False
+
 
 def clear_user_chatflow_assignments(admin_token, user_email, chatflow_id):
     """Clear existing user assignments to avoid conflicts (corrected for admin.py)"""
-    print(f"\n🧹 Clearing existing assignments for '{user_email}' and chatflow '{chatflow_id}'")
+    print(
+        f"\n🧹 Clearing existing assignments for '{user_email}' and chatflow '{chatflow_id}'"
+    )
     try:
         headers = {"Authorization": f"Bearer {admin_token}"}
         # Use the correct endpoint and query parameter as per admin.py
         response = requests.delete(
             f"{API_BASE_URL}/api/v1/admin/chatflows/{chatflow_id}/users",
             headers=headers,
-            params={"email": user_email}
+            params={"email": user_email},
         )
         if response.status_code == 200:
             print(f"✅ Cleared existing assignment for '{user_email}'")
@@ -322,60 +357,69 @@ def clear_user_chatflow_assignments(admin_token, user_email, chatflow_id):
             print(f"ℹ️ No existing assignment found for '{user_email}' (this is fine)")
             return True
         else:
-            print(f"⚠️ Could not clear assignment: {response.status_code} - {response.text}")
+            print(
+                f"⚠️ Could not clear assignment: {response.status_code} - {response.text}"
+            )
             return False
     except Exception as e:
         print(f"⚠️ Error clearing assignment: {e}")
         return False
 
+
 # ADD THIS NEW FUNCTION: Verify the assignment worked
 def verify_user_assignment(admin_token, chatflow_id, user_email):
     """Verify that the user assignment was successful by checking the database"""
-    print(f"\n--- Verifying Assignment for '{user_email}' to Chatflow '{chatflow_id}' ---")
+    print(
+        f"\n--- Verifying Assignment for '{user_email}' to Chatflow '{chatflow_id}' ---"
+    )
     try:
         headers = {"Authorization": f"Bearer {admin_token}"}
-        
+
         # List users assigned to this chatflow
         response = requests.get(
             f"{API_BASE_URL}/api/v1/admin/chatflows/{chatflow_id}/users",
-            headers=headers
+            headers=headers,
         )
-        
+
         if response.status_code == 200:
             users = response.json()
             print(f"✅ Found {len(users)} users assigned to chatflow '{chatflow_id}':")
-            
+
             user_found = False
             for user in users:
-                user_email_in_list = user.get('email', 'N/A')
+                user_email_in_list = user.get("email", "N/A")
                 print(f"   - {user.get('username', 'N/A')} ({user_email_in_list})")
                 if user_email_in_list == user_email:
                     user_found = True
                     print(f"   ✅ Target user '{user_email}' found in assignment list")
-            
+
             if not user_found:
                 print(f"   ⚠️ Target user '{user_email}' NOT found in assignment list")
-            
+
             return user_found
         else:
-            print(f"❌ Failed to list chatflow users: {response.status_code} - {response.text}")
+            print(
+                f"❌ Failed to list chatflow users: {response.status_code} - {response.text}"
+            )
             return False
-            
+
     except Exception as e:
         print(f"❌ Error verifying assignment: {e}")
         return False
 
+
 def debug_database_state():
     """Debug function to check database state directly"""
     print("\n🔍 DEBUGGING: Database State Check")
-    
+
     try:
         import pymongo
+
         client = pymongo.MongoClient(
             "mongodb://testuser:testpass@localhost:27020/flowise_proxy_test"
         )
         db = client["flowise_proxy_test"]
-        
+
         # Check users
         users = list(db.users.find({"email": "user1@example.com"}))
         print(f"👤 Users with email 'user1@example.com': {len(users)}")
@@ -384,28 +428,33 @@ def debug_database_state():
             print(f"   - User ID: {user.get('_id')}")
             print(f"   - External ID: {user.get('external_id')}")
             print(f"   - Email: {user.get('email')}")
-        
+
         # Check UserChatflow assignments
         if users:
-            user_id = str(users[0]['_id'])
+            user_id = str(users[0]["_id"])
             assignments = list(db.userchatflows.find({"user_id": user_id}))
             print(f"🔗 UserChatflow assignments for user {user_id}: {len(assignments)}")
             for assignment in assignments:
                 print(f"   - Chatflow ID: {assignment.get('chatflow_id')}")
                 print(f"   - Is Active: {assignment.get('is_active')}")
                 print(f"   - Assigned At: {assignment.get('assigned_at')}")
-                
-        # Also check by external_id 
+
+        # Also check by external_id
         if users:
-            external_id = users[0].get('external_id')
+            external_id = users[0].get("external_id")
             if external_id:
-                assignments_by_external = list(db.userchatflows.find({"user_id": external_id}))
-                print(f"🔗 UserChatflow assignments for external_id {external_id}: {len(assignments_by_external)}")
-        
+                assignments_by_external = list(
+                    db.userchatflows.find({"user_id": external_id})
+                )
+                print(
+                    f"🔗 UserChatflow assignments for external_id {external_id}: {len(assignments_by_external)}"
+                )
+
         client.close()
-        
+
     except Exception as e:
         print(f"❌ Database debug error: {e}")
+
 
 def list_accessible_chatflows_enhanced(token, username):
     """Enhanced version with detailed debugging"""
@@ -420,17 +469,17 @@ def list_accessible_chatflows_enhanced(token, username):
     try:
         print(f"🔍 Making request to: {chatflows_url}")
         print(f"🔍 Headers: Authorization: Bearer {token[:20]}...")
-        
+
         response = requests.get(chatflows_url, headers=headers)
-        
+
         print(f"🔍 Response Status: {response.status_code}")
         print(f"🔍 Response Headers: {dict(response.headers)}")
         print(f"🔍 Response Body: {response.text}")
-        
+
         if response.status_code == 200:
             chatflows = response.json()
             print(f"✅ API returned {len(chatflows)} chatflows")
-            
+
             if chatflows:
                 print(f"✅ Accessible chatflows for {username}:")
                 for cf in chatflows:
@@ -443,30 +492,32 @@ def list_accessible_chatflows_enhanced(token, username):
             print(f"❌ Failed to list chatflows for {username}: {response.status_code}")
             print(f"❌ Error response: {response.text}")
             return None
-            
+
     except Exception as e:
         print(f"❌ Exception during chatflows request: {e}")
         import traceback
+
         traceback.print_exc()
         return None
+
 
 def test_alternative_chatflows_endpoint(token, username):
     """Test the /my-chatflows endpoint instead"""
     print(f"\n--- Testing Alternative My-Chatflows Endpoint for {username} ---")
-    
+
     my_chatflows_url = f"{API_BASE_URL}/api/v1/chatflows/my-chatflows"
     headers = {"Authorization": f"Bearer {token}"}
 
     try:
         response = requests.get(my_chatflows_url, headers=headers)
-        
+
         print(f"🔍 Response Status: {response.status_code}")
         print(f"🔍 Response Body: {response.text}")
-        
+
         if response.status_code == 200:
             chatflows = response.json()
             print(f"✅ My-Chatflows API returned {len(chatflows)} chatflows")
-            
+
             if chatflows:
                 print(f"✅ Accessible chatflows via my-chatflows for {username}:")
                 for cf in chatflows:
@@ -479,10 +530,11 @@ def test_alternative_chatflows_endpoint(token, username):
             print(f"❌ Failed to get my-chatflows: {response.status_code}")
             print(f"❌ Error response: {response.text}")
             return None
-            
+
     except Exception as e:
         print(f"❌ Exception during my-chatflows request: {e}")
         return None
+
 
 def test_sync_users_by_email(token, emails):
     """Test syncing users by email from external auth to local DB"""
@@ -502,7 +554,7 @@ def test_sync_users_by_email(token, emails):
             response = requests.post(
                 f"{API_BASE_URL}/api/v1/admin/users/sync-by-email",
                 headers=headers,
-                json={"email": email}
+                json={"email": email},
             )
             if response.status_code == 200:
                 data = response.json()
@@ -513,7 +565,7 @@ def test_sync_users_by_email(token, emails):
                         f"[{timestamp}] User sync successful for {email}: {data.get('status')}\\\\n"
                     )
                 successful_syncs += 1
-            elif response.status_code == 201: # Created
+            elif response.status_code == 201:  # Created
                 data = response.json()
                 print(f"✅ User created and synced for {email}: {data.get('status')}")
                 with open(LOG_PATH, "a") as log_file:
@@ -523,14 +575,16 @@ def test_sync_users_by_email(token, emails):
                     )
                 successful_syncs += 1
             else:
-                print(f"❌ User sync failed for {email}: {response.status_code} - {response.text}")
+                print(
+                    f"❌ User sync failed for {email}: {response.status_code} - {response.text}"
+                )
                 with open(LOG_PATH, "a") as log_file:
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     log_file.write(
                         f"[{timestamp}] User sync failed for {email}: {response.status_code} - {response.text}\\\\n"
                     )
                 all_successful = False
-                failed_syncs +=1
+                failed_syncs += 1
         except requests.RequestException as e:
             print(f"❌ Request error during user sync for {email}: {e}")
             all_successful = False
@@ -539,9 +593,12 @@ def test_sync_users_by_email(token, emails):
             print(f"❌ Unexpected error during user sync for {email}: {e}")
             all_successful = False
             failed_syncs += 1
-    
-    print(f"📊 User Sync Summary: {successful_syncs} successful, {failed_syncs} failed.")
+
+    print(
+        f"📊 User Sync Summary: {successful_syncs} successful, {failed_syncs} failed."
+    )
     return all_successful
+
 
 def test_sync_chatflows(token):
     """Test syncing chatflows from Flowise endpoint to database"""
@@ -549,23 +606,28 @@ def test_sync_chatflows(token):
     try:
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.post(
-            f"{API_BASE_URL}/api/v1/admin/chatflows/sync",
-            headers=headers
+            f"{API_BASE_URL}/api/v1/admin/chatflows/sync", headers=headers
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             print("✅ Chatflow sync successful")
-            print(f"📊 Sync Results: total_fetched={data.get('total_fetched',0)}, created={data.get('created',0)}, updated={data.get('updated',0)}, deleted={data.get('deleted',0)}, errors={data.get('errors',0)}")
+            print(
+                f"📊 Sync Results: total_fetched={data.get('total_fetched',0)}, created={data.get('created',0)}, updated={data.get('updated',0)}, deleted={data.get('deleted',0)}, errors={data.get('errors',0)}"
+            )
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Chatflow sync completed: {json.dumps(data)}\\\\n")
+                log_file.write(
+                    f"[{timestamp}] Chatflow sync completed: {json.dumps(data)}\\\\n"
+                )
             return True
         else:
             print(f"❌ Chatflow sync failed: {response.status_code} - {response.text}")
             with open(LOG_PATH, "a") as log_file:
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] Chatflow sync failed: {response.status_code} - {response.text}\\\\n")
+                log_file.write(
+                    f"[{timestamp}] Chatflow sync failed: {response.status_code} - {response.text}\\\\n"
+                )
             return False
     except requests.RequestException as e:
         print(f"❌ Request error during chatflow sync: {e}")
@@ -574,22 +636,28 @@ def test_sync_chatflows(token):
         print(f"❌ Unexpected error during chatflow sync: {e}")
         return False
 
+
 def sync_chatflows_via_api(admin_token):
     """Sync chatflows from Flowise to local DB using the admin API endpoint."""
     print("\n🔄 Performing chatflow sync via server endpoint...")
     headers = {"Authorization": f"Bearer {admin_token}"}
     try:
-        response = requests.post(f"{API_BASE_URL}/api/v1/admin/chatflows/sync", headers=headers)
+        response = requests.post(
+            f"{API_BASE_URL}/api/v1/admin/chatflows/sync", headers=headers
+        )
         if response.status_code == 200:
             data = response.json()
             print(f"✅ Chatflow sync via API successful: {data}")
             return True
         else:
-            print(f"❌ Chatflow sync via API failed: {response.status_code} {response.text}")
+            print(
+                f"❌ Chatflow sync via API failed: {response.status_code} {response.text}"
+            )
             return False
     except Exception as e:
         print(f"❌ Exception during chatflow sync via API: {e}")
         return False
+
 
 # Main execution flow with admin setup and user testing:
 if __name__ == "__main__":
@@ -604,7 +672,9 @@ if __name__ == "__main__":
         print("❌ Could not get admin token. Exiting.")
         exit(1)
     # Sync users and chatflows if needed (call your sync functions here if available)
-    user_emails_to_sync = [user["email"] for user in SUPERVISOR_USERS] + [user["email"] for user in REGULAR_USERS]
+    user_emails_to_sync = [user["email"] for user in SUPERVISOR_USERS] + [
+        user["email"] for user in REGULAR_USERS
+    ]
     print("\n🔄 Syncing Users by Email...")
     user_sync_successful = test_sync_users_by_email(admin_token, user_emails_to_sync)
     if user_sync_successful:
@@ -614,35 +684,51 @@ if __name__ == "__main__":
     # Perform chatflow sync using the server endpoint
     sync_successful = sync_chatflows_via_api(admin_token)
     if not sync_successful:
-        print("❌ Critical: Chatflow sync via API failed. Some tests might not be meaningful. Continuing...")
+        print(
+            "❌ Critical: Chatflow sync via API failed. Some tests might not be meaningful. Continuing..."
+        )
     # List all chatflows as admin and pick one
     target_chatflow_id = list_all_chatflows_as_admin(admin_token)
     if not target_chatflow_id:
         print("❌ No chatflows available for assignment. Exiting.")
         exit(1)
     # Assign user1 to the chatflow as admin
-    assignment_success = assign_user_to_chatflow_by_email(admin_token, target_chatflow_id, REGULAR_USERS[0]["email"])
+    assignment_success = assign_user_to_chatflow_by_email(
+        admin_token, target_chatflow_id, REGULAR_USERS[0]["email"]
+    )
     if not assignment_success:
         print(f"❌ Failed to assign user1 to chatflow {target_chatflow_id}. Exiting.")
         exit(1)
     # Verify the assignment to debug the issue
     print("\n🕵️  Verifying the assignment directly after the API call...")
-    verification_passed = verify_user_assignment(admin_token, target_chatflow_id, REGULAR_USERS[0]["email"])
+    verification_passed = verify_user_assignment(
+        admin_token, target_chatflow_id, REGULAR_USERS[0]["email"]
+    )
     if not verification_passed:
-        print("‼️  Verification failed. The API call to assign the user might have succeeded, but the user is not showing up as assigned.")
+        print(
+            "‼️  Verification failed. The API call to assign the user might have succeeded, but the user is not showing up as assigned."
+        )
         print("   Running a database state check for more details...")
         debug_database_state()
     else:
         print("✅ Verification PASSED: The admin API confirms the user is assigned.")
-        print("   The issue likely lies in the user-facing endpoint for listing chatflows or data synchronization.")
+        print(
+            "   The issue likely lies in the user-facing endpoint for listing chatflows or data synchronization."
+        )
     # Log in as user1 and test access
     user = REGULAR_USERS[0]
     user_token = get_user_token(user)
     if user_token:
         chatflow_id = list_accessible_chatflows(user_token, user["username"])
         if chatflow_id:
-            test_chat_predict(user_token, user["username"], chatflow_id, "Hello, can you help me?")
+            test_chat_predict(
+                user_token, user["username"], chatflow_id, "Hello, can you help me?"
+            )
         else:
             print(f"❌ No accessible chatflows for user {user['username']}.")
     else:
         print(f"❌ Could not get token for user {user['username']}.")
+
+
+# --- Testing chat predict for user: user1 on chatflow ---
+# ✅ Prediction response: {'response': '{"event":"start","data":"Of"}{"event":"token","data":"Of"}{"event":"token","data":" course! I\'d"}{"event":"token","data":" be happy to help."}{"event":"token","data":" What do"}{"event":"token","data":" you need assistance with?\\n\\n"}{"event":"token","data":"If"}{"event":"token","data":" you have"}{"event":"token","data":" a specific"}{"event":"token","data":" question, whether"}{"event":"token","data":" it\'"}{"event":"token","data":"s about a"}{"event":"token","data":" topic, need"}{"event":"token","data":" some"}{"event":"token","data":" information"}{"event":"token","data":", or"}{"event":"token","data":" require"}{"event":"token","data":" guidance"}{"event":"token","data":" on a particular task"}{"event":"token","data":", feel"}{"event":"token","data":" free to ask."}{"event":"token","data":" Here"}{"event":"token","data":" are"}{"event":"token","data":" a few categories"}{"event":"token","data":" I"}{"event":"token","data":" can"}{"event":"token","data":" help with:\\n\\n"}{"event":"token","data":"1. **General"}{"event":"token","data":" Knowledge"}{"event":"token","data":"**:"}{"event":"token","data":" Facts"}{"event":"token","data":","}{"event":"token","data":" history"}{"event":"token","data":", science"}{"event":"token","data":", etc"}{"event":"token","data":".\\n2. **Technology**:"}{"event":"token","data":" Software"}{"event":"token","data":","}{"event":"token","data":" hardware, troubleshooting"}{"event":"token","data":","}{"event":"token","data":" etc.\\n3. **Health"}{"event":"token","data":" and"}{"event":"token","data":" Wellness**: Basic"}{"event":"token","data":" health"}{"event":"token","data":" tips"}{"event":"token","data":", fitness"}{"event":"token","data":" advice"}{"event":"token","data":", etc.\\n"}{"event":"token","data":"4. **Education"}{"event":"token","data":"**: Study"}{"event":"token","data":" tips, explanations"}{"event":"token","data":" of"}{"event":"token","data":" concepts, etc.\\n5."}{"event":"token","data":" **Entertainment**: Movies"}{"event":"token","data":", books"}{"event":"token","data":", games"}{"event":"token","data":", etc"}{"event":"token","data":".\\n6. **Every"}{"event":"token","data":"day Tasks"}{"event":"token","data":"**: Cooking"}{"event":"token","data":" recipes"}{"event":"token","data":", DIY"}{"event":"token","data":" projects"}{"event":"token","data":", etc"}{"event":"token","data":".\\n\\n"}{"event":"token","data":"Just"}{"event":"token","data":" let me know what you’"}{"event":"token","data":"re looking"}{"event":"token","data":" for!"}{"event":"metadata","data":{"chatId":"290252b1-b578-48cc-af83-b0e8d1feec04","chatMessageId":"7c71c3a3-7a18-4e0e-84b9-5447697982c4","question":"Hello, can you help me?","sessionId":"290252b1-b578-48cc-af83-b0e8d1feec04","memoryType":"Buffer Memory"}}{"event":"end","data":"[DONE]"}', 'metadata': {'chatflow_id': '7a2f12b2-25eb-46e0-856a-a08cf5a99c0f', 'cost': 1, 'remaining_credits': 482, 'user': 'user1', 'streaming': True}}
