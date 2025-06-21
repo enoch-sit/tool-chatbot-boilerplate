@@ -12,9 +12,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(SCRIPT_DIR, LOG_FILE)
 
 # Configuration
-AUTH_URL = "http://localhost:3000"
 API_BASE_URL = "http://localhost:8000"
-ACCOUNT_BASE_URL = "http://localhost:3001"
 
 MONGODB_CONTAINER = "auth-mongodb"
 ADMIN_USER = {

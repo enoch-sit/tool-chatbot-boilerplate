@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-super-secret-jwt-key-here}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev_access_secret_key_change_this_in_production}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-${JWT_SECRET_KEY:-dev_access_secret_key_change_this_in_production}}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-${JWT_SECRET_KEY:-dev_refresh_secret_key_change_this_in_production}}
       - JWT_ALGORITHM=HS256
@@ -16,7 +16,8 @@ services:
       - FLOWISE_API_URL=${FLOWISE_API_URL:-http://flowise:3000}
       - FLOWISE_API_KEY=${FLOWISE_API_KEY}
       - EXTERNAL_AUTH_URL=${EXTERNAL_AUTH_URL:-http://auth-service:8001}
-      - ACCOUNTING_SERVICE_URL=${ACCOUNTING_SERVICE_URL:-http://accounting-service:8002}      - MONGODB_URL=mongodb://mongodb:27017
+      - ACCOUNTING_SERVICE_URL=${ACCOUNTING_SERVICE_URL:-http://accounting-service:8002}
+      - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_DATABASE_NAME=flowise_proxy
       - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -36,9 +37,12 @@ services:
   mongodb:
     image: mongo:7-jammy
     environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=s3cr3t_p@ssw0rdds_!@#$
       - MONGO_INITDB_DATABASE=flowise_proxy
     volumes:
       - mongodb_data:/data/db
+      - ./init-mongo-prod.js:/docker-entrypoint-initdb.d/init-mongo-prod.js:ro
     networks:
       - flowise-network
     restart: unless-stopped
@@ -48,7 +52,7 @@ services:
       timeout: 10s
       retries: 3
     ports:
-      - "27019:27017"
+      - "27020:27017"
 
 volumes:
   mongodb_data:
