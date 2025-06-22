@@ -1,4 +1,3 @@
-version: '3.8'
 # docker compose -f docker-compose.test.yml up -d
 # Check container status
 # docker ps
@@ -6,6 +5,28 @@ version: '3.8'
 # Check MongoDB connection
 # docker exec -it mongodb-test mongosh --eval "db.runCommand('ping')"
 services:
+  flowise-proxy-test:
+    build: .
+    container_name: flowise-proxy-test
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env.test
+    environment:
+      # this overrides the MONGODB_URL, EXTERNAL_AUTH_URL, and ACCOUNTING_SERVICE_URL
+      # This overrides the MONGODB_URL from .env.test to use the Docker network service name
+      - MONGODB_URL=mongodb://admin:password@mongodb-test:27017/flowise_proxy_test?authSource=admin
+      # This allows the container to connect to services running on the Docker host machine
+      - EXTERNAL_AUTH_URL=http://host.docker.internal:3000
+      - ACCOUNTING_SERVICE_URL=http://host.docker.internal:3001
+    volumes:
+      - .:/project_root
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - mongodb-test
+    networks:
+      - test-network
+
   mongodb-test:
     image: mongo:latest
     container_name: mongodb-test
