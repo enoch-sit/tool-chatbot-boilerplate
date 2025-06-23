@@ -598,31 +598,33 @@ async def chat_predict_stream_store(
 
 
 @router.get("/credits")
-async def get_user_credits(current_user: Dict = Depends(authenticate_user)):
+async def get_user_credits(request: Request, current_user: Dict = Depends(authenticate_user)):
     """Get current user's credit balance"""
     try:
         accounting_service = AccountingService()
         user_id = current_user.get("user_id")
 
-        credits = await accounting_service.check_user_credits(user_id)
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization header")
+        
+        user_token = auth_header.split(" ")[1]
+
+        credits = await accounting_service.check_user_credits(user_id, user_token)
 
         if credits is None:
             raise HTTPException(
-                status_code=503, detail="Accounting service unavailable"
+                status_code=500, detail="Could not retrieve credit balance"
             )
 
-        return {
-            "user_id": user_id,
-            "username": current_user.get("username"),
-            "credits": credits,
-        }
+        return {"totalCredits": credits}
 
-    except HTTPException:
-        raise
+    except HTTPException as e:
+        # Re-raise HTTP exceptions to let FastAPI handle them
+        raise e
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve credits: {str(e)}"
-        )
+        print(f"Error getting user credits: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred.")
 
 
 @router.get("/my-assigned-chatflows", response_model=MyAssignedChatflowsResponse)

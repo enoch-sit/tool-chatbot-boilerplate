@@ -16,7 +16,7 @@ class AccountingService:
                 # Assuming 'your_bearer_token' variable holds your actual token
                 headers = {"Authorization": f"Bearer {user_token}"}
                 response = await client.get(
-                    f"{self.accounting_url}/api/credits/balance", # Corrected endpoint
+                    f"{self.accounting_url}/api/credits/total-balance", # Corrected endpoint
                     timeout=30.0,
                     headers=headers
                 )

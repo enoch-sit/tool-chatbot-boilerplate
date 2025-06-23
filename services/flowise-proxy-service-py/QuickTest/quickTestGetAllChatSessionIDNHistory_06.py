@@ -284,6 +284,34 @@ def get_session_history(token, username, session_id):
         return None
 
 
+def get_user_credits(token, username):
+    """Gets the credit balance for the given user."""
+    print(f"\n--- Getting credit balance for user: {username} ---")
+    if not token:
+        print("❌ Cannot get credits without a token.")
+        return None
+    credits_url = f"{API_BASE_URL}/api/v1/chat/credits"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        response = requests.get(credits_url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            credits = data.get("totalCredits")
+            print(f"✅ {username} has {credits} credits.")
+            return credits
+        else:
+            print(
+                f"❌ Failed to get credits for {username}: {response.status_code} {response.text}"
+            )
+            return None
+    except requests.RequestException as e:
+        print(f"❌ Request error while getting credits for {username}: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Unexpected error while getting credits for {username}: {e}")
+        return None
+
+
 def main():
     """Main test execution function"""
     print("--- Starting Chat Session and History Retrieval Test ---")
@@ -335,6 +363,9 @@ def main():
         print(
             f"Expected at least 4 messages, but got {len(history) if history else 0}."
         )
+
+    # 7. Get user credits
+    get_user_credits(token, username)
 
 
 if __name__ == "__main__":
