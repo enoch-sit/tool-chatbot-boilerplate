@@ -13,7 +13,6 @@ services:
     env_file:
       - ./.env.test
     environment:
-      # this overrides the MONGODB_URL, EXTERNAL_AUTH_URL, and ACCOUNTING_SERVICE_URL
       # This overrides the MONGODB_URL from .env.test to use the Docker network service name
       - MONGODB_URL=mongodb://admin:password@mongodb-test:27017/flowise_proxy_test?authSource=admin
       # This allows the container to connect to services running on the Docker host machine
@@ -21,7 +20,7 @@ services:
       - ACCOUNTING_SERVICE_URL=http://host.docker.internal:3001
     volumes:
       - .:/project_root
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: hypercorn app.main:app --bind 0.0.0.0:8000 --reload
     depends_on:
       - mongodb-test
     networks:

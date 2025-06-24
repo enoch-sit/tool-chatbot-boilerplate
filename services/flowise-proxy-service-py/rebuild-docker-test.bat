@@ -38,14 +38,14 @@ echo Testing MongoDB connection...
 docker exec mongodb-test mongosh --eval "db.runCommand('ping')" --quiet
 
 echo.
+echo Checking test container status...
+docker-compose -f docker-compose.test.yml ps
+
+echo.
+echo Displaying recent logs for the test server...
+docker-compose -f docker-compose.test.yml logs --tail=20 flowise-proxy-test
+
+echo.
 echo ======================================================
-echo Test Docker rebuild with volume reset completed.
-echo All previous test data has been cleared.
-echo Test services are ready for use.
-echo.
-echo MongoDB Test Connection: mongodb://admin:password@localhost:27020
-echo Database: flowise_proxy_test
-echo.
-echo You can now run the VS Code debugger with "Python Debugger: FastAPI (Test DB)"
 echo ======================================================
 pause
