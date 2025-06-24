@@ -1,10 +1,10 @@
 
-
 # Comprehensive Guide: React TypeScript Chatbot with MUI Joy UI and Enhanced Authentication
 
 This guide combines the modern architecture from the Gemini guide with the comprehensive authentication system from the Grok guide, creating a robust chatbot application with advanced features. This updated version incorporates all functionalities tested in the provided Python scripts, including chatflow synchronization, statistics, session history, user credit management, and bulk user assignments.
 
 ## Table of Contents
+
 1. [Project Setup](#1-project-setup)
 2. [Enhanced Authentication System](#2-enhanced-authentication-system)
 3. [State Management with Zustand + Auth](#3-state-management-with-zustand--auth)
@@ -26,6 +26,8 @@ npx create-react-app chatbot-app --template typescript
 cd chatbot-app
 ```
 
+[PROGRESS](progress.md#step-code-00001)
+
 ### 1.2. Install Dependencies
 
 ```bash
@@ -36,10 +38,14 @@ npm install react-i18next i18next i18next-browser-languagedetector
 npm install markdown-to-jsx mermaid prismjs
 npm install @fontsource/inter
 
+# [PROGRESS - complete](progress.md#step-code-00002)
+
 # Development dependencies
 npm install -D @types/prismjs @types/react-router-dom
 npm install -D msw jest @types/jest @testing-library/react @testing-library/jest-dom
 ```
+
+[PROGRESS - complete](progress.md#step-code-00003)
 
 ### 1.3. Project Structure
 
@@ -103,6 +109,7 @@ src/
 └── i18n.ts
 ```
 
+[PROGRESS - complete](progress.md#step-code-00004)
 ---
 
 ## 2. Enhanced Authentication System
