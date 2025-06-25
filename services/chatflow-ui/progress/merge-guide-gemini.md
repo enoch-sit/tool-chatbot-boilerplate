@@ -1,4 +1,3 @@
-
 # Comprehensive Guide: React TypeScript Chatbot with MUI Joy UI and Enhanced Authentication
 
 This guide combines the modern architecture from the Gemini guide with the comprehensive authentication system from the Grok guide, creating a robust chatbot application with advanced features. This updated version incorporates all functionalities tested in the provided Python scripts, including chatflow synchronization, statistics, session history, user credit management, and bulk user assignments.
@@ -14,6 +13,7 @@ This guide combines the modern architecture from the Gemini guide with the compr
 7. [Chat Interface with Auth](#7-chat-interface-with-auth)
 8. [Admin Interface](#8-admin-interface)
 9. [Testing with MSW](#9-testing-with-msw)
+10. [Progress Tracking](#10-progress-tracking)
 
 ---
 
@@ -37,6 +37,7 @@ npm install react-router-dom zustand axios
 npm install react-i18next i18next i18next-browser-languagedetector
 npm install markdown-to-jsx mermaid prismjs
 npm install @fontsource/inter
+npm install @lightenna/react-mermaid-diagram # [UPDATED] For rendering Mermaid diagrams
 
 # [PROGRESS - complete](progress.md#step-code-00002)
 
@@ -103,7 +104,8 @@ src/
 ├── utils/                   # Utility functions
 │   ├── auth.ts
 │   ├── storage.ts
-│   └── permissions.ts
+│   ├── permissions.ts
+│   └── contentParser.ts
 ├── App.tsx
 ├── index.tsx
 └── i18n.ts
@@ -122,7 +124,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  role: 'admin' | 'supervisor' | 'enduser';
+  role: 'admin' | 'supervisor' | 'enduser' | 'user';
   permissions: string[];
   profile?: {
     firstName?: string;
@@ -157,7 +159,7 @@ export interface LoginResponse {
   expires_in: number;
   token_type: string;
   user: User;
-  role?: string;
+  role?: 'admin' | 'supervisor' | 'enduser' | 'user';//   role?: string;
 }
 ```
 
@@ -323,7 +325,7 @@ export const useAuthStore = create<AuthStore>()(
 // src/api/auth.ts
 import { LoginCredentials, LoginResponse } from '../types/auth';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.FLOWISE_PROXY_API_URL || 'http://localhost:8000';
 
 // Auth API functions
 export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
@@ -434,7 +436,8 @@ import { useAuth } from './useAuth';
 
 export const usePermissions = () => {
   const { user, hasPermission, hasRole } = useAuth();
-
+  
+  const isStrictlyAdmin = () => hasRole('admin');
   const canAccessAdmin = () => hasRole(['admin', 'supervisor']);
   const canManageUsers = () => hasPermission('manage_users');
   const canManageChatflows = () => hasPermission('manage_chatflows');
@@ -444,6 +447,7 @@ export const usePermissions = () => {
     user,
     hasPermission,
     hasRole,
+    isStrictlyAdmin,
     canAccessAdmin,
     canManageUsers,
     canManageChatflows,
@@ -463,12 +467,19 @@ export const usePermissions = () => {
 import { create } from 'zustand';
 import { streamChatResponse, createSession, getChatflows, getUserSessions, getSessionHistory } from '../api';
 import { useAuthStore } from './authStore';
+import { parseMixedContent } from '../utils/contentParser'; // [UPDATED] Import parser
+
+// [UPDATED] New block-based structure for flexible content rendering
+export type ContentBlock = {
+  type: 'text' | 'mermaid' | 'mindmap' | 'code' | 'image';
+  content: string;
+  language?: string; // For code block syntax highlighting
+};
 
 export type Message = {
   id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  type?: 'text' | 'mermaid' | 'mindmap' | 'code';
+  role: 'user' | 'assistant' | 'system';
+  content: ContentBlock[]; // [UPDATED] Changed from string to ContentBlock[]
   timestamp: Date;
   sessionId?: string;
   metadata?: Record<string, any>;
@@ -615,7 +626,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: prompt,
+      // [UPDATED] User message is now also a ContentBlock array
+      content: [{ type: 'text', content: prompt }],
       timestamp: new Date(),
       sessionId: currentSession.session_id,
     };
@@ -624,7 +636,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const assistantMessage: Message = {
       id: (Date.now() + 1).toString(),
       role: 'assistant',
-      content: '',
+      content: [], // [UPDATED] Start with an empty content array
       timestamp: new Date(),
       sessionId: currentSession.session_id,
     };
@@ -641,20 +653,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const reader = stream.getReader();
       const decoder = new TextDecoder();
-      let content = '';
+      let accumulatedContent = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        content += decoder.decode(value, { stream: true });
-        updateMessage(assistantMessage.id, { content });
+        accumulatedContent += decoder.decode(value, { stream: true });
+        // [UPDATED] Parse the streamed content into blocks and update the message
+        const contentBlocks = parseMixedContent(accumulatedContent);
+        updateMessage(assistantMessage.id, { content: contentBlocks });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      // [UPDATED] Update message with an error block
       updateMessage(assistantMessage.id, { 
-        content: `Error: ${errorMessage}`,
-        type: 'text'
+        content: [{ type: 'text', content: `Error: ${errorMessage}` }],
       });
       set({ error: errorMessage });
     } finally {
@@ -666,152 +680,64 @@ export const useChatStore = create<ChatState>((set, get) => ({
 }));
 ```
 
-### 3.2. Admin Store
+### 3.2. Content Parsing Utility
+
+This utility parses the raw string from the AI into an array of content blocks, enabling the rendering of mixed content types within a single message.
 
 ```typescript
-// src/store/adminStore.ts
-import { create } from 'zustand';
-import { 
-  getAllChatflows, 
-  assignUserToChatflow, 
-  removeUserFromChatflow,
-  getChatflowUsers,
-  syncChatflows as apiSyncChatflows,
-  bulkAssignUsersToChatflow
-} from '../api';
-import { useAuthStore } from './authStore';
+// src/utils/contentParser.ts
+// [ADDED] This entire section is new to support mixed content rendering.
+import { ContentBlock } from '../store/chatStore';
 
-interface AdminUser {
-  id: string;
-  username: string;
-  email: string;
-  role: string;
-  assigned_at?: string;
-}
+/**
+ * Parses a raw string from the AI into an array of content blocks.
+ * It identifies code, mermaid, and mindmap blocks using Markdown fences.
+ * @param rawContent The raw string to parse.
+ * @returns An array of ContentBlock objects.
+ */
+export const parseMixedContent = (rawContent: string): ContentBlock[] => {
+  const blocks: ContentBlock[] = [];
+  // This regex looks for ```language ... ``` blocks
+  const regex = /```(\w+)?\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
 
-interface AdminChatflow {
-  id: string;
-  flowise_id: string;
-  name: string;
-  description?: string;
-  deployed: boolean;
-  is_public: boolean;
-  users?: AdminUser[];
-}
-
-interface AdminState {
-  chatflows: AdminChatflow[];
-  selectedChatflow: AdminChatflow | null;
-  chatflowUsers: AdminUser[];
-  isLoading: boolean;
-  isSyncing: boolean;
-  error: string | null;
-
-  // Actions
-  loadAllChatflows: () => Promise<void>;
-  syncChatflows: () => Promise<void>;
-  selectChatflow: (chatflow: AdminChatflow | null) => void;
-  loadChatflowUsers: (chatflowId: string) => Promise<void>;
-  assignUser: (chatflowId: string, email: string) => Promise<void>;
-  bulkAssignUsers: (chatflowId: string, emails: string[]) => Promise<void>;
-  removeUser: (chatflowId: string, email: string) => Promise<void>;
-  setError: (error: string | null) => void;
-}
-
-export const useAdminStore = create<AdminState>((set, get) => ({
-  chatflows: [],
-  selectedChatflow: null,
-  chatflowUsers: [],
-  isLoading: false,
-  isSyncing: false,
-  error: null,
-
-  loadAllChatflows: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const chatflows = await getAllChatflows();
-      set({ chatflows, isLoading: false });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load chatflows';
-      set({ error: errorMessage, isLoading: false });
+  while ((match = regex.exec(rawContent)) !== null) {
+    // Capture any text that appeared before this block
+    if (match.index > lastIndex) {
+      const textContent = rawContent.substring(lastIndex, match.index).trim();
+      if (textContent) {
+        blocks.push({ type: 'text', content: textContent });
+      }
     }
-  },
 
-  syncChatflows: async () => {
-    set({ isSyncing: true, error: null });
-    try {
-      await apiSyncChatflows();
-      await get().loadAllChatflows(); // Reload chatflows after sync
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to sync chatflows';
-      set({ error: errorMessage });
-    } finally {
-      set({ isSyncing: false });
+    const language = match[1]?.toLowerCase() || 'text';
+    const code = match[2].trim();
+
+    if (language === 'mermaid' || language === 'mindmap') {
+      blocks.push({ type: language, content: code });
+    } else {
+      blocks.push({ type: 'code', content: code, language });
     }
-  },
 
-  selectChatflow: (chatflow) => {
-    set({ selectedChatflow: chatflow, chatflowUsers: [] });
-    if (chatflow) {
-      get().loadChatflowUsers(chatflow.id);
+    lastIndex = regex.lastIndex;
+  }
+
+  // Capture any remaining text after the last block
+  if (lastIndex < rawContent.length) {
+    const remainingText = rawContent.substring(lastIndex).trim();
+    if (remainingText) {
+      blocks.push({ type: 'text', content: remainingText });
     }
-  },
+  }
 
-  loadChatflowUsers: async (chatflowId: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const users = await getChatflowUsers(chatflowId);
-      set({ chatflowUsers: users, isLoading: false });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load users';
-      set({ error: errorMessage, isLoading: false });
-    }
-  },
+  // If no blocks were found, treat the entire content as a single text block
+  if (blocks.length === 0 && rawContent.trim()) {
+    blocks.push({ type: 'text', content: rawContent });
+  }
 
-  assignUser: async (chatflowId: string, email: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      await assignUserToChatflow(chatflowId, email);
-      await get().loadChatflowUsers(chatflowId); // Reload users
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to assign user';
-      set({ error: errorMessage });
-      throw error;
-    } finally {
-      set({ isLoading: false });
-    }
-  },
-
-  bulkAssignUsers: async (chatflowId: string, emails: string[]) => {
-    set({ isLoading: true, error: null });
-    try {
-      await bulkAssignUsersToChatflow(chatflowId, emails);
-      await get().loadChatflowUsers(chatflowId); // Reload users
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to bulk assign users';
-      set({ error: errorMessage });
-      throw error;
-    } finally {
-      set({ isLoading: false });
-    }
-  },
-
-  removeUser: async (chatflowId: string, email: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      await removeUserFromChatflow(chatflowId, email);
-      await get().loadChatflowUsers(chatflowId); // Reload users
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to remove user';
-      set({ error: errorMessage });
-      throw error;
-    } finally {
-      set({ isLoading: false });
-    }
-  },
-
-  setError: (error) => set({ error }),
-}));
+  return blocks;
+};
 ```
 
 ---
@@ -1014,7 +940,7 @@ export default i18n;
 // src/api/index.ts
 import { useAuthStore } from '../store/authStore';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.FLOWISE_PROXY_API_URL || 'http://localhost:8000';
 
 // Request interceptor to add auth token
 const makeAuthenticatedRequest = async (
@@ -1772,3 +1698,7 @@ export const handlers = [
 ```
 
 ---
+
+## 10. Progress Tracking
+
+For an overview of the project's current status, including architecture details and feature implementation progress, please refer to the [progress.md](./progress.md) file.

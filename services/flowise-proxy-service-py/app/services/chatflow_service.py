@@ -3,13 +3,14 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import HTTPException
-from app.models.chatflow import Chatflow, ChatflowSyncResult, UserChatflow
+from app.models.chatflow import Chatflow, UserChatflow
 from app.services.flowise_service import FlowiseService
 from app.core.logging import logger
 from app.models.user import User
 from app.services.external_auth_service import ExternalAuthService
 # Import the schemas from the new central location
 from app.schemas import (
+    ChatflowSyncResult,
     UserAuditResult,
     UserCleanupResult,
     InvalidUserAssignment,
@@ -34,7 +35,8 @@ class ChatflowService:
             created=0,
             updated=0,
             deleted=0,
-            errors=0
+            errors=0,
+            error_details=[]
         )
         
         try:
@@ -75,13 +77,13 @@ class ChatflowService:
                 except Exception as e:
                     result.errors += 1
                     error_msg = f"Error processing chatflow {flowise_cf.get('id', 'unknown')}: {str(e)}"
-                    result.error_details.append(error_msg)
+                    result.error_details.append({"error": error_msg, "chatflow_id": flowise_cf.get('id', 'unknown')})
                     logger.error(error_msg)
             
             # Mark deleted chatflows using Beanie
             deleted_ids = set(existing_ids_map.keys()) - current_flowise_ids
             if deleted_ids:
-                await Chatflow.find(Chatflow.flowise_id.is_in(list(deleted_ids))).update(
+                await Chatflow.find({"flowise_id": {"$in": list(deleted_ids)}}).update(
                     {"$set": {"sync_status": "deleted", "synced_at": datetime.utcnow()}}
                 )
                 result.deleted = len(deleted_ids)
@@ -90,7 +92,7 @@ class ChatflowService:
         except Exception as e:
             result.errors += 1
             error_msg = f"Failed to sync chatflows: {str(e)}"
-            result.error_details.append(error_msg)
+            result.error_details.append({"error": error_msg, "type": "general_sync_error"})
             logger.error(error_msg)
         
         return result
@@ -435,7 +437,11 @@ class ChatflowService:
                         result.records_deleted += 1
                 except Exception as e:
                     result.errors += 1
-                    result.error_details.append(f"Failed to process record {invalid.user_chatflow_id}: {e}")
+                    result.error_details.append({
+                        "error": f"Failed to process record {invalid.user_chatflow_id}: {e}",
+                        "record_id": invalid.user_chatflow_id,
+                        "type": "cleanup_error"
+                    })
 
         return result
 
@@ -506,7 +512,7 @@ class ChatflowService:
         external_user_ids = [uc.external_user_id for uc in user_chatflows]
 
         # 4. Find the corresponding local user records to get username and email
-        local_users = await User.find(User.external_id.is_in(external_user_ids)).to_list()
+        local_users = await User.find(User.external_id.in_(external_user_ids)).to_list()
         users_map = {user.external_id: user for user in local_users}
 
         # 5. Construct the response

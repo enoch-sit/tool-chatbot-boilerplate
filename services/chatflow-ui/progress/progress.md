@@ -67,3 +67,32 @@ Install without any problem
 
 1. Created [the file](../chatbot-app/setup_structure.bat)
 2. And successfully executed
+
+# Project Progress
+
+This document tracks the development progress of the chatbot application.
+
+## Architecture Overview
+
+The application is a React-based single-page application (SPA) built with TypeScript. It uses MUI Joy for the UI components and Zustand for state management. The application is structured into several directories, each with a specific purpose:
+
+-   **`src/api`**: Handles all communication with the backend API.
+-   **`src/components`**: Contains reusable UI components.
+-   **`src/hooks`**: Custom React hooks for shared logic.
+-   **`src/locales`**: Manages internationalization (i18n).
+-   **`src/mocks`**: Sets up mock service workers for development and testing.
+-   **`src/pages`**: Represents the different pages of the application.
+-   **`src/store`**: Global state management using Zustand.
+-   **`src/types`**: TypeScript type definitions.
+-   **`src/utils`**: Utility functions.
+
+## Feature Status
+
+| Feature                 | Status      | Notes                                      |
+| ----------------------- | ----------- | ------------------------------------------ |
+| User Authentication     | In Progress | Login/logout functionality is implemented. |
+| Chat Interface          | In Progress | Basic chat UI is in place.                 |
+| Role-Based Access       | In Progress | Admin and user roles are defined.          |
+| Internationalization    | Implemented | English, Simplified and Traditional Chinese are supported. |
+| API Mocking             | Implemented | Using `msw` to mock API responses.         |
+| Mixed Content Rendering | To Do       | The ability to render text, mermaid diagrams, and code blocks in a single message. |

@@ -835,3 +835,288 @@ def run_comprehensive_user_chatflow_tests():
 if __name__ == "__main__":
     run_comprehensive_chatflow_tests()
     run_comprehensive_user_chatflow_tests()
+
+'''
+Example of the output of the tests:
+============================================================
+🚀 CHATFLOW SYNC COMPREHENSIVE TEST
+============================================================
+
+--- Getting admin access token ---
+Response structure: {
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODU4YTY4Nzk4NWU4ZjA1N2ZjMGZiNjIiLCJ1c2VybmFtZSI6ImFkbWluIiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSIsInR5cGUiOiJhY2Nlc3MiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NTA4MTYzMTIsImV4cCI6MTc1MDgxNzIxMn0.U0XSSKssy4r1xlW4MoTMMlg6O9aXES-wb5WZ5RGsQRU",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODU4YTY4Nzk4NWU4ZjA1N2ZjMGZiNjIiLCJ1c2VybmFtZSI6ImFkbWluIiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSIsInR5cGUiOiJyZWZyZXNoIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzUwODE2MzEyLCJleHAiOjE3NTE0MjExMTJ9.dJ2h37eXrAKEJxURCIkHllIcjRXlrPmBa7BbxiR5QZw",
+  "token_type": "bearer",
+  "user": {
+    "id": "6858a687985e8f057fc0fb62",
+    "username": "admin",
+    "email": "admin@example.com",
+    "isVerified": true,
+    "role": "admin"
+  },
+  "message": "Login successful"
+}
+Found potential token in field: access_token
+✅ Admin access token obtained
+
+🔄 Test 0: Syncing Users by Email...
+
+--- Testing User Sync by Email ---
+Attempting to sync user: supervisor1@example.com
+✅ User sync successful for supervisor1@example.com: success
+Attempting to sync user: supervisor2@example.com
+✅ User sync successful for supervisor2@example.com: success
+Attempting to sync user: user1@example.com
+✅ User sync successful for user1@example.com: success
+Attempting to sync user: user2@example.com
+✅ User sync successful for user2@example.com: success
+📊 User Sync Summary: 4 successful, 0 failed.
+✅ User sync process completed successfully.
+
+🔄 Test 1: Syncing Chatflows...
+
+--- Testing Chatflow Sync ---
+✅ Chatflow sync successful
+📊 Sync Results:
+   - Total fetched: 2
+   - Created: 0
+   - Updated: 2
+   - Deleted: 0
+   - Errors: 0
+✅ Chatflow sync process completed successfully.
+
+🔄 Test 2: Listing Chatflows...
+
+--- Testing List Chatflows ---
+✅ Retrieved 2 active chatflows
+   Chatflow 1:
+     - ID: 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+     - Name: eduhkTest
+     - Deployed: False
+     - Public: False
+     - Sync Status: active
+   Chatflow 2:
+     - ID: e13cbaa3-c909-4570-8c49-78b45115f34a
+     - Name: deepSearchAWS
+     - Deployed: False
+     - Public: True
+     - Sync Status: active
+✅ Found 0 deleted chatflows (total: 2)
+✅ Chatflows listed successfully.
+
+🔄 Test 3: Getting Chatflow Stats...
+
+--- Testing Chatflow Statistics ---
+✅ Chatflow statistics retrieved
+📈 Statistics:
+   - Total chatflows: 2
+   - Active: 2
+   - Deleted: 0
+   - Errors: 0
+   - Last sync: 2025-06-25T01:51:53.190000
+✅ Chatflow stats retrieved successfully.
+
+🔄 Test 4: Getting Specific Chatflow...
+
+--- Testing Get Specific Chatflow ---
+ℹ️ No flowise_id provided, picked one from list: 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+✅ Retrieved chatflow details for ID: 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+📝 Chatflow Details:
+   - Name: eduhkTest
+   - Description:
+   - Deployed: False
+   - Category: None
+   - Type: CHATFLOW
+   - Created: 2025-06-21T01:43:24.126000
+   - Updated: 2025-06-21T01:43:24.126000
+   - Synced: 2025-06-25T01:51:53.189000
+✅ Specific chatflow retrieved successfully.
+
+============================================================
+📊 TEST SUMMARY
+============================================================
+User Sync: ✅ PASS
+Chatflow Sync: ✅ PASS
+List Chatflows: ✅ PASS
+Chatflow Stats: ✅ PASS
+Get Specific Chatflow: ✅ PASS
+
+Overall Result: 5/5 tests passed
+🎉 ALL CHATFLOW SYNC TESTS PASSED!
+============================================================
+🚀 USER-TO-CHATFLOW ASSIGNMENT TEST
+============================================================
+
+--- Getting admin access token ---
+Response structure: {
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODU4YTY4Nzk4NWU4ZjA1N2ZjMGZiNjIiLCJ1c2VybmFtZSI6ImFkbWluIiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSIsInR5cGUiOiJhY2Nlc3MiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NTA4MTYzMTMsImV4cCI6MTc1MDgxNzIxM30.xfhfeCVVWpRKgpdrvk1WWw8YREEUXlKrdGChnGJgXZc",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODU4YTY4Nzk4NWU4ZjA1N2ZjMGZiNjIiLCJ1c2VybmFtZSI6ImFkbWluIiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSIsInR5cGUiOiJyZWZyZXNoIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzUwODE2MzEzLCJleHAiOjE3NTE0MjExMTN9.KkSj0UaTPbYNxp2j33ZlhzDlKYyn913l1XrMgLAZnJ4",
+  "token_type": "bearer",
+  "user": {
+    "id": "6858a687985e8f057fc0fb62",
+    "username": "admin",
+    "email": "admin@example.com",
+    "isVerified": true,
+    "role": "admin"
+  },
+  "message": "Login successful"
+}
+Found potential token in field: access_token
+✅ Admin access token obtained
+
+🔄 Syncing chatflows first...
+
+--- Testing Chatflow Sync ---
+✅ Chatflow sync successful
+📊 Sync Results:
+   - Total fetched: 2
+   - Created: 0
+   - Updated: 2
+   - Deleted: 0
+   - Errors: 0
+
+--- Testing Get Specific Chatflow ---
+ℹ️ No flowise_id provided, picked one from list: 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+✅ Retrieved chatflow details for ID: 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+📝 Chatflow Details:
+   - Name: eduhkTest
+   - Description:
+   - Deployed: False
+   - Category: None
+   - Type: CHATFLOW
+   - Created: 2025-06-21T01:43:24.126000
+   - Updated: 2025-06-21T01:43:24.126000
+   - Synced: 2025-06-25T01:51:53.396000
+
+--- Testing List Users for Chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f ---
+✅ Retrieved 4 users assigned to chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+👥 Assigned Users:
+   - User 1:
+     - Email: user1@example.com
+     - Username: user1
+     - External ID: 6858a688985e8f057fc0fb73
+     - Assigned At: 2025-06-24T07:49:47.449000
+   - User 2:
+     - Email: user2@example.com
+     - Username: user2
+     - External ID: 6858a688985e8f057fc0fb77
+     - Assigned At: 2025-06-24T07:49:42.822000
+   - User 3:
+     - Email: supervisor1@example.com
+     - Username: supervisor1
+     - External ID: 6858a688985e8f057fc0fb6b
+     - Assigned At: 2025-06-24T07:49:28.538000
+   - User 4:
+     - Email: supervisor2@example.com
+     - Username: supervisor2
+     - External ID: 6858a688985e8f057fc0fb6f
+     - Assigned At: 2025-06-24T07:49:28.572000
+
+--- Testing Add User 'user1@example.com' to Chatflow ---
+✅ User 'user1@example.com' successfully added to chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+📝 Response: User is already actively assigned to this chatflow.
+
+--- Testing Add User 'user2@example.com' to Chatflow ---
+✅ User 'user2@example.com' successfully added to chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+📝 Response: User is already actively assigned to this chatflow.
+
+--- Testing Add User 'supervisor1@example.com' to Chatflow ---
+✅ User 'supervisor1@example.com' successfully added to chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+📝 Response: User is already actively assigned to this chatflow.
+
+--- Testing List Users for Chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f ---
+✅ Retrieved 4 users assigned to chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+👥 Assigned Users:
+   - User 1:
+     - Email: user1@example.com
+     - Username: user1
+     - External ID: 6858a688985e8f057fc0fb73
+     - Assigned At: 2025-06-24T07:49:47.449000
+   - User 2:
+     - Email: user2@example.com
+     - Username: user2
+     - External ID: 6858a688985e8f057fc0fb77
+     - Assigned At: 2025-06-24T07:49:42.822000
+   - User 3:
+     - Email: supervisor1@example.com
+     - Username: supervisor1
+     - External ID: 6858a688985e8f057fc0fb6b
+     - Assigned At: 2025-06-24T07:49:28.538000
+   - User 4:
+     - Email: supervisor2@example.com
+     - Username: supervisor2
+     - External ID: 6858a688985e8f057fc0fb6f
+     - Assigned At: 2025-06-24T07:49:28.572000
+
+--- Testing Bulk Add Users to Chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f ---
+✅ Bulk user assignment completed
+📊 Results:
+   - Successfully added: [{'email': 'supervisor2@example.com', 'status': 'No Action', 'message': 'User is already actively assigned to this chatflow.'}]
+   - Failed: 0
+
+--- Testing List Users for Chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f ---
+✅ Retrieved 4 users assigned to chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+👥 Assigned Users:
+   - User 1:
+     - Email: user1@example.com
+     - Username: user1
+     - External ID: 6858a688985e8f057fc0fb73
+     - Assigned At: 2025-06-24T07:49:47.449000
+   - User 2:
+     - Email: user2@example.com
+     - Username: user2
+     - External ID: 6858a688985e8f057fc0fb77
+     - Assigned At: 2025-06-24T07:49:42.822000
+   - User 3:
+     - Email: supervisor1@example.com
+     - Username: supervisor1
+     - External ID: 6858a688985e8f057fc0fb6b
+     - Assigned At: 2025-06-24T07:49:28.538000
+   - User 4:
+     - Email: supervisor2@example.com
+     - Username: supervisor2
+     - External ID: 6858a688985e8f057fc0fb6f
+     - Assigned At: 2025-06-24T07:49:28.572000
+
+--- Testing Remove User 'user1@example.com' from Chatflow ---
+✅ User 'user1@example.com' successfully removed from chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+📝 Response: User access has been successfully revoked.
+
+--- Testing List Users for Chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f ---
+✅ Retrieved 3 users assigned to chatflow 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+👥 Assigned Users:
+   - User 1:
+     - Email: user2@example.com
+     - Username: user2
+     - External ID: 6858a688985e8f057fc0fb77
+     - Assigned At: 2025-06-24T07:49:42.822000
+   - User 2:
+     - Email: supervisor1@example.com
+     - Username: supervisor1
+     - External ID: 6858a688985e8f057fc0fb6b
+     - Assigned At: 2025-06-24T07:49:28.538000
+   - User 3:
+     - Email: supervisor2@example.com
+     - Username: supervisor2
+     - External ID: 6858a688985e8f057fc0fb6f
+     - Assigned At: 2025-06-24T07:49:28.572000
+
+============================================================
+📊 ASSIGNMENT TEST SUMMARY
+============================================================
+Sync Chatflows: ✅ PASS
+Get Chatflow: ✅ PASS
+List Initial Users: ✅ PASS
+Add User1: ✅ PASS
+Add User2: ✅ PASS
+Add Supervisor: ✅ PASS
+List Users After Add: ✅ PASS
+Bulk Add Users: ✅ PASS
+List Users After Bulk: ✅ PASS
+Remove User: ✅ PASS
+List Users After Remove: ✅ PASS
+
+Overall Result: 11/11 tests passed
+Test Chatflow ID: 7a2f12b2-25eb-46e0-856a-a08cf5a99c0f
+🎉 ALL TESTS PASSED! User-to-chatflow assignment functionality is working correctly.
+'''

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Dict, Optional
 from app.auth.middleware import require_admin_role
-from app.models.chatflow import Chatflow, ChatflowSyncResult
+from app.models.chatflow import Chatflow
 from app.services.chatflow_service import ChatflowService
 from app.services.flowise_service import FlowiseService
 from app.core.logging import logger

@@ -6,6 +6,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@fontsource/inter": "^5.2.6",
+    "@lightenna/react-mermaid-diagram": "^1.0.21",
     "@mui/joy": "^5.0.0-beta.52",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/user-event": "^13.5.0",
