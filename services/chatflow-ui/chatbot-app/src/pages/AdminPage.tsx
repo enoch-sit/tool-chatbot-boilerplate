@@ -1,70 +1,117 @@
 // src/pages/AdminPage.tsx
 import React, { useEffect, useState } from 'react';
 import {
-  Box, Sheet, Typography, Button, Input, Modal, ModalDialog,
-  Stack, Alert, Textarea, List, ListItem, ListItemButton, IconButton, ListItemDecorator, Avatar, ListItemContent, FormControl, FormLabel, DialogTitle, DialogContent, DialogActions
+  Box, Button, Typography, Sheet, Table, Modal, ModalDialog,
+  ModalClose, Input, Textarea, CircularProgress, Alert
 } from '@mui/joy';
-import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon, Sync as SyncIcon, GroupAdd as GroupAddIcon } from '@mui/icons-material';
+import {
+  syncChatflows, getAllChatflows, getChatflowStats, getChatflowUsers,
+  addUserToChatflow, bulkAddUsersToChatflow, removeUserFromChatflow
+} from '../api/admin';
+import { Chatflow, ChatflowStats, User } from '../types/admin';
 import { useTranslation } from 'react-i18next';
-import { useAdminStore } from '../store/adminStore';
-import { getChatflowStats } from '../api/admin';
 import { usePermissions } from '../hooks/usePermissions';
-import { Chatflow } from '../types/chat';
-import { User } from '../types/auth';
 
 const AdminPage: React.FC = () => {
   const { t } = useTranslation();
   const { canManageUsers, canManageChatflows } = usePermissions();
-  
-  const {
-    chatflows, selectedChatflow, chatflowUsers, isLoading, isSyncing, error,
-    loadAllChatflows, syncChatflows, selectChatflow, assignUser, bulkAssignUsers, removeUser, setError,
-  } = useAdminStore();
 
-  const [stats, setStats] = useState<any>(null);
-  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [chatflows, setChatflows] = useState<Chatflow[]>([]);
+  const [stats, setStats] = useState<ChatflowStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const [selectedChatflow, setSelectedChatflow] = useState<Chatflow | null>(null);
+  const [chatflowUsers, setChatflowUsers] = useState<User[]>([]);
+  const [showUserModal, setShowUserModal] = useState(false);
   const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [bulkUserEmails, setBulkUserEmails] = useState('');
 
-  const fetchStats = async () => {
-    try {
-      const data = await getChatflowStats();
-      setStats(data);
-    } catch (err) { console.error("Failed to fetch stats", err); }
-  };
-
   useEffect(() => {
-    if (canManageChatflows()) {
-      loadAllChatflows();
-      fetchStats();
+    fetchAdminData();
+  }, []);
+
+  const fetchAdminData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [flows, stats] = await Promise.all([
+        getAllChatflows(),
+        getChatflowStats(),
+      ]);
+      setChatflows(flows);
+      setStats(stats);
+    } catch (err) {
+      setError('Failed to fetch admin data. Please make sure the backend is running and you are authenticated.');
     }
-  }, [loadAllChatflows, canManageChatflows]);
+    setLoading(false);
+  };
 
   const handleSync = async () => {
-    await syncChatflows();
-    await fetchStats(); // Refresh stats after sync
+    setLoading(true);
+    try {
+      await syncChatflows();
+      setSuccessMessage('Chatflows synced successfully!');
+      fetchAdminData();
+    } catch (err) {
+      setError('Failed to sync chatflows.');
+    }
+    setLoading(false);
   };
 
-  const handleAssignUser = async () => {
-    if (!selectedChatflow || !userEmail.trim()) return;
+  const handleManageUsers = async (chatflow: Chatflow) => {
+    setSelectedChatflow(chatflow);
+    setShowUserModal(true);
     try {
-      await assignUser(selectedChatflow.id, userEmail.trim());
-      setShowAssignModal(false);
+      const users = await getChatflowUsers(chatflow.id);
+      setChatflowUsers(users);
+    } catch (err) {
+      setError(`Failed to fetch users for ${chatflow.name}.`);
+    }
+  };
+
+  const handleAddUser = async () => {
+    if (!selectedChatflow || !userEmail) return;
+    try {
+      await addUserToChatflow(selectedChatflow.id, userEmail);
+      setSuccessMessage(`User ${userEmail} added to ${selectedChatflow.name}.`);
       setUserEmail('');
-    } catch (err) { console.error('Failed to assign user:', err); }
+      handleManageUsers(selectedChatflow); // Refresh user list
+    } catch (err) {
+      setError('Failed to add user.');
+    }
+  };
+
+  const handleRemoveUser = async (userId: string) => {
+    if (!selectedChatflow) return;
+    try {
+      await removeUserFromChatflow(selectedChatflow.id, userId);
+      setSuccessMessage(`User removed from ${selectedChatflow.name}.`);
+      handleManageUsers(selectedChatflow); // Refresh user list
+    } catch (err) {
+      setError('Failed to remove user.');
+    }
   };
 
   const handleBulkAssign = async () => {
     if (!selectedChatflow || !bulkUserEmails.trim()) return;
-    const emails = bulkUserEmails.split('\n').map(e => e.trim()).filter(Boolean);
-    if (emails.length === 0) return;
     try {
-      await bulkAssignUsers(selectedChatflow.id, emails);
-      setShowBulkAssignModal(false);
+      const emails = bulkUserEmails.split('\n').map(e => e.trim()).filter(Boolean);
+      const result = await bulkAddUsersToChatflow(selectedChatflow.id, emails);
+      setSuccessMessage(`${result.successful_assignments} users assigned. ${result.failed_assignments.length} failed.`);
       setBulkUserEmails('');
-    } catch (err) { console.error('Failed to bulk assign users:', err); }
+      setShowBulkAssignModal(false);
+      handleManageUsers(selectedChatflow); // Refresh user list
+    } catch (err) {
+      setError('Failed to bulk assign users.');
+    }
   };
+
+  if (loading) {
+    return <CircularProgress />;
+  }
 
   if (!canManageChatflows() && !canManageUsers()) {
     return (
@@ -76,178 +123,96 @@ const AdminPage: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        <Typography level="h2">{t('admin.pageTitle')}</Typography>
-        <Stack direction="row" spacing={1}>
-          {canManageChatflows() && (
-            <Button
-              variant="outlined"
-              color="primary"
-              startDecorator={<SyncIcon />}
-              loading={isSyncing}
-              onClick={handleSync}
-            >
-              {t('admin.syncChatflows')}
-            </Button>
-          )}
-          <Button
-            variant="outlined"
-            color="neutral"
-            startDecorator={<RefreshIcon />}
-            onClick={() => {
-              if (canManageChatflows()) {
-                loadAllChatflows();
-                fetchStats();
-              }
-            }}
-          >
-            {t('common.refresh')}
-          </Button>
-        </Stack>
-      </Stack>
+      <Typography level="h2" component="h1" gutterBottom>
+        Admin Dashboard
+      </Typography>
 
-      {error && (<Alert color="danger" variant="soft" sx={{ mb: 3 }}>{error}</Alert>)}
+      {error && <Alert color="danger">{error}</Alert>}
+      {successMessage && <Alert color="success">{successMessage}</Alert>}
+
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography level="h4">Chatflow Management</Typography>
+        <Button onClick={handleSync} disabled={loading}>{t('admin.syncChatflows')}</Button>
+      </Box>
 
       {stats && (
-        <Sheet variant="outlined" sx={{ p: 2, borderRadius: 'md', mb: 3 }}>
-          <Typography level="h4" sx={{ mb: 2 }}>{t('admin.statsTitle')}</Typography>
-          <Stack direction="row" spacing={4}>
-            <Box> <Typography level="title-lg">{stats.total}</Typography> <Typography>Total</Typography> </Box>
-            <Box> <Typography level="title-lg" color="success">{stats.active}</Typography> <Typography>Active</Typography> </Box>
-            <Box> <Typography level="title-lg" color="neutral">{stats.deleted}</Typography> <Typography>Deleted</Typography> </Box>
-            <Box> <Typography level="title-lg" color="danger">{stats.error}</Typography> <Typography>Errors</Typography> </Box>
-          </Stack>
+        <Sheet variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 'sm' }}>
+          <Typography>Total: {stats.total} | Active: {stats.active} | Deleted: {stats.deleted} | Error: {stats.error}</Typography>
         </Sheet>
       )}
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-        {canManageChatflows() && (
-          <Box sx={{ width: { xs: '100%', md: '40%' } }}>
-            <Typography level="h4" sx={{ mb: 2 }}>{t('admin.chatflowManagement')}</Typography>
-            <List
-              variant="outlined"
-              sx={{
-                borderRadius: 'sm',
-                maxHeight: 400,
-                overflow: 'auto',
-              }}
-            >
-              {isLoading && <ListItem>{t('common.loading')}</ListItem>}
-              {chatflows.map((flow: Chatflow) => (
-                <ListItem
-                  key={flow.id}
-                  onClick={() => selectChatflow(flow)}
-                  sx={{
-                    cursor: 'pointer',
-                    ...(selectedChatflow?.id === flow.id && {
-                      bgcolor: 'primary.softBg',
-                    }),
-                  }}
-                >
-                  <ListItemButton>{flow.name}</ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-        )}
+      <Sheet variant="outlined" sx={{ borderRadius: 'sm' }}>
+        <Table aria-label="Chatflows table">
+          <thead>
+            <tr>
+              <th>{t('admin.chatflowName')}</th>
+              <th>{t('admin.status')}</th>
+              <th>{t('admin.deployed')}</th>
+              <th>{t('admin.public')}</th>
+              <th>{t('admin.actions')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {chatflows.map((flow) => (
+              <tr key={flow.id}>
+                <td>{flow.name}</td>
+                <td>{flow.status}</td>
+                <td>{flow.deployed ? 'Yes' : 'No'}</td>
+                <td>{flow.public ? 'Yes' : 'No'}</td>
+                <td>
+                  <Button size="sm" onClick={() => handleManageUsers(flow)}>{t('admin.manageUsers')}</Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </Sheet>
 
-        {canManageUsers() && selectedChatflow && (
-          <Box sx={{ flex: 1 }}>
-            <Typography level="h4" sx={{ mb: 2 }}>
-              {t('admin.userManagement')} - {selectedChatflow.name}
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-              <Button
-                variant="solid"
-                color="primary"
-                startDecorator={<AddIcon />}
-                onClick={() => setShowAssignModal(true)}
-              >
-                {t('admin.assignUser')}
-              </Button>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<GroupAddIcon />}
-                onClick={() => setShowBulkAssignModal(true)}
-              >
-                {t('admin.bulkAssign')}
-              </Button>
-            </Stack>
-            <List variant="outlined" sx={{ borderRadius: 'sm' }}>
-              {chatflowUsers.length === 0 ? (
-                <ListItem>{t('admin.noUsers')}</ListItem>
-              ) : (
-                chatflowUsers.map((user: User) => (
-                  <ListItem
-                    key={user.email}
-                    endAction={
-                      <IconButton
-                        aria-label="delete"
-                        onClick={() => removeUser(selectedChatflow.id, user.email)}
-                        color="danger"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    }
-                  >
-                    <ListItemDecorator>
-                      <Avatar size="sm" />
-                    </ListItemDecorator>
-                    <ListItemContent>
-                      <Typography level="title-sm">{user.username || user.email}</Typography>
-                      <Typography level="body-xs">{user.email}</Typography>
-                    </ListItemContent>
-                  </ListItem>
-                ))
-              }
-            </List>
+      {/* User Management Modal */}
+      <Modal open={showUserModal} onClose={() => setShowUserModal(false)}>
+        <ModalDialog layout="fullscreen">
+          <ModalClose />
+          <Typography level="h4">{t('admin.manageUsers')} - {selectedChatflow?.name}</Typography>
+          <Box sx={{ display: 'flex', gap: 1, my: 2 }}>
+            <Input
+              placeholder={t('admin.userEmailPlaceholder')}
+              value={userEmail}
+              onChange={(e) => setUserEmail(e.target.value)}
+            />
+            <Button onClick={handleAddUser}>{t('admin.addUser')}</Button>
+            <Button color="success" onClick={() => setShowBulkAssignModal(true)}>{t('admin.bulkAssign')}</Button>
           </Box>
-        )}
-      </Stack>
-
-      {/* Assign User Modal */}
-      <Modal open={showAssignModal} onClose={() => setShowAssignModal(false)}>
-        <ModalDialog>
-          <DialogTitle>{t('admin.assignUser')}</DialogTitle>
-          <DialogContent>
-            <FormControl>
-              <FormLabel>{t('admin.userEmail')}</FormLabel>
-              <Input
-                type="email"
-                value={userEmail}
-                onChange={(e) => setUserEmail(e.target.value)}
-                placeholder="user@example.com"
-              />
-            </FormControl>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowAssignModal(false)}>{t('common.cancel')}</Button>
-            <Button onClick={handleAssignUser} color="primary">{t('admin.assignButton')}</Button>
-          </DialogActions>
+          <Sheet variant="outlined" sx={{ borderRadius: 'sm' }}>
+            <Table>
+              <thead>
+                <tr><th>{t('admin.email')}</th><th>{t('admin.role')}</th><th>{t('admin.actions')}</th></tr>
+              </thead>
+              <tbody>
+                {chatflowUsers.map(user => (
+                  <tr key={user.id}>
+                    <td>{user.email}</td>
+                    <td>{user.role}</td>
+                    <td><Button size="sm" color="danger" onClick={() => handleRemoveUser(user.id)}>{t('admin.remove')}</Button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Sheet>
         </ModalDialog>
       </Modal>
 
-      {/* Bulk Assign User Modal */}
+      {/* Bulk Assign Modal */}
       <Modal open={showBulkAssignModal} onClose={() => setShowBulkAssignModal(false)}>
         <ModalDialog>
-          <DialogTitle>{t('admin.bulkAssign')}</DialogTitle>
-          <DialogContent>
-            <FormControl>
-              <FormLabel>{t('admin.bulkAssignTooltip')}</FormLabel>
-              <Textarea
-                minRows={4}
-                value={bulkUserEmails}
-                onChange={(e) => setBulkUserEmails(e.target.value)}
-                placeholder="user1@example.com
-user2@example.com"
-              />
-            </FormControl>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowBulkAssignModal(false)}>{t('common.cancel')}</Button>
-            <Button onClick={handleBulkAssign} color="primary">{t('admin.assignButton')}</Button>
-          </DialogActions>
+          <ModalClose />
+          <Typography level="h4">{t('admin.bulkAssign')}</Typography>
+          <Textarea
+            placeholder={t('admin.bulkAssignTooltip')}
+            minRows={5}
+            value={bulkUserEmails}
+            onChange={(e) => setBulkUserEmails(e.target.value)}
+          />
+          <Button onClick={handleBulkAssign} sx={{ mt: 2 }}>{t('admin.assignUsers')}</Button>
         </ModalDialog>
       </Modal>
     </Box>

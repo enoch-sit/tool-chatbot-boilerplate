@@ -1,69 +1,52 @@
 // src/store/chatStore.ts
+
+/**
+ * This file defines the central state management for the chat application using Zustand.
+ * It is responsible for managing messages, chat sessions, chatflows, and the real-time
+ * state of the chat, including loading and streaming statuses.
+ *
+ * The store is designed to be the single source of truth for the chat UI. Its actions
+ * interact with the API layer to fetch data and handle real-time communication, and
+ * its state is consumed by the React components to render the UI.
+ */
+
 import { create } from 'zustand';
-import { streamChatResponse, createSession, getChatflows, getUserSessions, getSessionHistory } from '../api';
-import { useAuthStore } from './authStore';
-import { parseMixedContent } from '../utils/contentParser';
-import { StreamProcessor } from '../utils/streamParser';
+import { streamChat } from '../api/chat';
+import { getMyChatflows } from '../api/chatflows';
+// TODO: Implement and import API functions for session management.
+// import { createSession, getUserSessions, getSessionHistory } from '../api'; 
+import { Message, ChatSession, Chatflow, StreamEvent } from '../types/chat';
 
-// [UPDATED] New block-based structure for flexible content rendering
-export type ContentBlock = {
-  type: 'text' | 'mermaid' | 'mindmap' | 'code' | 'image';
-  content: string;
-  language?: string; // For code block syntax highlighting
-};
-
-export type Message = {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: ContentBlock[]; // [UPDATED] Changed from string to ContentBlock[]
-  timestamp: Date;
-  sessionId?: string;
-  metadata?: Record<string, any>;
-};
-
-export type ChatSession = {
-  session_id: string;
-  chatflow_id: string;
-  topic: string;
-  created_at: string;
-  first_message?: string;
-};
-
-export type Chatflow = {
-  id: string;
-  name: string;
-  description?: string;
-  category?: string;
-  deployed: boolean;
-  is_public: boolean;
-};
-
+/**
+ * Defines the shape of the chat state, including all data and status flags
+ * required for the chat interface to function.
+ */
 interface ChatState {
-  // State
-  messages: Message[];
-  sessions: ChatSession[];
-  chatflows: Chatflow[];
-  currentSession: ChatSession | null;
-  currentChatflow: Chatflow | null;
-  isLoading: boolean;
-  isStreaming: boolean;
-  error: string | null;
+  // --- State ---
+  messages: Message[]; // The list of messages in the current chat session.
+  sessions: ChatSession[]; // The list of all chat sessions for the user.
+  chatflows: Chatflow[]; // The list of available chatflows (agents).
+  currentSession: ChatSession | null; // The currently active chat session.
+  currentChatflow: Chatflow | null; // The currently selected chatflow.
+  isLoading: boolean; // Indicates if a background operation is in progress (e.g., loading history).
+  isStreaming: boolean; // True when the assistant is generating a response.
+  error: string | null; // Stores any error messages.
 
-  // Actions
-  addMessage: (message: Message) => void;
-  updateMessage: (messageId: string, updates: Partial<Message>) => void;
-  clearMessages: () => void;
-  setCurrentSession: (session: ChatSession | null) => Promise<void>;
-  setCurrentChatflow: (chatflow: Chatflow | null) => void;
-  createNewSession: (chatflowId: string, topic: string) => Promise<ChatSession>;
-  loadChatflows: () => Promise<void>;
-  loadSessions: () => Promise<void>;
-  streamAssistantResponse: (prompt: string) => Promise<void>;
-  setError: (error: string | null) => void;
+  // --- Actions ---
+  addMessage: (message: Message) => void; // Adds a new message to the list.
+  updateMessage: (messageId: string, updates: Partial<Message>) => void; // Updates an existing message.
+  clearMessages: () => void; // Clears all messages from the current session.
+  setCurrentSession: (session: ChatSession | null) => Promise<void>; // Switches the active session.
+  setCurrentChatflow: (chatflow: Chatflow | null) => void; // Selects a chatflow to interact with.
+  createNewSession: (chatflowId: string, topic: string) => Promise<ChatSession>; // Creates a new chat session.
+  loadChatflows: () => Promise<void>; // Fetches the list of available chatflows.
+  loadSessions: () => Promise<void>; // Fetches the user's chat sessions.
+  streamAssistantResponse: (prompt: string) => Promise<void>; // The core action to send a prompt and handle the streamed response.
+  setError: (error: string | null) => void; // Sets or clears the error state.
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  // Initial state
+  // --- Initial State ---
   messages: [],
   sessions: [],
   chatflows: [],
@@ -73,12 +56,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isStreaming: false,
   error: null,
 
-  // Actions
-  addMessage: (message) => 
+  // --- Actions Implementation ---
+
+  /** Adds a new message to the state. */
+  addMessage: (message) =>
     set((state) => ({ 
       messages: [...state.messages, message] 
     })),
 
+  /** Finds a message by its ID and applies updates. */
   updateMessage: (messageId, updates) =>
     set((state) => ({
       messages: state.messages.map((msg) =>
@@ -86,21 +72,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ),
     })),
 
+  /** Clears all messages, typically when switching sessions. */
   clearMessages: () => set({ messages: [] }),
 
+  /**
+   * Sets the current session and loads its message history.
+   * NOTE: Session history loading is not yet implemented.
+   */
   setCurrentSession: async (session) => {
     set({ currentSession: session, isLoading: true, messages: [] });
     if (session) {
       try {
-        const history = await getSessionHistory(session.session_id);
-        const formattedMessages = history.map((item: any) => ({
-          id: item.id || item.messageId,
-          role: item.role,
-          content: item.content,
-          timestamp: new Date(item.created_at),
-          sessionId: session.session_id
-        }));
-        set({ messages: formattedMessages, isLoading: false });
+        // TODO: Implement `getSessionHistory` in the API layer and uncomment.
+        // const history = await getSessionHistory(session.id);
+        // set({ messages: history, isLoading: false });
+        console.log("Session history loading not implemented yet.");
+        set({ isLoading: false });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load session history';
         set({ error: errorMessage, isLoading: false });
@@ -110,19 +97,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  /** Sets the currently selected chatflow. */
   setCurrentChatflow: (chatflow) => set({ currentChatflow: chatflow }),
 
+  /**
+   * Creates a new chat session for a given chatflow.
+   * NOTE: This is a mock implementation. It should be replaced with a real API call.
+   */
   createNewSession: async (chatflowId, topic) => {
     set({ isLoading: true, error: null });
     try {
-      const session = await createSession(chatflowId, topic);
-      set((state) => ({
-        sessions: [session, ...state.sessions],
-        currentSession: session,
-        isLoading: false,
-      }));
+      // TODO: Implement `createSession` in the API layer and uncomment.
+      // const session = await createSession(chatflowId, topic);
+      // set(state => ({ sessions: [session, ...state.sessions], currentSession: session, isLoading: false }));
+      // return session;
+      console.log("Create session not implemented yet. Using mock session.");
+      const tempSession: ChatSession = { id: Date.now().toString(), topic, chatflow_id: chatflowId, created_at: new Date().toISOString(), user_id: 'mock_user' };
+      set(state => ({ sessions: [tempSession, ...state.sessions], currentSession: tempSession, isLoading: false }));
       get().clearMessages();
-      return session;
+      return tempSession;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create session';
       set({ error: errorMessage, isLoading: false });
@@ -130,10 +123,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  /** Fetches the list of chatflows the user has access to from the backend. */
   loadChatflows: async () => {
     set({ isLoading: true, error: null });
     try {
-      const chatflows = await getChatflows();
+      const chatflows = await getMyChatflows();
       set({ chatflows, isLoading: false });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load chatflows';
@@ -141,106 +135,104 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  /**
+   * Fetches the user's existing chat sessions.
+   * NOTE: This is a mock implementation.
+   */
   loadSessions: async () => {
     set({ isLoading: true, error: null });
     try {
-      const sessionData = await getUserSessions();
-      set({ sessions: sessionData.sessions, isLoading: false });
+      // TODO: Implement `getUserSessions` in the API layer and uncomment.
+      // const sessionData = await getUserSessions();
+      // set({ sessions: sessionData.sessions, isLoading: false });
+      console.log("Load sessions not implemented yet. Using empty list.");
+      set({ sessions: [], isLoading: false });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load sessions';
       set({ error: errorMessage, isLoading: false });
     }
   },
 
+  /**
+   * This is the core function for handling the real-time chat interaction.
+   * It sends the user's prompt to the backend and processes the resulting stream of events.
+   */
   streamAssistantResponse: async (prompt: string) => {
-    const { currentSession, currentChatflow, addMessage, updateMessage, messages } = get();
-    const { tokens } = useAuthStore.getState();
+    const { currentSession, addMessage, updateMessage } = get();
+    if (!currentSession) return; // Must have a session to chat.
 
-    if (!tokens?.accessToken) throw new Error('No authentication token available');
-    if (!currentSession || !currentChatflow) throw new Error('No active session or chatflow selected');
-
+    // 1. Add the user's message to the UI immediately.
     const userMessage: Message = {
       id: Date.now().toString(),
-      role: 'user',
-      content: [{ type: 'text', content: prompt }],
-      timestamp: new Date(),
-      sessionId: currentSession.session_id,
+      session_id: currentSession.id,
+      sender: 'user',
+      content: prompt,
+      timestamp: new Date().toISOString(),
     };
     addMessage(userMessage);
 
+    // 2. Create a placeholder for the bot's response.
     const assistantMessageId = (Date.now() + 1).toString();
     const assistantMessage: Message = {
       id: assistantMessageId,
-      role: 'assistant',
-      content: [], // Start with empty content
-      timestamp: new Date(),
-      sessionId: currentSession.session_id,
-      metadata: { streamEnded: false },
+      session_id: currentSession.id,
+      sender: 'bot',
+      content: '', // Start with empty content, will be populated by the stream.
+      timestamp: new Date().toISOString(),
+      streamEvents: [], // Store the raw events for debugging.
     };
     addMessage(assistantMessage);
 
     set({ isStreaming: true, error: null });
 
-    try {
-      const stream = await streamChatResponse({
-        question: prompt,
-        sessionId: currentSession.session_id,
-        chatflow_id: currentChatflow.id,
-      });
+    // 3. Define the callback for handling each event from the stream.
+    const onStreamEvent = (event: StreamEvent) => {
+      const currentMessages = get().messages;
+      const messageIndex = currentMessages.findIndex(m => m.id === assistantMessageId);
+      if (messageIndex === -1) return; // Should not happen
 
-      let accumulatedContent = '';
+      const updatedMessage = { ...currentMessages[messageIndex] };
+      updatedMessage.streamEvents = [...(updatedMessage.streamEvents || []), event];
 
-      for await (const event of StreamProcessor(stream)) {
-        switch (event.event) {
-          case 'start':
-            console.log('Stream started');
-            break;
-          
-          case 'chunk':
-            accumulatedContent += event.data;
-            const contentBlocks = parseMixedContent(accumulatedContent);
-            updateMessage(assistantMessageId, { content: contentBlocks });
-            break;
-
-          case 'end':
-            // Final parse to ensure all content is captured
-            const finalContentBlocks = parseMixedContent(accumulatedContent);
-            updateMessage(assistantMessageId, { 
-              content: finalContentBlocks,
-              metadata: { 
-                ...(messages.find(m => m.id === assistantMessageId)?.metadata || {}), 
-                streamEnded: true 
-              } 
-            });
-            console.log('Stream ended');
-            break;
-            
-          case 'error':
-            throw new Error(event.data);
-
-          default:
-            // This can handle other custom events like 'tool_start', 'tool_end', etc.
-            console.warn('Unhandled stream event:', event);
-            // You might want to update the message metadata with these events
-            updateMessage(assistantMessageId, {
-              metadata: {
-                ...(messages.find(m => m.id === assistantMessageId)?.metadata || {}),
-                lastEvent: event,
-              }
-            });
-            break;
-        }
+      // The logic here is based on `flowise_agent_stream_struct.md`.
+      if (event.event === 'token') {
+        // Append new text tokens to the message content.
+        updatedMessage.content += event.data;
+      } else if (event.event === 'end') {
+        // The 'end' event signifies the stream is complete.
+        set({ isStreaming: false });
+      } else {
+        // Other events can be handled here (e.g., for logging, tool calls, etc.)
       }
+
+      // Update the message in the store, which will re-render the UI.
+      updateMessage(assistantMessageId, updatedMessage);
+    };
+
+    // 4. Define the error handler for the stream.
+    const onError = (error: Error) => {
+      console.error('Stream error:', error);
+      set({ error: error.message, isStreaming: false });
+    };
+
+    // 5. Initiate the stream by calling the API.
+    try {
+      await streamChat(
+        currentSession.id,
+        { sender: 'user', content: prompt }, // The message payload
+        onStreamEvent, // The event handler
+        onError // The error handler
+      );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      // If the stream fails to start, update the bot message with an error.
       updateMessage(assistantMessageId, {
-        content: [{ type: 'text', content: `Error: ${errorMessage}` }],
+        content: `Error: ${errorMessage}`,
       });
-      set({ error: errorMessage });
-    } finally {
-      set({ isStreaming: false });
+      set({ error: errorMessage, isStreaming: false });
     }
   },
 
+  /** Sets or clears the global error message. */
   setError: (error) => set({ error }),
 }));
