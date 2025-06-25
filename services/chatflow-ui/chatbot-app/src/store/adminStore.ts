@@ -149,3 +149,88 @@ export const useAuthStore = create<AuthStore>()(
     }
   )
 );
+
+// src/store/adminStore.ts
+import { create } from 'zustand';
+import {
+  getAllChatflows,
+  getChatflowStats,
+  getSpecificChatflow,
+  getChatflowUsers,
+} from '../api/admin';
+import { Chatflow, ChatflowStats } from '../types/chat';
+import { User } from '../types/auth';
+
+interface AdminState {
+  chatflows: Chatflow[];
+  stats: ChatflowStats | null;
+  selectedChatflow: Chatflow | null;
+  chatflowUsers: User[];
+  isLoading: boolean;
+  error: string | null;
+}
+
+interface AdminActions {
+  fetchChatflows: () => Promise<void>;
+  fetchStats: () => Promise<void>;
+  fetchChatflowDetails: (id: string) => Promise<void>;
+  fetchChatflowUsers: (id: string) => Promise<void>;
+  clearError: () => void;
+}
+
+export const useAdminStore = create<AdminState & AdminActions>((set) => ({
+  // Initial state
+  chatflows: [],
+  stats: null,
+  selectedChatflow: null,
+  chatflowUsers: [],
+  isLoading: false,
+  error: null,
+
+  // Actions
+  fetchChatflows: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const chatflows = await getAllChatflows();
+      set({ chatflows, isLoading: false });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch chatflows';
+      set({ isLoading: false, error: errorMessage });
+    }
+  },
+
+  fetchStats: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const stats = await getChatflowStats();
+      set({ stats, isLoading: false });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch stats';
+      set({ isLoading: false, error: errorMessage });
+    }
+  },
+
+  fetchChatflowDetails: async (id: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const chatflow = await getSpecificChatflow(id);
+      set({ selectedChatflow: chatflow, isLoading: false });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch chatflow details';
+      set({ isLoading: false, error: errorMessage });
+    }
+  },
+
+  fetchChatflowUsers: async (id: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const users = await getChatflowUsers(id);
+      set({ chatflowUsers: users, isLoading: false });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch chatflow users';
+      set({ isLoading: false, error: errorMessage });
+    }
+  },
+
+  clearError: () => set({ error: null }),
+}));

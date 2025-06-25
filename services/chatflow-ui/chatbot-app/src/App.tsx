@@ -16,8 +16,14 @@ function App() {
   const { checkAuthStatus, user } = useAuth();
 
   useEffect(() => {
-    // Check authentication status on app start
+    // Check authentication status on app start and set up an interval
     checkAuthStatus();
+    const interval = setInterval(() => {
+      checkAuthStatus();
+    }, 14 * 60 * 1000); // 14 minutes
+
+    // Clean up the interval on component unmount
+    return () => clearInterval(interval);
   }, [checkAuthStatus]);
 
   return (

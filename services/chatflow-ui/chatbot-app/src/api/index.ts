@@ -43,7 +43,7 @@ const makeAuthenticatedRequest = async (
 };
 
 // API helper function
-const apiRequest = async <T>(
+export const apiRequest = async <T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> => {
@@ -79,10 +79,11 @@ export const createSession = async (chatflowId: string, topic: string) =>
     body: JSON.stringify({ chatflow_id: chatflowId, topic }),
   });
 
-export const getUserSessions = async () => apiRequest('/api/v1/chat/sessions');
+export const getUserSessions = async (chatflowId: string) => 
+  apiRequest(`/api/v1/chat/sessions?chatflow_id=${chatflowId}`);
 
 export const getSessionHistory = async (sessionId: string) => 
-  apiRequest(`/api/v1/chat/sessions/${sessionId}/history`);
+  apiRequest(`/api/v1/chat/history/${sessionId}`);
 
 export const streamChatResponse = async (payload: ChatRequest): Promise<ReadableStream<Uint8Array>> => {
   const { tokens } = useAuthStore.getState();
@@ -102,42 +103,4 @@ export const streamChatResponse = async (payload: ChatRequest): Promise<Readable
   return response.body;
 };
 
-export const getUserCredits = async () => apiRequest('/api/v1/chat/credits');
-
-// Admin API functions
-export const getAllChatflows = async () => apiRequest('/api/v1/admin/chatflows');
-
-export const getSpecificChatflow = async (chatflowId: string) =>
-  apiRequest(`/api/v1/admin/chatflows/${chatflowId}`);
-
-export const assignUserToChatflow = async (chatflowId: string, email: string) => 
-  apiRequest(`/api/v1/admin/chatflows/${chatflowId}/users`, {
-    method: 'POST',
-    body: JSON.stringify({ email }),
-  });
-
-export const bulkAssignUsersToChatflow = async (chatflowId: string, emails: string[]) =>
-  apiRequest(`/api/v1/admin/chatflows/${chatflowId}/users/bulk-add`, {
-    method: 'POST',
-    body: JSON.stringify({ emails }),
-  });
-
-export const getChatflowUsers = async (chatflowId: string) => 
-  apiRequest(`/api/v1/admin/chatflows/${chatflowId}/users`);
-
-export const removeUserFromChatflow = async (chatflowId: string, email: string) => 
-  apiRequest(`/api/v1/admin/chatflows/${chatflowId}/users`, {
-    method: 'DELETE',
-    body: JSON.stringify({ email }), // Body might not be needed depending on server impl
-  });
-
-export const syncChatflows = async () => 
-  apiRequest('/api/v1/admin/chatflows/sync', { method: 'POST' });
-
-export const getChatflowStats = async () => apiRequest('/api/v1/admin/chatflows/stats');
-
-export const syncUserByEmail = async (email: string) =>
-  apiRequest('/api/v1/admin/users/sync-by-email', {
-    method: 'POST',
-    body: JSON.stringify({ email }),
-  });
+export const getUserCredits = async () => apiRequest('/api/v1/users/me/credits');

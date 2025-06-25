@@ -2,7 +2,8 @@
 import { create } from 'zustand';
 import { streamChatResponse, createSession, getChatflows, getUserSessions, getSessionHistory } from '../api';
 import { useAuthStore } from './authStore';
-import { parseMixedContent } from '../utils/contentParser'; // [UPDATED] Import parser
+import { parseMixedContent } from '../utils/contentParser';
+import { StreamProcessor } from '../utils/streamParser';
 
 // [UPDATED] New block-based structure for flexible content rendering
 export type ContentBlock = {
@@ -152,7 +153,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   streamAssistantResponse: async (prompt: string) => {
-    const { currentSession, currentChatflow, addMessage, updateMessage } = get();
+    const { currentSession, currentChatflow, addMessage, updateMessage, messages } = get();
     const { tokens } = useAuthStore.getState();
 
     if (!tokens?.accessToken) throw new Error('No authentication token available');
@@ -161,19 +162,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      // [UPDATED] User message is now also a ContentBlock array
       content: [{ type: 'text', content: prompt }],
       timestamp: new Date(),
       sessionId: currentSession.session_id,
     };
     addMessage(userMessage);
 
+    const assistantMessageId = (Date.now() + 1).toString();
     const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
+      id: assistantMessageId,
       role: 'assistant',
-      content: [], // [UPDATED] Start with an empty content array
+      content: [], // Start with empty content
       timestamp: new Date(),
       sessionId: currentSession.session_id,
+      metadata: { streamEnded: false },
     };
     addMessage(assistantMessage);
 
@@ -186,23 +188,52 @@ export const useChatStore = create<ChatState>((set, get) => ({
         chatflow_id: currentChatflow.id,
       });
 
-      const reader = stream.getReader();
-      const decoder = new TextDecoder();
       let accumulatedContent = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      for await (const event of StreamProcessor(stream)) {
+        switch (event.event) {
+          case 'start':
+            console.log('Stream started');
+            break;
+          
+          case 'chunk':
+            accumulatedContent += event.data;
+            const contentBlocks = parseMixedContent(accumulatedContent);
+            updateMessage(assistantMessageId, { content: contentBlocks });
+            break;
 
-        accumulatedContent += decoder.decode(value, { stream: true });
-        // [UPDATED] Parse the streamed content into blocks and update the message
-        const contentBlocks = parseMixedContent(accumulatedContent);
-        updateMessage(assistantMessage.id, { content: contentBlocks });
+          case 'end':
+            // Final parse to ensure all content is captured
+            const finalContentBlocks = parseMixedContent(accumulatedContent);
+            updateMessage(assistantMessageId, { 
+              content: finalContentBlocks,
+              metadata: { 
+                ...(messages.find(m => m.id === assistantMessageId)?.metadata || {}), 
+                streamEnded: true 
+              } 
+            });
+            console.log('Stream ended');
+            break;
+            
+          case 'error':
+            throw new Error(event.data);
+
+          default:
+            // This can handle other custom events like 'tool_start', 'tool_end', etc.
+            console.warn('Unhandled stream event:', event);
+            // You might want to update the message metadata with these events
+            updateMessage(assistantMessageId, {
+              metadata: {
+                ...(messages.find(m => m.id === assistantMessageId)?.metadata || {}),
+                lastEvent: event,
+              }
+            });
+            break;
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      // [UPDATED] Update message with an error block
-      updateMessage(assistantMessage.id, { 
+      updateMessage(assistantMessageId, {
         content: [{ type: 'text', content: `Error: ${errorMessage}` }],
       });
       set({ error: errorMessage });

@@ -1,14 +1,16 @@
 // src/pages/AdminPage.tsx
 import React, { useEffect, useState } from 'react';
 import {
-  Box, Sheet, Typography, Table, Button, Input, Modal, ModalDialog, ModalClose,
-  Stack, Alert, Chip, IconButton, CircularProgress, Textarea, Tooltip
+  Box, Sheet, Typography, Button, Input, Modal, ModalDialog,
+  Stack, Alert, Textarea, List, ListItem, ListItemButton, IconButton, ListItemDecorator, Avatar, ListItemContent, FormControl, FormLabel, DialogTitle, DialogContent, DialogActions
 } from '@mui/joy';
-import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon, People as PeopleIcon } from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon, Refresh as RefreshIcon, Sync as SyncIcon, GroupAdd as GroupAddIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAdminStore } from '../store/adminStore';
+import { getChatflowStats } from '../api/admin';
 import { usePermissions } from '../hooks/usePermissions';
-import { getChatflowStats } from '../api';
+import { Chatflow } from '../types/chat';
+import { User } from '../types/auth';
 
 const AdminPage: React.FC = () => {
   const { t } = useTranslation();
@@ -33,7 +35,7 @@ const AdminPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (canManageChatflows) {
+    if (canManageChatflows()) {
       loadAllChatflows();
       fetchStats();
     }
@@ -64,7 +66,7 @@ const AdminPage: React.FC = () => {
     } catch (err) { console.error('Failed to bulk assign users:', err); }
   };
 
-  if (!canManageChatflows && !canManageUsers) {
+  if (!canManageChatflows() && !canManageUsers()) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
         <Typography level="h4" color="danger">{t('auth.unauthorized')}</Typography>
@@ -77,13 +79,34 @@ const AdminPage: React.FC = () => {
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         <Typography level="h2">{t('admin.pageTitle')}</Typography>
         <Stack direction="row" spacing={1}>
-          <Button startDecorator={isSyncing ? <CircularProgress size="sm" /> : <RefreshIcon />} variant="outlined" onClick={handleSync} disabled={isSyncing || isLoading}>
-            {isSyncing ? t('admin.syncing') : t('admin.syncChatflows')}
+          {canManageChatflows() && (
+            <Button
+              variant="outlined"
+              color="primary"
+              startDecorator={<SyncIcon />}
+              loading={isSyncing}
+              onClick={handleSync}
+            >
+              {t('admin.syncChatflows')}
+            </Button>
+          )}
+          <Button
+            variant="outlined"
+            color="neutral"
+            startDecorator={<RefreshIcon />}
+            onClick={() => {
+              if (canManageChatflows()) {
+                loadAllChatflows();
+                fetchStats();
+              }
+            }}
+          >
+            {t('common.refresh')}
           </Button>
         </Stack>
       </Stack>
 
-      {error && (<Alert color="danger" variant="soft" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>)}
+      {error && (<Alert color="danger" variant="soft" sx={{ mb: 3 }}>{error}</Alert>)}
 
       {stats && (
         <Sheet variant="outlined" sx={{ p: 2, borderRadius: 'md', mb: 3 }}>
@@ -98,81 +121,133 @@ const AdminPage: React.FC = () => {
       )}
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-        <Sheet variant="outlined" sx={{ flex: 1, p: 2, borderRadius: 'md' }}>
-          <Typography level="h4" sx={{ mb: 2 }}>{t('admin.chatflowManagement')}</Typography>
-          <Table hoverRow>
-            <thead><tr><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>
-              {chatflows.map((cf) => (
-                <tr key={cf.id} style={{ backgroundColor: selectedChatflow?.id === cf.id ? 'var(--joy-palette-primary-50)' : 'transparent' }}>
-                  <td><Typography level="body-md">{cf.name}</Typography></td>
-                  <td>
-                    <Stack direction="row" spacing={1}>
-                      <Chip color={cf.deployed ? 'success' : 'neutral'} size="sm">{cf.deployed ? 'Deployed' : 'Not Deployed'}</Chip>
-                      {cf.is_public && <Chip color="primary" size="sm">Public</Chip>}
-                    </Stack>
-                  </td>
-                  <td><Button size="sm" variant={selectedChatflow?.id === cf.id ? 'solid' : 'outlined'} onClick={() => selectChatflow(cf)}>Select</Button></td>
-                </tr>
+        {canManageChatflows() && (
+          <Box sx={{ width: { xs: '100%', md: '40%' } }}>
+            <Typography level="h4" sx={{ mb: 2 }}>{t('admin.chatflowManagement')}</Typography>
+            <List
+              variant="outlined"
+              sx={{
+                borderRadius: 'sm',
+                maxHeight: 400,
+                overflow: 'auto',
+              }}
+            >
+              {isLoading && <ListItem>{t('common.loading')}</ListItem>}
+              {chatflows.map((flow: Chatflow) => (
+                <ListItem
+                  key={flow.id}
+                  onClick={() => selectChatflow(flow)}
+                  sx={{
+                    cursor: 'pointer',
+                    ...(selectedChatflow?.id === flow.id && {
+                      bgcolor: 'primary.softBg',
+                    }),
+                  }}
+                >
+                  <ListItemButton>{flow.name}</ListItemButton>
+                </ListItem>
               ))}
-            </tbody>
-          </Table>
-        </Sheet>
+            </List>
+          </Box>
+        )}
 
-        <Sheet variant="outlined" sx={{ flex: 1, p: 2, borderRadius: 'md' }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography level="h4">{t('admin.userManagement')}</Typography>
-            {selectedChatflow && canManageUsers && (
-              <Stack direction="row" spacing={1}>
-                <Button startDecorator={<AddIcon />} size="sm" onClick={() => setShowAssignModal(true)} disabled={isLoading}>{t('admin.assignUser')}</Button>
-                <Button startDecorator={<PeopleIcon />} size="sm" onClick={() => setShowBulkAssignModal(true)} disabled={isLoading}>{t('admin.bulkAssign')}</Button>
-              </Stack>
-            )}
-          </Stack>
-          {!selectedChatflow ? (<Typography color="neutral">{t('admin.selectChatflow', 'Select a chatflow to manage users')}</Typography>) : (
-            <Table>
-              <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
-              <tbody>
-                {chatflowUsers.map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.username}</td><td>{u.email}</td>
-                    <td><Chip size="sm">{u.role}</Chip></td>
-                    <td><IconButton size="sm" color="danger" onClick={() => removeUser(selectedChatflow.id, u.email)} disabled={isLoading}><DeleteIcon /></IconButton></td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Sheet>
+        {canManageUsers() && selectedChatflow && (
+          <Box sx={{ flex: 1 }}>
+            <Typography level="h4" sx={{ mb: 2 }}>
+              {t('admin.userManagement')} - {selectedChatflow.name}
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+              <Button
+                variant="solid"
+                color="primary"
+                startDecorator={<AddIcon />}
+                onClick={() => setShowAssignModal(true)}
+              >
+                {t('admin.assignUser')}
+              </Button>
+              <Button
+                variant="outlined"
+                color="neutral"
+                startDecorator={<GroupAddIcon />}
+                onClick={() => setShowBulkAssignModal(true)}
+              >
+                {t('admin.bulkAssign')}
+              </Button>
+            </Stack>
+            <List variant="outlined" sx={{ borderRadius: 'sm' }}>
+              {chatflowUsers.length === 0 ? (
+                <ListItem>{t('admin.noUsers')}</ListItem>
+              ) : (
+                chatflowUsers.map((user: User) => (
+                  <ListItem
+                    key={user.email}
+                    endAction={
+                      <IconButton
+                        aria-label="delete"
+                        onClick={() => removeUser(selectedChatflow.id, user.email)}
+                        color="danger"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    }
+                  >
+                    <ListItemDecorator>
+                      <Avatar size="sm" />
+                    </ListItemDecorator>
+                    <ListItemContent>
+                      <Typography level="title-sm">{user.username || user.email}</Typography>
+                      <Typography level="body-xs">{user.email}</Typography>
+                    </ListItemContent>
+                  </ListItem>
+                ))
+              }
+            </List>
+          </Box>
+        )}
       </Stack>
 
       {/* Assign User Modal */}
       <Modal open={showAssignModal} onClose={() => setShowAssignModal(false)}>
-        <ModalDialog><ModalClose /><Typography level="h4" sx={{ mb: 2 }}>{t('admin.assignUser')}</Typography>
-          <Stack spacing={2}>
-            <Typography>Chatflow: {selectedChatflow?.name}</Typography>
-            <Input placeholder={t('admin.userEmail')} value={userEmail} onChange={(e) => setUserEmail(e.target.value)} />
-            <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-              <Button variant="plain" onClick={() => setShowAssignModal(false)}>{t('common.cancel')}</Button>
-              <Button onClick={handleAssignUser} disabled={!userEmail.trim() || isLoading}>{t('admin.assignButton')}</Button>
-            </Stack>
-          </Stack>
+        <ModalDialog>
+          <DialogTitle>{t('admin.assignUser')}</DialogTitle>
+          <DialogContent>
+            <FormControl>
+              <FormLabel>{t('admin.userEmail')}</FormLabel>
+              <Input
+                type="email"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+                placeholder="user@example.com"
+              />
+            </FormControl>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowAssignModal(false)}>{t('common.cancel')}</Button>
+            <Button onClick={handleAssignUser} color="primary">{t('admin.assignButton')}</Button>
+          </DialogActions>
         </ModalDialog>
       </Modal>
 
       {/* Bulk Assign User Modal */}
       <Modal open={showBulkAssignModal} onClose={() => setShowBulkAssignModal(false)}>
-        <ModalDialog><ModalClose /><Typography level="h4" sx={{ mb: 2 }}>{t('admin.bulkAssign')}</Typography>
-          <Stack spacing={2}>
-            <Typography>Chatflow: {selectedChatflow?.name}</Typography>
-            <Tooltip title={t('admin.bulkAssignTooltip')} variant="outlined">
-              <Textarea placeholder="user1@example.com\nuser2@example.com" minRows={4} value={bulkUserEmails} onChange={(e) => setBulkUserEmails(e.target.value)} />
-            </Tooltip>
-            <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-              <Button variant="plain" onClick={() => setShowBulkAssignModal(false)}>{t('common.cancel')}</Button>
-              <Button onClick={handleBulkAssign} disabled={!bulkUserEmails.trim() || isLoading}>{t('admin.assignButton')}</Button>
-            </Stack>
-          </Stack>
+        <ModalDialog>
+          <DialogTitle>{t('admin.bulkAssign')}</DialogTitle>
+          <DialogContent>
+            <FormControl>
+              <FormLabel>{t('admin.bulkAssignTooltip')}</FormLabel>
+              <Textarea
+                minRows={4}
+                value={bulkUserEmails}
+                onChange={(e) => setBulkUserEmails(e.target.value)}
+                placeholder="user1@example.com
+user2@example.com"
+              />
+            </FormControl>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowBulkAssignModal(false)}>{t('common.cancel')}</Button>
+            <Button onClick={handleBulkAssign} color="primary">{t('admin.assignButton')}</Button>
+          </DialogActions>
         </ModalDialog>
       </Modal>
     </Box>
