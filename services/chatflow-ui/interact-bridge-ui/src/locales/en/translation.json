@@ -1,0 +1,67 @@
+// public/locales/en/translation.json
+{
+  "appTitle": "Advanced Chatbot",
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "username": "Username",
+    "password": "Password",
+    "loginButton": "Sign In",
+    "loginError": "Login failed. Please check your credentials.",
+    "logoutConfirm": "Are you sure you want to logout?",
+    "welcome": "Welcome back",
+    "unauthorized": "You don't have permission to access this page"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "credits": "Your Credits",
+    "noCredits": "N/A"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "chat": "Chat",
+    "admin": "Administration",
+    "profile": "Profile"
+  },
+  "chat": {
+    "typeMessage": "Type a message...",
+    "send": "Send",
+    "newSession": "New Session",
+    "selectChatflow": "Select a chatflow",
+    "createSession": "Create Session",
+    "sessionTopic": "Session topic",
+    "noSessions": "No chat sessions yet",
+    "loadingSessions": "Loading sessions...",
+    "loadingHistory": "Loading chat history..."
+  },
+  "admin": {
+    "pageTitle": "Admin Dashboard",
+    "chatflowManagement": "Chatflow Management",
+    "userManagement": "User Management",
+    "assignUser": "Assign User",
+    "bulkAssign": "Bulk Assign",
+    "bulkAssignTooltip": "Assign multiple users by entering one email per line.",
+    "removeUser": "Remove User",
+    "userEmail": "User Email",
+    "assignButton": "Assign",
+    "removeButton": "Remove",
+    "noUsers": "No users assigned to this chatflow",
+    "assignSuccess": "User assigned successfully",
+    "removeSuccess": "User removed successfully",
+    "syncChatflows": "Sync Chatflows",
+    "syncing": "Syncing...",
+    "statsTitle": "Chatflow Statistics"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "create": "Create",
+    "refresh": "Refresh"
+  }
+}

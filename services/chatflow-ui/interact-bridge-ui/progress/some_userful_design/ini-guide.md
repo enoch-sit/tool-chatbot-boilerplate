@@ -170,7 +170,7 @@ export interface LoginResponse {
 // src/store/authStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AuthState, User, AuthTokens, LoginCredentials } from '../types/auth';
+import type { AuthState, User, AuthTokens, LoginCredentials } from '../types/auth';
 import { login as apiLogin, logout as apiLogout, refreshToken as apiRefreshToken } from '../api/auth';
 
 interface AuthStore extends AuthState {
@@ -324,7 +324,7 @@ export const useAuthStore = create<AuthStore>()(
 
 ```typescript
 // src/api/auth.ts
-import { LoginCredentials, LoginResponse } from '../types/auth';
+import type { LoginCredentials, LoginResponse } from '../types/auth';
 
 const API_BASE_URL = process.env.FLOWISE_PROXY_API_URL || 'http://localhost:8000';
 
