@@ -10,7 +10,7 @@ export const API_BASE_URL = import.meta.env.VITE_FLOWISE_PROXY_API_URL || 'http:
 /**
  * The default timeout for standard API requests, in milliseconds.
  */
-export const API_TIMEOUT = 30000;
+export const API_TIMEOUT = 30000000;
 
 /**
  * A long timeout specifically for streaming operations.
@@ -18,4 +18,4 @@ export const API_TIMEOUT = 30000;
  * that may take a very long time to complete, preventing the connection
  * from closing prematurely.
  */
-export const STREAM_TIMEOUT = 1800000;
+export const STREAM_TIMEOUT = 18000000;

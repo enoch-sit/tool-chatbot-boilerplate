@@ -1,4 +1,4 @@
-// src/api/chat.ts (Corrected)
+// src/api/chat.ts
 
 /**
  * This file provides the client-side API for interacting with the chat backend.
@@ -9,24 +9,7 @@
 import type { StreamEvent, Message } from '../types/chat';
 import { API_BASE_URL } from './config';
 import { StreamParser } from '../utils/streamParser';
-
-// Helper to get the auth token from localStorage.
-const getAuthHeader = () => {
-  try {
-    const authStorage = localStorage.getItem('auth-storage');
-    if (authStorage) {
-      const { state } = JSON.parse(authStorage);
-      const token = state?.tokens?.accessToken;
-      if (token) {
-        return { Authorization: `Bearer ${token}` };
-      }
-    }
-  } catch (e) {
-    console.error('Error parsing auth storage:', e);
-  }
-  return {};
-};
-
+import { useAuthStore } from '../store/authStore';
 
 /**
  * Sends a message to the chat backend and handles the streaming response,
@@ -50,19 +33,20 @@ export const streamChatAndStore = async (
   onStreamEvent: (event: StreamEvent) => void,
   onError: (error: Error) => void
 ): Promise<void> => {
-  // --- FIX STARTS HERE ---
+  // Get auth token from store instead of localStorage directly
+  const tokens = useAuthStore.getState().tokens;
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
-  const authHeader = getAuthHeader();
-  if (authHeader.Authorization) {
-    headers['Authorization'] = authHeader.Authorization;
+  
+  if (tokens?.accessToken) {
+    headers['Authorization'] = `Bearer ${tokens.accessToken}`;
   }
-  // --- FIX ENDS HERE ---
 
   const response = await fetch(`${API_BASE_URL}/api/v1/chat/predict/stream/store`, {
     method: 'POST',
-    headers: headers, // Use the correctly constructed headers object
+    headers: headers,
     body: JSON.stringify({
       chatflow_id,
       sessionId: session_id,
@@ -70,6 +54,52 @@ export const streamChatAndStore = async (
     }),
   });
 
+  if (!response.ok) {
+    if (response.status === 401) {
+      // Try to refresh token and retry
+      try {
+        await useAuthStore.getState().refreshToken();
+        const newTokens = useAuthStore.getState().tokens;
+        
+        if (newTokens?.accessToken) {
+          headers['Authorization'] = `Bearer ${newTokens.accessToken}`;
+          
+          // Retry the request
+          const retryResponse = await fetch(`${API_BASE_URL}/api/v1/chat/predict/stream/store`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+              chatflow_id,
+              sessionId: session_id,
+              question,
+            }),
+          });
+          
+          if (!retryResponse.ok) {
+            throw new Error(`HTTP error! status: ${retryResponse.status}`);
+          }
+          
+          // Process the retry response
+          await processStreamResponse(retryResponse, onStreamEvent, onError);
+          return;
+        }
+      } catch (refreshError) {
+        useAuthStore.getState().logout();
+        throw new Error('Authentication failed');
+      }
+    }
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  await processStreamResponse(response, onStreamEvent, onError);
+};
+
+// Helper function to process the stream response
+const processStreamResponse = async (
+  response: Response,
+  onStreamEvent: (event: StreamEvent) => void,
+  onError: (error: Error) => void
+): Promise<void> => {
   if (!response.body) {
     throw new Error('Response body is null. The server may have failed to send a response.');
   }

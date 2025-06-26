@@ -1,33 +1,13 @@
-// src/api/sessions.ts (Corrected)
+// src/api/sessions.ts
 
-import axios from 'axios';
-import { API_BASE_URL } from './config';
+import apiClient from './client';
 import type { ChatSession, Message } from '../types/chat';
-
-// Helper to get the auth token from localStorage.
-const getAuthHeader = () => {
-  try {
-    const authStorage = localStorage.getItem('auth-storage');
-    if (authStorage) {
-      const { state } = JSON.parse(authStorage);
-      const token = state?.tokens?.accessToken;
-      if (token) {
-        return { Authorization: `Bearer ${token}` };
-      }
-    }
-  } catch (e) {
-    console.error('Error parsing auth storage:', e);
-  }
-  return {};
-};
 
 /**
  * Fetches all chat sessions for the authenticated user.
  */
 export const getUserSessions = async (): Promise<ChatSession[]> => {
-  const response = await axios.get<{ sessions: ChatSession[] }>(`${API_BASE_URL}/api/v1/chat/sessions`, {
-    headers: getAuthHeader(),
-  });
+  const response = await apiClient.get<{ sessions: ChatSession[] }>('/api/v1/chat/sessions');
   return response.data.sessions || [];
 };
 
@@ -35,11 +15,10 @@ export const getUserSessions = async (): Promise<ChatSession[]> => {
  * Creates a new chat session for a given chatflow.
  */
 export const createSession = async (chatflowId: string, topic: string): Promise<ChatSession> => {
-  const response = await axios.post<ChatSession>(
-    `${API_BASE_URL}/api/v1/chat/sessions`,
-    { chatflow_id: chatflowId, topic },
-    { headers: getAuthHeader() }
-  );
+  const response = await apiClient.post<ChatSession>('/api/v1/chat/sessions', {
+    chatflow_id: chatflowId,
+    topic
+  });
   return response.data;
 };
 
@@ -47,8 +26,6 @@ export const createSession = async (chatflowId: string, topic: string): Promise<
  * Retrieves the full message history for a specific chat session.
  */
 export const getSessionHistory = async (sessionId: string): Promise<Message[]> => {
-  const response = await axios.get<{ history: Message[] }>(`${API_BASE_URL}/api/v1/chat/sessions/${sessionId}/history`, {
-    headers: getAuthHeader(),
-  });
+  const response = await apiClient.get<{ history: Message[] }>(`/api/v1/chat/sessions/${sessionId}/history`);
   return response.data.history || [];
 };

@@ -7,26 +7,8 @@
  * such as `quickUserAccessListAndChat_03.py`.
  */
 
-import axios from 'axios';
-import { API_BASE_URL } from './config';
+import apiClient from './client';
 import type { Chatflow } from '../types/chatflow';
-
-// Helper to get the auth token from localStorage, where the Zustand store persists it.
-const getAuthHeader = () => {
-  try {
-    const authStorage = localStorage.getItem('auth-storage');
-    if (authStorage) {
-      const { state } = JSON.parse(authStorage);
-      const token = state?.tokens?.accessToken;
-      if (token) {
-        return { Authorization: `Bearer ${token}` };
-      }
-    }
-  } catch (e) {
-    console.error('Error parsing auth storage:', e);
-  }
-  return {};
-};
 
 /**
  * Fetches the list of chatflows that the currently authenticated user has access to.
@@ -39,8 +21,6 @@ const getAuthHeader = () => {
  * @returns A promise that resolves to an array of `Chatflow` objects.
  */
 export const getMyChatflows = async (): Promise<Chatflow[]> => {
-  const response = await axios.get(`${API_BASE_URL}/api/v1/chatflows/my-chatflows`, {
-    headers: getAuthHeader(),
-  });
+  const response = await apiClient.get('/api/v1/chatflows/my-chatflows');
   return response.data;
 };

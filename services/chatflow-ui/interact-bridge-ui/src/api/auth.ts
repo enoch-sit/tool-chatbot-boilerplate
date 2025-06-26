@@ -1,6 +1,6 @@
 // src/api/auth.ts
+import apiClient from './client';
 import type { LoginCredentials, LoginResponse } from '../types/auth';
-import { API_BASE_URL } from './config';
 
 /**
  * Authenticates a user against the backend.
@@ -15,7 +15,8 @@ import { API_BASE_URL } from './config';
  * and `get_user_token` in `progress/quickUserAccessListAndChat_03.py`.
  */
 export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/chat/authenticate`, {
+  // Note: We use fetch here instead of apiClient to avoid auth interceptors during login
+  const response = await fetch(`${import.meta.env.VITE_FLOWISE_PROXY_API_URL || 'http://localhost:8000'}/api/v1/chat/authenticate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -43,7 +44,8 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
  * which is a best practice for robust authentication.
  */
 export const refreshToken = async (token: string): Promise<LoginResponse> => {
-  const response = await fetch(`${API_BASE_URL}/api/v1/chat/refresh`, {
+  // Note: We use fetch here instead of apiClient to avoid auth interceptors during token refresh
+  const response = await fetch(`${import.meta.env.VITE_FLOWISE_PROXY_API_URL || 'http://localhost:8000'}/api/v1/chat/refresh`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

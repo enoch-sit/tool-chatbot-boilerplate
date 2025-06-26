@@ -8,32 +8,16 @@
  * administrative scripts, ensuring the frontend client matches the backend contract.
  */
 
-import { API_BASE_URL } from './config';
+import apiClient from './client';
 import type { BulkAssignmentResult } from '../types/admin';
 import type { Chatflow, ChatflowStats, ChatflowUser} from '../types/chatflow';
-import type { User } from '../types/auth';
-import axios from 'axios';
-
-// Helper function to get the authorization header from local storage.
-// This is crucial for securing admin-only endpoints, as seen in all
-// Python scripts making authenticated requests.
-const getAuthHeader = () => {
-  const authStorage = localStorage.getItem('auth-storage');
-  if (!authStorage) {
-    return {};
-  }
-  const token = JSON.parse(authStorage).state?.tokens?.accessToken;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
 
 /**
  * Triggers a synchronization of chatflows from the Flowise instance.
  * Evidence: `quickTestChatflowsSync_01.py` shows a POST request to this endpoint.
  */
 export const syncChatflows = async (): Promise<{ message: string }> => {
-  const response = await axios.post(`${API_BASE_URL}/api/v1/admin/chatflows/sync`, {}, {
-    headers: getAuthHeader()
-  });
+  const response = await apiClient.post('/api/v1/admin/chatflows/sync', {});
   return response.data;
 };
 
@@ -42,9 +26,7 @@ export const syncChatflows = async (): Promise<{ message: string }> => {
  * is a standard administrative dashboard feature.
  */
 export const getChatflowStats = async (): Promise<ChatflowStats> => {
-  const response = await axios.get(`${API_BASE_URL}/api/v1/admin/chatflows/stats`, {
-    headers: getAuthHeader()
-  });
+  const response = await apiClient.get('/api/v1/admin/chatflows/stats');
   return response.data;
 };
 
@@ -53,9 +35,7 @@ export const getChatflowStats = async (): Promise<ChatflowStats> => {
  * Evidence: `actual_admin.py` performs a GET request to this endpoint.
  */
 export const getAllChatflows = async (): Promise<Chatflow[]> => {
-  const response = await axios.get(`${API_BASE_URL}/api/v1/admin/chatflows`, {
-    headers: getAuthHeader()
-  });
+  const response = await apiClient.get('/api/v1/admin/chatflows');
   return response.data.map((chatflow: any) => ({
     ...chatflow,
     id: chatflow.flowise_id, // 將 flowise_id 複製到 id 字段，確保兼容性
@@ -67,9 +47,7 @@ export const getAllChatflows = async (): Promise<Chatflow[]> => {
  * Evidence: `actual_admin.py` includes a function to get a specific chatflow.
  */
 export const getSpecificChatflow = async (id: string): Promise<Chatflow> => {
-  const response = await axios.get(`${API_BASE_URL}/api/v1/admin/chatflows/${id}`, {
-    headers: getAuthHeader()
-  });
+  const response = await apiClient.get(`/api/v1/admin/chatflows/${id}`);
   return response.data;
 };
 
@@ -77,13 +55,9 @@ export const getSpecificChatflow = async (id: string): Promise<Chatflow> => {
  * Gets a list of all users assigned to a specific chatflow.
  * Evidence: `quickUserAccessListAndChat_03.py` calls this endpoint.
  */
-// src/api/admin.ts
 export const getChatflowUsers = async (flowiseId: string): Promise<ChatflowUser[]> => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/api/v1/admin/chatflows/${flowiseId}/users`,
-      { headers: getAuthHeader() }
-    );
+    const response = await apiClient.get(`/api/v1/admin/chatflows/${flowiseId}/users`);
     
     // 確保返回正確的類型
     return response.data.map((user: any): ChatflowUser => ({
@@ -105,10 +79,9 @@ export const getChatflowUsers = async (flowiseId: string): Promise<ChatflowUser[
  * Evidence: `quickAddUserToChatflow_02.py` demonstrates this POST request.
  */
 export const addUserToChatflow = async (id: string, email: string): Promise<{ message: string }> => {
-  const response = await axios.post(`${API_BASE_URL}/api/v1/admin/chatflows/${id}/users`, 
-    { email },
-    { headers: getAuthHeader() }
-  );
+  const response = await apiClient.post(`/api/v1/admin/chatflows/${id}/users`, {
+    email
+  });
   return response.data;
 };
 
@@ -117,11 +90,9 @@ export const addUserToChatflow = async (id: string, email: string): Promise<{ me
  * Evidence: `actual_admin.py` contains logic for this bulk-add operation.
  */
 export const bulkAddUsersToChatflow = async (id: string, emails: string[]): Promise<BulkAssignmentResult> => {
-  const response = await axios.post(
-    `${API_BASE_URL}/api/v1/admin/chatflows/${id}/users/bulk-add`,
-    { emails },
-    { headers: getAuthHeader() }
-  );
+  const response = await apiClient.post(`/api/v1/admin/chatflows/${id}/users/bulk-add`, {
+    emails
+  });
   return response.data;
 };
 
@@ -130,9 +101,8 @@ export const bulkAddUsersToChatflow = async (id: string, emails: string[]): Prom
  * Evidence: `actual_admin.py` shows a DELETE request to this endpoint.
  */
 export const removeUserFromChatflow = async (id: string, email: string): Promise<void> => {
-  await axios.delete(`${API_BASE_URL}/api/v1/admin/chatflows/${id}/users`, {
-    data: { email },
-    headers: getAuthHeader()
+  await apiClient.delete(`/api/v1/admin/chatflows/${id}/users`, {
+    data: { email }
   });
 };
 
@@ -141,9 +111,8 @@ export const removeUserFromChatflow = async (id: string, email: string): Promise
  * Evidence: `actual_admin.py` contains a function for user synchronization.
  */
 export const syncUserByEmail = async (email: string): Promise<{ message: string; user_id: string }> => {
-    const response = await axios.post(`${API_BASE_URL}/api/v1/admin/users/sync-by-email`, 
-    { email },
-    { headers: getAuthHeader() }
-  );
+  const response = await apiClient.post('/api/v1/admin/users/sync-by-email', {
+    email
+  });
   return response.data;
-}
+};
