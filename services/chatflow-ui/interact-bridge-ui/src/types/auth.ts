@@ -5,7 +5,7 @@ export interface User {
   username: string;
   email: string;
   role: 'admin' | 'supervisor' | 'enduser' | 'user';
-  permissions: string[];
+  permissions: string[]; // Keep this for runtime use, but it's derived from role
   profile?: {
     firstName?: string;
     lastName?: string;

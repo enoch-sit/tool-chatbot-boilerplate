@@ -15,7 +15,8 @@ import { streamChatAndStore } from '../api/chat';
 import { getMyChatflows } from '../api/chatflows';
 // TODO: Implement and import API functions for session management.
 // import { createSession, getUserSessions, getSessionHistory } from '../api'; 
-import type { Message, ChatSession, Chatflow, StreamEvent } from '../types/chat';
+import type { Message, ChatSession, StreamEvent } from '../types/chat';
+import type {Chatflow} from '../types/chatflow';
 
 /**
  * Defines the shape of the chat state, including all data and status flags

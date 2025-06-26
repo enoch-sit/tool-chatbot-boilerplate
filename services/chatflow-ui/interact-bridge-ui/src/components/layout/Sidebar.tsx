@@ -11,16 +11,31 @@ import Typography from '@mui/joy/Typography';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ChatIcon from '@mui/icons-material/Chat';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const Sidebar: React.FC = () => {
   const { t } = useTranslation();
-  const { hasRole } = useAuth();
+  const { canAccessAdmin } = usePermissions();
 
   const navItems = [
-    { to: '/dashboard', label: t('navigation.dashboard'), icon: <DashboardIcon />, requiredRoles: [] },
-    { to: '/chat', label: t('navigation.chat'), icon: <ChatIcon />, requiredRoles: [] },
-    { to: '/admin', label: t('navigation.admin'), icon: <AdminPanelSettingsIcon />, requiredRoles: ['admin', 'supervisor'] },
+    { 
+      to: '/dashboard', 
+      label: t('navigation.dashboard'), 
+      icon: <DashboardIcon />, 
+      show: true 
+    },
+    { 
+      to: '/chat', 
+      label: t('navigation.chat'), 
+      icon: <ChatIcon />, 
+      show: true 
+    },
+    { 
+      to: '/admin', 
+      label: t('navigation.admin'), 
+      icon: <AdminPanelSettingsIcon />, 
+      show: canAccessAdmin // Now this is a boolean, not a function call
+    },
   ];
 
   return (
@@ -32,7 +47,7 @@ const Sidebar: React.FC = () => {
           </Typography>
           <List>
             {navItems.map((item) => (
-              (item.requiredRoles.length === 0 || hasRole(item.requiredRoles)) && (
+              item.show && (
                 <ListItem key={item.to}>
                   <ListItemButton component={NavLink} to={item.to} sx={{ fontWeight: 'md' }}>
                     <ListItemDecorator>{item.icon}</ListItemDecorator>
@@ -49,4 +64,3 @@ const Sidebar: React.FC = () => {
 };
 
 export default Sidebar;
-

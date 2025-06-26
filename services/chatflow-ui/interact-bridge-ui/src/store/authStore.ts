@@ -13,7 +13,7 @@ interface DecodedToken {
   iat: number;
   username: string;
   role: User['role'];
-  permissions: string[];
+  // Remove permissions from JWT since we'll derive them from roles
 }
 
 interface AuthActions {
@@ -23,8 +23,41 @@ interface AuthActions {
   checkAuthStatus: () => void;
   clearError: () => void;
   hasPermission: (permission: string) => boolean;
-  hasRole: (role: User['role']) => boolean;
+  hasRole: (role: User['role'] | User['role'][]) => boolean;
+  getUserPermissions: () => string[];
 }
+
+// Define role-based permissions
+const ROLE_PERMISSIONS: Record<User['role'], string[]> = {
+  admin: [
+    'manage_users',
+    'manage_chatflows',
+    'view_analytics',
+    'sync_chatflows',
+    'access_admin_panel',
+    'view_all_sessions',
+    'view_all_messages',
+    'manage_system_settings',
+  ],
+  supervisor: [
+    'manage_users',
+    'manage_chatflows',
+    'view_analytics',
+    'access_admin_panel',
+    'view_all_sessions',
+    'view_all_messages',
+  ],
+  enduser: [
+    'create_sessions',
+    'send_messages',
+    'view_own_sessions',
+  ],
+  user: [
+    'create_sessions',
+    'send_messages',
+    'view_own_sessions',
+  ],
+};
 
 const initialState: AuthState = {
   user: null,
@@ -35,18 +68,25 @@ const initialState: AuthState = {
 };
 
 const transformLoginResponse = (data: LoginResponse): { user: User; tokens: AuthTokens } => {
-    const { access_token, refresh_token, expires_in, token_type, user } = data;
+  const { access_token, refresh_token, expires_in, token_type, user } = data;
 
-    const tokens: AuthTokens = {
-        accessToken: access_token,
-        refreshToken: refresh_token,
-        expiresIn: expires_in,
-        tokenType: token_type as 'Bearer',
-    };
+  const tokens: AuthTokens = {
+    accessToken: access_token,
+    refreshToken: refresh_token,
+    expiresIn: expires_in,
+    tokenType: token_type as 'Bearer',
+  };
 
-    return { user, tokens };
+  // Derive permissions from role
+  const permissions = ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.user;
+  
+  const enrichedUser: User = {
+    ...user,
+    permissions,
+  };
+
+  return { user: enrichedUser, tokens };
 };
-
 
 export const useAuthStore = create<AuthState & AuthActions>()(
   persist(
@@ -66,8 +106,6 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       },
       logout: () => {
         set(initialState);
-        // Persist middleware will clear storage
-        // Optionally, remove tokens from localStorage/sessionStorage if used
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
       },
@@ -85,7 +123,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           set({ user, tokens: newTokens, isAuthenticated: true, isLoading: false });
         } catch (error: any) {
           set({ error: error.message || 'Token refresh failed', isLoading: false });
-          get().logout(); // Logout if refresh fails
+          get().logout();
           throw error;
         }
       },
@@ -95,15 +133,21 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           try {
             const decoded: DecodedToken = jwtDecode(tokens.accessToken);
             if (decoded.exp * 1000 < Date.now()) {
-              // Token expired, try to refresh
               get().refreshToken().catch(() => {
                 // If refresh fails, the refreshToken action will log out
               });
             } else {
-              set({ isAuthenticated: true });
+              // Re-derive permissions from role in case they changed
+              const { user } = get();
+              if (user) {
+                const permissions = ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.user;
+                set({ 
+                  user: { ...user, permissions },
+                  isAuthenticated: true 
+                });
+              }
             }
           } catch (error) {
-            // Error decoding, treat as logged out
             get().logout();
           }
         }
@@ -111,11 +155,24 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       clearError: () => set({ error: null }),
       hasPermission: (permission) => {
         const { user } = get();
-        return user?.permissions?.includes(permission) ?? false;
+        if (!user) return false;
+        
+        // Get permissions based on role
+        const rolePermissions = ROLE_PERMISSIONS[user.role] || [];
+        return rolePermissions.includes(permission);
       },
       hasRole: (role) => {
         const { user } = get();
-        return user?.role === role;
+        if (!user) return false;
+        if (Array.isArray(role)) {
+          return role.includes(user.role);
+        }
+        return user.role === role;
+      },
+      getUserPermissions: () => {
+        const { user } = get();
+        if (!user) return [];
+        return ROLE_PERMISSIONS[user.role] || [];
       },
     }),
     {
@@ -125,4 +182,3 @@ export const useAuthStore = create<AuthState & AuthActions>()(
     }
   )
 );
-

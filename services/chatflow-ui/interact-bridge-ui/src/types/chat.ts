@@ -9,25 +9,6 @@
  */
 
 /**
- * print(f"📈 Statistics:")
- * print(f"   - Total chatflows: {stats.get('total', 0)}")
- * print(f"   - Active: {stats.get('active', 0)}")
- * print(f"   - Deleted: {stats.get('deleted', 0)}")
- * print(f"   - Errors: {stats.get('error', 0)}")
- * print(f"   - Last sync: {stats.get('last_sync', 'Never')}")
- * Show the chaflow structure
- */
-
-// already implement in admin.ts
-// export interface ChatflowStats {
-//   total: number;
-//   active: number;
-//   deleted: number;
-//   error: number;
-//   last_sync: string; // ISO date string or 'Never'
-// }
-
-/**
  * Represents a single chat message in a session. This is a fundamental object
  * used to display the conversation history in the UI.
  */
@@ -53,19 +34,7 @@ export interface ChatSession {
   user_id: string;
 }
 
-/**
- * Represents a chatflow (an agent or conversational application).
- * The structure is based on data returned from the `my-chatflows` endpoint
- * as seen in `quickUserAccessListAndChat_03.py`.
- */
-export interface Chatflow {
-  id: string;
-  name: string;
-  description?: string;
-  category?: string;
-  deployed?: boolean;
-  is_public?: boolean;
-}
+
 
 // --- Stream Event Types ---
 // The following types are derived directly from the `flowise_agent_stream_struct.md`

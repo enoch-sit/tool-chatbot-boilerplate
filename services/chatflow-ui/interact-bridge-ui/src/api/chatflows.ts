@@ -9,7 +9,7 @@
 
 import axios from 'axios';
 import { API_BASE_URL } from './config';
-import type { Chatflow } from '../types/chat';
+import type { Chatflow } from '../types/chatflow';
 
 // Helper to get the auth token from localStorage, where the Zustand store persists it.
 const getAuthHeader = () => {

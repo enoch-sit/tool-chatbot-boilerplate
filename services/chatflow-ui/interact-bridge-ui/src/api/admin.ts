@@ -9,7 +9,8 @@
  */
 
 import { API_BASE_URL } from './config';
-import type { Chatflow, ChatflowStats, BulkAssignmentResult } from '../types/admin';
+import type { BulkAssignmentResult } from '../types/admin';
+import type { Chatflow, ChatflowStats, ChatflowUser} from '../types/chatflow';
 import type { User } from '../types/auth';
 import axios from 'axios';
 
@@ -55,7 +56,10 @@ export const getAllChatflows = async (): Promise<Chatflow[]> => {
   const response = await axios.get(`${API_BASE_URL}/api/v1/admin/chatflows`, {
     headers: getAuthHeader()
   });
-  return response.data;
+  return response.data.map((chatflow: any) => ({
+    ...chatflow,
+    id: chatflow.flowise_id, // 將 flowise_id 複製到 id 字段，確保兼容性
+  }));
 };
 
 /**
@@ -73,11 +77,27 @@ export const getSpecificChatflow = async (id: string): Promise<Chatflow> => {
  * Gets a list of all users assigned to a specific chatflow.
  * Evidence: `quickUserAccessListAndChat_03.py` calls this endpoint.
  */
-export const getChatflowUsers = async (id: string): Promise<User[]> => {
-  const response = await axios.get(`${API_BASE_URL}/api/v1/admin/chatflows/${id}/users`, {
-    headers: getAuthHeader()
-  });
-  return response.data;
+// src/api/admin.ts
+export const getChatflowUsers = async (flowiseId: string): Promise<ChatflowUser[]> => {
+  try {
+    const response = await axios.get(
+      `${API_BASE_URL}/api/v1/admin/chatflows/${flowiseId}/users`,
+      { headers: getAuthHeader() }
+    );
+    
+    // 確保返回正確的類型
+    return response.data.map((user: any): ChatflowUser => ({
+      _id: user.external_user_id || user._id || user.id, // make this more compatible 
+      username: user.username || user.name || user.email.split('@')[0],
+      email: user.email,
+      role: user.role || 'user',
+      assigned_at: user.assigned_at || user.created_at || new Date().toISOString(),
+      external_user_id: user.external_user_id || user.externalId,
+    }));
+  } catch (error) {
+    console.error('Error fetching chatflow users:', error);
+    throw error;
+  }
 };
 
 /**
