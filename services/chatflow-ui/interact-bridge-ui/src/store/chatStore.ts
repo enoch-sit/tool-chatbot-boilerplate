@@ -13,8 +13,7 @@
 import { create } from 'zustand';
 import { streamChatAndStore } from '../api/chat';
 import { getMyChatflows } from '../api/chatflows';
-// TODO: Implement and import API functions for session management.
-// import { createSession, getUserSessions, getSessionHistory } from '../api'; 
+import { createSession, getUserSessions, getSessionHistory } from '../api/sessions';
 import type { Message, ChatSession, StreamEvent } from '../types/chat';
 import type {Chatflow} from '../types/chatflow';
 
@@ -34,6 +33,7 @@ interface ChatState {
   error: string | null; // Stores any error messages.
 
   // --- Actions ---
+  
   addMessage: (message: Message) => void; // Adds a new message to the list.
   updateMessage: (messageId: string, updates: Partial<Message>) => void; // Updates an existing message.
   clearMessages: () => void; // Clears all messages from the current session.
@@ -78,17 +78,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   /**
    * Sets the current session and loads its message history.
-   * NOTE: Session history loading is not yet implemented.
+   * Evidence from mimic_client_06: history endpoint provides message list
    */
   setCurrentSession: async (session) => {
     set({ currentSession: session, isLoading: true, messages: [] });
+    
     if (session) {
       try {
-        // TODO: Implement `getSessionHistory` in the API layer and uncomment.
-        // const history = await getSessionHistory(session.id);
-        // set({ messages: history, isLoading: false });
-        console.log("Session history loading not implemented yet.");
-        set({ isLoading: false });
+        const history = await getSessionHistory(session.id);
+        set({ messages: history, isLoading: false });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load session history';
         set({ error: errorMessage, isLoading: false });
@@ -103,20 +101,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   /**
    * Creates a new chat session for a given chatflow.
-   * NOTE: This is a mock implementation. It should be replaced with a real API call.
+   * Evidence from mimic_client_05: successful creation returns session_id
    */
-  createNewSession: async (chatflowId, topic) => {
+  createNewSession: async (chatflowId: string, topic: string) => {
     set({ isLoading: true, error: null });
     try {
-      // TODO: Implement `createSession` in the API layer and uncomment.
-      // const session = await createSession(chatflowId, topic);
-      // set(state => ({ sessions: [session, ...state.sessions], currentSession: session, isLoading: false }));
-      // return session;
-      console.log("Create session not implemented yet. Using mock session.");
-      const tempSession: ChatSession = { id: Date.now().toString(), topic, chatflow_id: chatflowId, created_at: new Date().toISOString(), user_id: 'mock_user' };
-      set(state => ({ sessions: [tempSession, ...state.sessions], currentSession: tempSession, isLoading: false }));
-      get().clearMessages();
-      return tempSession;
+      const session = await createSession(chatflowId, topic);
+      
+      // Add to sessions list and set as current
+      set(state => ({ 
+        sessions: [session, ...state.sessions], 
+        currentSession: session, 
+        isLoading: false,
+        messages: [] // Clear messages for new session
+      }));
+      
+      return session;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create session';
       set({ error: errorMessage, isLoading: false });
@@ -138,16 +138,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   /**
    * Fetches the user's existing chat sessions.
-   * NOTE: This is a mock implementation.
+   * Evidence from mimic_client_06: endpoint returns sessions array
    */
   loadSessions: async () => {
     set({ isLoading: true, error: null });
     try {
-      // TODO: Implement `getUserSessions` in the API layer and uncomment.
-      // const sessionData = await getUserSessions();
-      // set({ sessions: sessionData.sessions, isLoading: false });
-      console.log("Load sessions not implemented yet. Using empty list.");
-      set({ sessions: [], isLoading: false });
+      const sessions = await getUserSessions();
+      set({ sessions, isLoading: false });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load sessions';
       set({ error: errorMessage, isLoading: false });
@@ -155,14 +152,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   /**
-   * This is the core function for handling the real-time chat interaction.
-   * It sends the user's prompt to the backend and processes the resulting stream of events.
+   * Core chat function using session ID.
+   * Evidence from mimic_client_05/06: sessionId is passed in predict payload
    */
   streamAssistantResponse: async (prompt: string) => {
-    // Get the necessary state from the store
     const { currentSession, currentChatflow, addMessage, updateMessage } = get();
 
-    // Guard against missing session or chatflow
     if (!currentSession) {
       get().setError("Cannot send message: No active session selected.");
       return;
@@ -172,7 +167,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    // 1. Add the user's message to the UI immediately.
+    // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
       session_id: currentSession.id,
@@ -182,21 +177,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
     addMessage(userMessage);
 
-    // 2. Create a placeholder for the bot's response.
+    // Create assistant message placeholder
     const assistantMessageId = (Date.now() + 1).toString();
     const assistantMessage: Message = {
       id: assistantMessageId,
       session_id: currentSession.id,
       sender: 'bot',
-      content: '', // Start with empty content, will be populated by the stream.
+      content: '',
       timestamp: new Date().toISOString(),
-      streamEvents: [], // Store the raw events for debugging.
+      streamEvents: [],
     };
     addMessage(assistantMessage);
 
     set({ isStreaming: true, error: null });
 
-    // 3. Define the callback for handling each event from the stream.
     const onStreamEvent = (event: StreamEvent) => {
       const currentMessages = get().messages;
       const messageIndex = currentMessages.findIndex(m => m.id === assistantMessageId);
@@ -214,15 +208,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       updateMessage(assistantMessageId, updatedMessage);
     };
 
-    // 4. Define the error handler for the stream.
     const onError = (error: Error) => {
       console.error('Stream error:', error);
       set({ error: error.message, isStreaming: false });
     };
 
-    // 5. Initiate the stream by calling the CORRECTED API function.
     try {
-      // --- THIS IS THE CORRECTED USAGE ---
+      // Evidence: Python scripts show sessionId is required for stream/store
       await streamChatAndStore(
         currentChatflow.id,
         currentSession.id,
@@ -230,7 +222,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         onStreamEvent,
         onError
       );
-      // --- END OF CORRECTION ---
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       updateMessage(assistantMessageId, {

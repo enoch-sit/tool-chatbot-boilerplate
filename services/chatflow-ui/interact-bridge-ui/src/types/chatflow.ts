@@ -42,6 +42,7 @@ export interface Chatflow {
   synced_at?: string;
   sync_status: "active" | "inactive" | "error";
   sync_error?: string | null;
+  session_id?: string | null; // specify a session
 }
 
 export interface ChatflowUser {

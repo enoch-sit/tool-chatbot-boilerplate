@@ -37,6 +37,7 @@ import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
 import AddIcon from '@mui/icons-material/Add';
 import FolderIcon from '@mui/icons-material/Folder';
+import NoSsr from '@mui/material/NoSsr';
 
 const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -89,17 +90,27 @@ const ChatPage: React.FC = () => {
    * Handles the user selecting a different session from the dropdown.
    * The store action will then take care of loading the message history for that session.
    */
-  const handleSessionChange = (
-    event: React.SyntheticEvent | null,
-    newValue: string | null
-  ) => {
-    if (newValue) {
-      const selectedSession = sessions.find(s => s.id === newValue);
-      if (selectedSession) {
-        setCurrentSession(selectedSession);
-      }
+  // const handleSessionChange = (
+  //   event: React.SyntheticEvent | null,
+  //   newValue: string | null
+  // ) => {
+  //   if (newValue) {
+  //     const selectedSession = sessions.find(s => s.id === newValue);
+  //     if (selectedSession) {
+  //       setCurrentSession(selectedSession);
+  //     }
+  //   }
+  // };
+  const handleSessionChange = (event: any, newValue: string | null) => {
+  console.log('Session change triggered with value:', newValue);
+  if (newValue && sessions) {
+    const selectedSession = sessions.find(s => s.session_id === newValue); // ✅ Use session_id
+    console.log('Found session:', selectedSession);
+    if (selectedSession) {
+      setCurrentSession(selectedSession);
     }
-  };
+  }
+};
 
   /**
    * Handles the creation of a new chat session.
@@ -126,12 +137,39 @@ const ChatPage: React.FC = () => {
           <Typography level="body-sm" color="neutral">{t('auth.welcome')}, {user?.username}</Typography>
         </Stack>
         <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-          <Select placeholder={t('chat.selectChatflow')} value={currentChatflow?.id || ''} onChange={handleChatflowChange} startDecorator={<FolderIcon />} sx={{ minWidth: 200 }} disabled={isLoading}>
-            {chatflows.map((chatflow) => (<Option key={chatflow.id} value={chatflow.id}>{chatflow.name}</Option>))}
-          </Select>
-          <Select placeholder={t('chat.selectSession', 'Select session')} value={currentSession?.id || ''} onChange={handleSessionChange} sx={{ minWidth: 200 }} disabled={!currentChatflow || isLoading}>
-            {sessions.filter(s => s.chatflow_id === currentChatflow?.id).map((session) => (<Option key={session.id} value={session.id}>{session.topic}</Option>))}
-          </Select>
+          
+            <Select 
+              placeholder={t('chat.selectChatflow')} value={currentChatflow?.id || ''} 
+              onChange={handleChatflowChange} 
+              startDecorator={<FolderIcon />} 
+              sx={{ minWidth: 200 }} 
+              disabled={isLoading}>
+              {chatflows.map((chatflow) => (<Option key={chatflow.id} value={chatflow.id}>{chatflow.name}</Option>))}
+            </Select>
+            <NoSsr>
+            <Select 
+              placeholder={t('chat.selectSession', 'Select session')} 
+              value={currentSession?.id || ''} 
+              onChange={handleSessionChange} 
+              sx={{ minWidth: 200 }} 
+              disabled={!currentChatflow || isLoading}
+            >
+              
+               {(() => {
+                  console.log('Sessions data:', sessions); // Move console.log here
+                  return sessions
+                    .filter(s => s.chatflow_id === currentChatflow?.id)
+                    .map((session, idx) => {
+                      console.log('Rendering session:', session, 'at index:', idx);
+                      return (
+                        <Option key={String(session.id) + String(idx)} value={session.session_id}>
+                          {session.topic}
+                        </Option>
+                      );
+                    });
+                })()}
+            </Select>
+          </NoSsr>
           <Button startDecorator={<AddIcon />} onClick={() => setShowNewSessionModal(true)} disabled={!currentChatflow || isLoading}>{t('chat.newSession')}</Button>
         </Stack>
       </Sheet>
