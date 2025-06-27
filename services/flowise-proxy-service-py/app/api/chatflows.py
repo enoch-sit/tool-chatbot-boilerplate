@@ -95,6 +95,91 @@ async def list_chatflows(
         logger.error(f"Error listing chatflows for user {current_user.get('email')}: {e}")
         raise HTTPException(status_code=500, detail="An error occurred while fetching chatflows.")
 
+@router.get("/my-chatflows", response_model=List[Dict])
+async def get_my_chatflows(
+    current_user: Dict = Depends(authenticate_user)
+):
+    """
+    Get list of chatflows accessible to the current user.
+    This endpoint returns chatflows from the local database that the user has access to.
+    """
+    try:
+        # FIXED: Get the actual local user ID from the database (same logic as main endpoint)
+        local_user = await get_local_user_from_jwt(current_user)
+        
+        if not local_user:
+            logger.error(f"❌ Local user not found for JWT: {current_user}")
+            return []
+        
+        local_user_id = str(local_user.id)
+        logger.info(f"✅ My-chatflows: Found local user: {local_user.email} with local ID: {local_user_id}")
+        
+        # Get user's active chatflow access records using LOCAL user ID
+        user_chatflows = await UserChatflow.find(
+            UserChatflow.external_user_id == current_user["sub"],  # Use local MongoDB ObjectId as string
+            UserChatflow.is_active == True
+        ).to_list()
+        
+        if not user_chatflows:
+            logger.info(f"No active chatflows found for user {local_user_id}")
+            return []
+        
+        # Extract chatflow IDs (these are flowise_ids stored in chatflow_id field)
+        chatflow_ids = [uc.chatflow_id for uc in user_chatflows]
+
+        # Original (find nothing)
+        # Get chatflow details from local database
+        # chatflows = await Chatflow.find(
+        #     In(Chatflow.flowise_id, chatflow_ids),
+        #     Chatflow.sync_status != "deleted",  # Exclude deleted chatflows
+        #     # Chatflow.deployed == True  # Only show deployed chatflows to users
+        # ).to_list()
+
+        # Throw error: 'ExpressionField' object is not callable
+        # chatflows = await Chatflow.find(
+        #     Chatflow.flowise_id.in_(chatflow_ids),
+        #     Chatflow.sync_status != "deleted",  # Exclude deleted chatflows
+        #     # Chatflow.deployed == True  # Only show deployed chatflows to users
+        # ).to_list()
+
+        object_ids = [ObjectId(cid) for cid in chatflow_ids if ObjectId.is_valid(cid)]
+
+        chatflows = await Chatflow.find(
+            In(Chatflow.id, object_ids),  # This works
+            Chatflow.sync_status != "deleted",
+        ).to_list()
+        
+        # Create response with user-friendly information
+        result = []
+        for chatflow in chatflows:
+            # Find corresponding access record for additional info
+            access_record = next(
+                (uc for uc in user_chatflows if uc.chatflow_id == chatflow.flowise_id), 
+                None
+            )
+            
+            chatflow_dict = {
+                "id": chatflow.flowise_id,
+                "name": chatflow.name,
+                "description": chatflow.description,
+                "category": chatflow.category,
+                "type": chatflow.type,
+                "deployed": chatflow.deployed,
+                "assigned_at": access_record.assigned_at.isoformat() if access_record and access_record.assigned_at else None
+            }
+            result.append(chatflow_dict)
+        
+        logger.info(f"✅ My-chatflows: Returning {len(result)} accessible chatflows for user {local_user.email}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting chatflows for user {current_user.get('username', 'unknown')}: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Internal server error while retrieving your chatflows"
+        )
+
+
 @router.get("/{chatflow_id}")
 async def get_chatflow(
     chatflow_id: str,
@@ -190,71 +275,3 @@ async def get_chatflow_config(
             detail=f"Failed to retrieve chatflow config: {str(e)}"
         )
 
-@router.get("/my-chatflows", response_model=List[Dict])
-async def get_my_chatflows(
-    current_user: Dict = Depends(authenticate_user)
-):
-    """
-    Get list of chatflows accessible to the current user.
-    This endpoint returns chatflows from the local database that the user has access to.
-    """
-    try:
-        # FIXED: Get the actual local user ID from the database (same logic as main endpoint)
-        local_user = await get_local_user_from_jwt(current_user)
-        
-        if not local_user:
-            logger.error(f"❌ Local user not found for JWT: {current_user}")
-            return []
-        
-        local_user_id = str(local_user.id)
-        logger.info(f"✅ My-chatflows: Found local user: {local_user.email} with local ID: {local_user_id}")
-        
-        # Get user's active chatflow access records using LOCAL user ID
-        user_chatflows = await UserChatflow.find(
-            UserChatflow.user_id == local_user_id,  # Use local MongoDB ObjectId as string
-            UserChatflow.is_active == True
-        ).to_list()
-        
-        if not user_chatflows:
-            logger.info(f"No active chatflows found for user {local_user_id}")
-            return []
-        
-        # Extract chatflow IDs (these are flowise_ids stored in chatflow_id field)
-        chatflow_ids = [uc.chatflow_id for uc in user_chatflows]
-        
-        # Get chatflow details from local database
-        chatflows = await Chatflow.find(
-            In(Chatflow.id, chatflow_ids),
-            Chatflow.sync_status != "deleted",  # Exclude deleted chatflows
-            # Chatflow.deployed == True  # Only show deployed chatflows to users
-        ).to_list()
-        
-        # Create response with user-friendly information
-        result = []
-        for chatflow in chatflows:
-            # Find corresponding access record for additional info
-            access_record = next(
-                (uc for uc in user_chatflows if uc.chatflow_id == chatflow.flowise_id), 
-                None
-            )
-            
-            chatflow_dict = {
-                "id": chatflow.flowise_id,
-                "name": chatflow.name,
-                "description": chatflow.description,
-                "category": chatflow.category,
-                "type": chatflow.type,
-                "deployed": chatflow.deployed,
-                "assigned_at": access_record.assigned_at.isoformat() if access_record and access_record.assigned_at else None
-            }
-            result.append(chatflow_dict)
-        
-        logger.info(f"✅ My-chatflows: Returning {len(result)} accessible chatflows for user {local_user.email}")
-        return result
-        
-    except Exception as e:
-        logger.error(f"Error getting chatflows for user {current_user.get('username', 'unknown')}: {e}")
-        raise HTTPException(
-            status_code=500, 
-            detail="Internal server error while retrieving your chatflows"
-        )
