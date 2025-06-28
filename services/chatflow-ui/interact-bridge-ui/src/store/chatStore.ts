@@ -85,7 +85,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     
     if (session) {
       try {
-        const history = await getSessionHistory(session.id);
+        const history = await getSessionHistory(session.session_id);
         set({ messages: history, isLoading: false });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load session history';
@@ -170,7 +170,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
-      session_id: currentSession.id,
+      session_id: currentSession.session_id,
       sender: 'user',
       content: prompt,
       timestamp: new Date().toISOString(),
@@ -181,7 +181,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const assistantMessageId = (Date.now() + 1).toString();
     const assistantMessage: Message = {
       id: assistantMessageId,
-      session_id: currentSession.id,
+      session_id: currentSession.session_id,
       sender: 'bot',
       content: '',
       timestamp: new Date().toISOString(),
@@ -217,7 +217,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Evidence: Python scripts show sessionId is required for stream/store
       await streamChatAndStore(
         currentChatflow.id,
-        currentSession.id,
+        currentSession.session_id,
         prompt,
         onStreamEvent,
         onError

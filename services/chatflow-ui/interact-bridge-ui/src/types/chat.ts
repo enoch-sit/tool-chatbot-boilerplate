@@ -27,7 +27,7 @@ export interface Message {
  * The structure is based on data returned from endpoints in `actual_chat.py`.
  */
 export interface ChatSession {
-  id: string;
+  session_id: string;
   topic: string; // A title or topic for the session
   created_at: string;
   chatflow_id: string; // The ID of the agent being chatted with
