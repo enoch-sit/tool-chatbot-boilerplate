@@ -12,14 +12,30 @@
  * Represents a single chat message in a session. This is a fundamental object
  * used to display the conversation history in the UI.
  */
+// export interface Message {
+//   id?: string; // Optional ID, as it may not be present on new messages
+//   session_id: string;
+//   sender: 'user' | 'bot' | 'system'; // Differentiates between user, AI, and system messages
+//   content: string; // The textual content of the message
+//   timestamp?: string;
+//   metadata?: Record<string, any>; // For any extra data associated with the message
+//   streamEvents?: StreamEvent[]; // Stores the raw events for a bot message, for debugging or reprocessing
+// }
+
 export interface Message {
-  id?: string; // Optional ID, as it may not be present on new messages
+  id?: string;
   session_id: string;
-  sender: 'user' | 'bot' | 'system'; // Differentiates between user, AI, and system messages
-  content: string; // The textual content of the message
+  sender: 'user' | 'bot' | 'system';
+  content: string;
   timestamp?: string;
-  metadata?: Record<string, any>; // For any extra data associated with the message
-  streamEvents?: StreamEvent[]; // Stores the raw events for a bot message, for debugging or reprocessing
+  metadata?: Record<string, any>;
+  streamEvents?: StreamEvent[];
+  isStreaming?: boolean; // Add this to track if message is still streaming
+  timeMetadata?: {
+    start: number;
+    end: number;
+    delta: number;
+  };
 }
 
 /**
@@ -95,8 +111,26 @@ export interface EndEvent {
  * The definition of these events is critical and is based entirely on the
  * `flowise_agent_stream_struct.md` documentation.
  */
+
+// src/types/chat.ts - Add to StreamEvent union
+export interface ContentEvent {
+  event: 'content';
+  data: {
+    content: string;
+    timeMetadata?: {
+      start: number;
+      end: number;
+      delta: number;
+    };
+    usageMetadata?: any;
+    calledTools?: any[];
+  };
+}
+
+// Update the StreamEvent union type
 export type StreamEvent =
   | TokenEvent
+  | ContentEvent  // Add this
   | AgentFlowEvent
   | NextAgentFlowEvent
   | AgentFlowExecutedDataEvent
@@ -104,4 +138,5 @@ export type StreamEvent =
   | UsageMetadataEvent
   | MetadataEvent
   | EndEvent;
+
 

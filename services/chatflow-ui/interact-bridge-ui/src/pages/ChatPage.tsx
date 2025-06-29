@@ -149,7 +149,7 @@ const ChatPage: React.FC = () => {
             <NoSsr>
             <Select 
               placeholder={t('chat.selectSession', 'Select session')} 
-              value={currentSession?.id || ''} 
+              value={currentSession?.session_id || ''} 
               onChange={handleSessionChange} 
               sx={{ minWidth: 200 }} 
               disabled={!currentChatflow || isLoading}
@@ -162,7 +162,7 @@ const ChatPage: React.FC = () => {
                     .map((session, idx) => {
                       console.log('Rendering session:', session, 'at index:', idx);
                       return (
-                        <Option key={String(session.id) + String(idx)} value={session.session_id}>
+                        <Option key={String(session.session_id) + String(idx)} value={session.session_id}>
                           {session.topic}
                         </Option>
                       );

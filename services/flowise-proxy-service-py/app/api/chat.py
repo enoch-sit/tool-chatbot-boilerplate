@@ -579,13 +579,13 @@ async def chat_predict_stream_store(
                 else:
                     # If no data was streamed or the response is empty, log as a failed transaction
                     await accounting_service.log_transaction(
-                        user_id, "chat", chatflow_id, cost, False
+                        user_token, user_id, "chat", chatflow_id, cost, False
                     )
 
             except Exception as e:
                 print(f"Error during stream processing and storing: {e}")
                 await accounting_service.log_transaction(
-                    user_id, "chat", chatflow_id, cost, False
+                    user_token, user_id, "chat", chatflow_id, cost, False
                 )
                 yield f"STREAM_ERROR: {str(e)}"
 
@@ -598,7 +598,9 @@ async def chat_predict_stream_store(
 
 
 @router.get("/credits")
-async def get_user_credits(request: Request, current_user: Dict = Depends(authenticate_user)):
+async def get_user_credits(
+    request: Request, current_user: Dict = Depends(authenticate_user)
+):
     """Get current user's credit balance"""
     try:
         accounting_service = AccountingService()
@@ -607,7 +609,7 @@ async def get_user_credits(request: Request, current_user: Dict = Depends(authen
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Invalid authorization header")
-        
+
         user_token = auth_header.split(" ")[1]
 
         credits = await accounting_service.check_user_credits(user_id, user_token)

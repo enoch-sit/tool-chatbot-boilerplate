@@ -6,7 +6,7 @@
  * of events from the backend.
  */
 
-import type { StreamEvent, Message } from '../types/chat';
+import type { StreamEvent } from '../types/chat';
 import { API_BASE_URL } from './config';
 import { StreamParser } from '../utils/streamParser';
 import { useAuthStore } from '../store/authStore';
@@ -85,7 +85,15 @@ export const streamChatAndStore = async (
         }
       } catch (refreshError) {
         useAuthStore.getState().logout();
-        throw new Error('Authentication failed');
+        let errorMsg = '';
+        if (refreshError instanceof Error) {
+          errorMsg = refreshError.message;
+        } else if (typeof refreshError === 'object' && refreshError !== null && 'message' in refreshError) {
+          errorMsg = String((refreshError as { message: unknown }).message);
+        } else {
+          errorMsg = String(refreshError);
+        }
+        throw new Error('Authentication failed: ' + errorMsg);
       }
     }
     throw new Error(`HTTP error! status: ${response.status}`);

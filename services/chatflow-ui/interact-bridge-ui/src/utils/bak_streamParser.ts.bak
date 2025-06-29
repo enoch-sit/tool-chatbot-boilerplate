@@ -1,6 +1,11 @@
-// src/utils/streamParser.ts
+// File: chatbot-app/src/utils/streamParser.ts
 import type { StreamEvent } from '../types/chat';
 
+/**
+ * A class to process a stream of concatenated JSON objects.
+ * The stream is expected to be a series of JSON objects without any delimiters.
+ * e.g., {"event":"start"}{"event":"chunk", "data":"hello"}{"event":"end"}
+ */
 export class StreamParser {
   private buffer: string = '';
   private onData: (data: StreamEvent) => void;
@@ -11,12 +16,20 @@ export class StreamParser {
     this.onError = onError;
   }
 
+  /**
+   * Appends a new chunk of data to the internal buffer and processes it.
+   * @param chunk The string chunk received from the stream.
+   */
   public processChunk(chunk: string): void {
     this.buffer += chunk;
-    this.parseEvents();
+    this.parse();
   }
 
-  private parseEvents(): void {
+  /**
+   * Attempts to parse JSON objects from the buffer.
+   * It finds the boundaries of each JSON object and parses it.
+   */
+  private parse(): void {
     let braceCount = 0;
     let startIndex = -1;
 
@@ -32,37 +45,22 @@ export class StreamParser {
           const objectStr = this.buffer.substring(startIndex, i + 1);
           try {
             const parsed = JSON.parse(objectStr);
-            this.handleParsedEvent(parsed);
-          } catch {
-            this.onError(new Error(`Failed to parse JSON: ${objectStr}`));
+            this.onData(parsed as StreamEvent);
+          } catch (e) {
+            this.onError(new Error(`Failed to parse JSON object: ${objectStr}`));
           }
+          // Reset start index for the next object
           startIndex = -1;
         }
       }
     }
 
-    // Keep remaining buffer for next chunk
+    // Keep the remaining part of the buffer that couldn't be parsed
     if (startIndex !== -1) {
       this.buffer = this.buffer.substring(startIndex);
     } else {
+      // Clear buffer if no partial object is left
       this.buffer = '';
-    }
-  }
-
-  private handleParsedEvent(event: any): void {
-    // Handle the streaming structure shown in context [[4]][doc_4][[5]][doc_5]
-    if (event.output?.content) {
-      this.onData({
-        event: 'content',
-        data: {
-          content: event.output.content,
-          timeMetadata: event.output.timeMetadata,
-          usageMetadata: event.output.usageMetadata,
-          calledTools: event.output.calledTools
-        }
-      });
-    } else if (event.event) {
-      this.onData(event as StreamEvent);
     }
   }
 }

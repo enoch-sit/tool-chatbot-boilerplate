@@ -8,8 +8,8 @@ const MessageList: React.FC = () => {
 
   return (
     <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 2 }}>
-      {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
+      {messages.map((msg, idx) => (
+        <MessageBubble key={String(msg.id) + String(idx)} message={msg} />
       ))}
     </Box>
   );

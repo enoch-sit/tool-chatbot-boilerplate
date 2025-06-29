@@ -158,8 +158,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamAssistantResponse: async (prompt: string) => {
     const { currentSession, currentChatflow, addMessage, updateMessage } = get();
 
-    if (!currentSession || !currentChatflow) {
-      get().setError("Cannot send message: No active session or chatflow selected.");
+    if (!currentSession) {
+      get().setError("Cannot send message: No active session selected.");
+      return;
+    }
+    if (!currentChatflow) {
+      get().setError("Cannot send message: No chatflow selected.");
       return;
     }
 
@@ -173,7 +177,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
     addMessage(userMessage);
 
-    // Create streaming assistant message
+    // Create assistant message placeholder
     const assistantMessageId = (Date.now() + 1).toString();
     const assistantMessage: Message = {
       id: assistantMessageId,
@@ -181,51 +185,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sender: 'bot',
       content: '',
       timestamp: new Date().toISOString(),
-      isStreaming: true,
       streamEvents: [],
     };
     addMessage(assistantMessage);
 
     set({ isStreaming: true, error: null });
 
-    let accumulatedContent = '';
-
     const onStreamEvent = (event: StreamEvent) => {
-      if (event.event === 'content' && event.data?.content) {
-        // Handle complete content updates [[4]][doc_4][[5]][doc_5]
-        const contentData = event.data;
-        accumulatedContent = contentData.content;
-        
-        updateMessage(assistantMessageId, {
-          content: accumulatedContent,
-          timeMetadata: contentData.timeMetadata,
-          streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event]
-        });
-      } else if (event.event === 'token' && typeof event.data === 'string') {
-        // Handle incremental token updates
-        accumulatedContent += event.data;
-        updateMessage(assistantMessageId, {
-          content: accumulatedContent
-        });
+      const currentMessages = get().messages;
+      const messageIndex = currentMessages.findIndex(m => m.id === assistantMessageId);
+      if (messageIndex === -1) return;
+
+      const updatedMessage = { ...currentMessages[messageIndex] };
+      updatedMessage.streamEvents = [...(updatedMessage.streamEvents || []), event];
+
+      if (event.event === 'token' && typeof event.data === 'string') {
+        updatedMessage.content += event.data;
       } else if (event.event === 'end') {
-        // Mark streaming as complete
-        updateMessage(assistantMessageId, {
-          isStreaming: false
-        });
         set({ isStreaming: false });
       }
+      
+      updateMessage(assistantMessageId, updatedMessage);
     };
 
     const onError = (error: Error) => {
       console.error('Stream error:', error);
-      updateMessage(assistantMessageId, {
-        content: accumulatedContent || `Error: ${error.message}`,
-        isStreaming: false
-      });
       set({ error: error.message, isStreaming: false });
     };
 
     try {
+      // Evidence: Python scripts show sessionId is required for stream/store
       await streamChatAndStore(
         currentChatflow.id,
         currentSession.session_id,
@@ -237,7 +226,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       updateMessage(assistantMessageId, {
         content: `Error: ${errorMessage}`,
-        isStreaming: false
       });
       set({ error: errorMessage, isStreaming: false });
     }
