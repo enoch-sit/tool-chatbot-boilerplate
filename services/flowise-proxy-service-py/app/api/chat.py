@@ -430,19 +430,19 @@ async def chat_predict_stream(
                 # Log transaction after the stream is finished
                 if response_streamed:
                     await accounting_service.log_transaction(
-                        user_id, "chat", chatflow_id, cost, True
+                        user_token, user_id, "chat", chatflow_id, cost, True
                     )
                 else:
                     # If no data was streamed, log as a failed transaction
                     await accounting_service.log_transaction(
-                        user_id, "chat", chatflow_id, cost, False
+                        user_token, user_id, "chat", chatflow_id, cost, False
                     )
 
             except Exception as e:
                 # Log the error for debugging
                 print(f"Error during raw stream processing: {e}")
                 await accounting_service.log_transaction(
-                    user_id, "chat", chatflow_id, cost, False
+                    user_token, user_id, "chat", chatflow_id, cost, False
                 )
                 # Yield a final error message in the stream if something goes wrong.
                 yield f"STREAM_ERROR: {str(e)}"
@@ -530,6 +530,8 @@ async def chat_predict_stream_store(
 
                 response_streamed = False
                 for chunk in completion:
+                    print(chunk)
+                    print("--")
                     chunk_str = ""
                     if isinstance(chunk, bytes):
                         chunk_str = chunk.decode("utf-8", errors="ignore")
@@ -565,7 +567,7 @@ async def chat_predict_stream_store(
 
                 if response_streamed and full_assistant_response.strip():
                     await accounting_service.log_transaction(
-                        user_id, "chat", chatflow_id, cost, True
+                        user_token, user_id, "chat", chatflow_id, cost, True
                     )
                     # Save user message first, then assistant message
                     await user_message.insert()
