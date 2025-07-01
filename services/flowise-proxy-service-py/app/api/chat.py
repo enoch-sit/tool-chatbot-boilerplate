@@ -19,6 +19,7 @@ import uuid
 import hashlib
 from datetime import datetime
 import json
+from json_repair import repair_json
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -502,8 +503,9 @@ async def chat_predict_stream_store(
         # await user_message.insert() # This is deferred until the stream is successful
 
         async def stream_generator() -> AsyncGenerator[str, None]:
-            full_assistant_response = ""
-            buffer = ""
+            """Generator to stream responses from Flowise and store messages."""
+            # List to collect full assistant response chunks
+            full_assistant_response_ls = []
             try:
                 # Initialize Flowise client
                 flowise_client = Flowise(
@@ -530,42 +532,61 @@ async def chat_predict_stream_store(
 
                 response_streamed = False
                 for chunk in completion:
-                    print(chunk)
-                    print("--")
+
                     chunk_str = ""
                     if isinstance(chunk, bytes):
                         chunk_str = chunk.decode("utf-8", errors="ignore")
                     else:
                         chunk_str = str(chunk)
-
-                    buffer += chunk_str
-
-                    decoder = json.JSONDecoder()
-                    pos = 0
-                    while pos < len(buffer):
-                        # Skip whitespace
-                        if buffer[pos].isspace():
-                            pos += 1
-                            continue
-                        try:
-                            obj, end_pos = decoder.raw_decode(buffer[pos:])
-
-                            # Process object
-                            if obj.get("event") == "token":
-                                full_assistant_response += obj.get("data", "")
-
-                            pos += end_pos
-                        except json.JSONDecodeError:
-                            # Incomplete JSON object in buffer, wait for next chunk
-                            break
-
-                    # Keep the unparsed part of the buffer
-                    buffer = buffer[pos:]
-
-                    yield chunk_str
+                    good_json_string = repair_json(chunk_str)
+                    full_assistant_response_ls.append(good_json_string)
+                    print(good_json_string)
+                    print("--")
+                    yield good_json_string
                     response_streamed = True
 
-                if response_streamed and full_assistant_response.strip():
+                if response_streamed:
+
+                    def process_json(full_assistant_response_ls):
+                        """
+                        Process a list of JSON strings, combine consecutive token events, and return as a JSON array string.
+
+                        Args:
+                            full_assistant_response_ls (list): List of JSON strings representing events.
+                        Returns:
+                            str: A single JSON array string with events in the correct order.
+                        """
+                        result = []  # List to store the final sequence of event objects
+                        token_data = ""  # String to accumulate data from "token" events
+
+                        for good_json_string in full_assistant_response_ls:
+                            try:
+                                obj = json.loads(
+                                    good_json_string
+                                )  # Parse JSON string to dictionary
+                                if obj["event"] == "token":
+                                    token_data += obj["data"]  # Accumulate token data
+                                else:
+                                    # If we have accumulated token data, add it as a single event
+                                    if token_data:
+                                        result.append(
+                                            {"event": "token", "data": token_data}
+                                        )
+                                        token_data = ""  # Reset token data
+                                    result.append(obj)  # Add the non-token event
+                            except json.JSONDecodeError:
+                                continue  # Skip invalid JSON strings
+
+                        # If there are any remaining tokens (e.g., at the end of the list), add them
+                        if token_data:
+                            result.append({"event": "token", "data": token_data})
+
+                        # Convert the list of objects to a JSON array string
+                        final_json = (
+                            "[" + ",".join(json.dumps(obj) for obj in result) + "]"
+                        )
+                        return final_json
+
                     await accounting_service.log_transaction(
                         user_token, user_id, "chat", chatflow_id, cost, True
                     )
@@ -575,14 +596,16 @@ async def chat_predict_stream_store(
                         session_id=session_id,
                         user_id=user_id,
                         role="assistant",
-                        content=full_assistant_response,
+                        content=process_json(full_assistant_response_ls),
                     )
+                    print(f"Storing assistant message: {assistant_message}")
                     await assistant_message.insert()
                 else:
                     # If no data was streamed or the response is empty, log as a failed transaction
                     await accounting_service.log_transaction(
                         user_token, user_id, "chat", chatflow_id, cost, False
                     )
+                    print("No response streamed, logging as failed transaction")
 
             except Exception as e:
                 print(f"Error during stream processing and storing: {e}")
