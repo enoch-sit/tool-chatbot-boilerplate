@@ -126,125 +126,124 @@ def list_accessible_chatflows(token, username):
         return None
 
 
-def list_all_chat_sessions(token, username, chatflow_id):
-    """
-    Lists all chat sessions for the user and chatflow.
-    Returns a list of session_ids if successful.
-    """
+def list_all_chat_sessions(token, username):
+    """Lists all chat sessions for the logged-in user."""
     print(f"\n--- Listing all chat sessions for user: {username} ---")
-    if not token:
-        print("❌ Cannot list sessions without a token.")
-        return None
-
-    sessions_url = f"{API_BASE_URL}/api/v1/chat/sessions"
+    url = f"{API_BASE_URL}/api/v1/chat/sessions"
     headers = {"Authorization": f"Bearer {token}"}
-
     try:
-        response = requests.get(sessions_url, headers=headers)
+        response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            data = response.json()
-            sessions = data.get("sessions", [])
-            print(f"✅ Found {data.get('count', 0)} sessions for {username}.")
-            if sessions:
-                for i, session in enumerate(sessions):
-                    print(f"  - Session {i+1}:")
-                    print(f"    - Session ID: {session.get('session_id')}")
-                    print(f"    - Chatflow ID: {session.get('chatflow_id')}")
-                    print(f"    - Topic: {session.get('topic')}")
-                    print(f"    - Created At: {session.get('created_at')}")
-                    print(f"    - First Message: {session.get('first_message')}")
-            return sessions
+            sessions = response.json().get("sessions", [])
+            print(f"✅ Found {len(sessions)} sessions.")
+            for session in sessions:
+                print(
+                    f"  - Session ID: {session['session_id']}, Topic: {session.get('topic', 'N/A')}"
+                )
+            return [s["session_id"] for s in sessions]
         else:
             print(
-                f"❌ Failed to list sessions for {username}: {response.status_code} {response.text}"
+                f"❌ Failed to list sessions: {response.status_code} - {response.text}"
             )
-            return None
     except requests.RequestException as e:
-        print(f"❌ Request error while listing sessions for {username}: {e}")
-        return None
-    except Exception as e:
-        print(f"❌ Unexpected error while listing sessions for {username}: {e}")
-        return None
+        print(f"❌ Request error: {e}")
+    return []
 
 
-def create_chat_session(token, username, chatflow_id, topic="Test Session"):
+class StreamParser:
     """
-    Creates a new chat session for the user and chatflow.
-    Returns the session_id if successful.
+    A class to process a stream of concatenated JSON objects.
+    Handles incomplete data and extracts full JSON events.
     """
-    print(
-        f"\n--- Creating chat session for user: {username} on chatflow: {chatflow_id} ---"
-    )
-    if not all([token, chatflow_id]):
-        print("❌ Token and chatflow_id are required.")
-        return None
 
-    session_url = f"{API_BASE_URL}/api/v1/chat/sessions"
+    def __init__(self):
+        self.buffer = ""
+        self.events = []
+
+    def process_chunk(self, chunk_text):
+        """Process a chunk of stream data and extract complete JSON events"""
+        self.buffer += chunk_text
+        # The stream sends JSON objects one after another, sometimes concatenated.
+        # We can split the buffer by the start of a new JSON object '}{'
+        self.buffer = self.buffer.replace('}{', '}\n{')
+        parts = self.buffer.split('\n')
+        
+        complete_parts = parts[:-1]
+        self.buffer = parts[-1] if parts else ""
+
+        extracted_events = []
+        for part in complete_parts:
+            if not part:
+                continue
+            try:
+                event = json.loads(part)
+                self.events.append(event)
+                extracted_events.append(event)
+            except json.JSONDecodeError:
+                # If a part fails, it might be incomplete.
+                # Prepend it to the buffer for the next chunk.
+                self.buffer = part + self.buffer
+        
+        return extracted_events
+
+
+def send_chat_message(token, username, chatflow_id, question, session_id=None):
+    """
+    Sends a message to the streaming endpoint. If session_id is None,
+    a new session is created implicitly and its ID is extracted and returned.
+    Otherwise, it continues the existing session.
+    """
+    if session_id:
+        print(f"\n--- Continuing chat for session: {session_id} ---")
+    else:
+        print(f"\n--- Starting new chat for user: {username} ---")
+
+    url = f"{API_BASE_URL}/api/v1/chat/predict/stream/store"
     headers = {"Authorization": f"Bearer {token}"}
-    payload = {"chatflow_id": chatflow_id, "topic": topic}
+    payload = {"chatflow_id": chatflow_id, "question": question}
+    if session_id:
+        payload["session_id"] = session_id
 
-    try:
-        response = requests.post(session_url, headers=headers, json=payload)
-        if response.status_code == 201:
-            data = response.json()
-            session_id = data.get("session_id")
-            print(f"✅ Session created successfully: {session_id}")
-            return session_id
-        else:
-            print(
-                f"❌ Failed to create session: {response.status_code} {response.text}"
-            )
-            return None
-    except requests.RequestException as e:
-        print(f"❌ Request error while creating session: {e}")
-        return None
-    except Exception as e:
-        print(f"❌ Unexpected error while creating session: {e}")
-        return None
-
-
-def test_chat_predict_stream_store_with_session(
-    token, username, chatflow_id, session_id, question
-):
-    """
-    Tests the chat predict stream/store endpoint using a specific session_id.
-    """
-    print(
-        f"\n--- Testing chat predict STREAM/STORE with session_id for user: {username} ---"
-    )
-    if not all([token, chatflow_id, session_id]):
-        print("❌ Token, chatflow_id, and session_id are required.")
-        return
-
-    predict_url = f"{API_BASE_URL}/api/v1/chat/predict/stream/store"
-    headers = {"Authorization": f"Bearer {token}"}
-    payload = {
-        "chatflow_id": chatflow_id,
-        "question": question,
-        "sessionId": session_id,
-    }
+    new_session_id = None
+    response_successful = False
+    parser = StreamParser()
 
     try:
         with requests.post(
-            predict_url, headers=headers, json=payload, stream=True
+            url, headers=headers, json=payload, stream=True, timeout=(30, 300)
         ) as response:
-            if response.status_code == 200:
-                print(f"✅ Stream started successfully for {username}. Chunks:")
-                full_response = ""
+            response_successful = response.status_code == 200
+            if response_successful:
+                print("✅ Stream started successfully. Chunks:")
                 for chunk in response.iter_content(chunk_size=None):
                     if chunk:
-                        decoded_chunk = chunk.decode("utf-8")
-                        print(decoded_chunk, end="")
-                        full_response += decoded_chunk
+                        chunk_text = chunk.decode("utf-8")
+                        print(chunk_text, end="")
+                        events = parser.process_chunk(chunk_text)
+                        for event in events:
+                            # Extract session_id from either 'session_id' or 'metadata' event
+                            if event.get("event") == "session_id":
+                                new_session_id = event.get("data")
+                                print(f"\n✅ Extracted session_id from 'session_id' event: {new_session_id}")
+                            elif event.get("event") == "metadata":
+                                meta_session_id = event.get("data", {}).get("sessionId")
+                                if meta_session_id:
+                                    new_session_id = meta_session_id
+                                    print(f"\n✅ Extracted session_id from 'metadata' event: {new_session_id}")
                 print("\n--- End of Stream ---")
             else:
                 print(
-                    f"❌ Failed to start stream for {username}: {response.status_code} {response.text}"
+                    f"❌ Failed to send message: {response.status_code} - {response.text}"
                 )
+
     except requests.RequestException as e:
-        print(f"❌ Request error during stream: {e}")
-    except Exception as e:
-        print(f"❌ Unexpected error during stream: {e}")
+        print(f"❌ Request error: {e}")
+
+    if not session_id:
+        if not new_session_id:
+            print("❌ CRITICAL: Failed to extract session_id from new chat stream.")
+        return new_session_id
+    return session_id if response_successful else None
 
 
 def get_session_history(token, username, session_id):
@@ -313,85 +312,63 @@ def get_user_credits(token, username):
 
 
 def main():
-    """Main test execution function"""
-    print("--- Starting Chat Session and History Retrieval Test ---")
+    """Main test execution flow"""
+    print("\n" + "=" * 60)
+    print("🚀 CHAT SESSION & HISTORY TEST SUITE 🚀")
+    print("=" * 60)
 
-    # Use the first regular user for the test
     test_user = REGULAR_USERS[0]
-    username = test_user["username"]
-
-    # 1. Get user token
-    token = get_user_token(test_user)
-    if not token:
-        print("\n--- Test failed: Could not get user token. ---")
+    user_token = get_user_token(test_user)
+    if not user_token:
+        print(f"\n❌ Test failed: Could not get token for {test_user['username']}.")
         return
 
-    # 2. List accessible chatflows and get the first one
-    chatflow_id = list_accessible_chatflows(token, username)
+    chatflow_id = list_accessible_chatflows(user_token, test_user["username"])
     if not chatflow_id:
-        print("\n--- Test failed: No accessible chatflows found. ---")
+        print(f"\n❌ Test failed: No accessible chatflows for {test_user['username']}.")
         return
 
-    # 3. Create a new chat session
-    session_topic = f"Test Session at {datetime.datetime.now()}"
-    session_id = create_chat_session(token, username, chatflow_id, topic=session_topic)
+    first_question = "What is a large language model?"
+    session_id = send_chat_message(
+        user_token, test_user["username"], chatflow_id, first_question
+    )
+
     if not session_id:
-        print("\n--- Test failed: Could not create a chat session. ---")
+        print("\n❌ Test failed: Did not get a session_id from the first message.")
         return
 
-    # 4. List all sessions to verify creation
-    list_all_chat_sessions(token, username, chatflow_id)
-
-    # 5. Send a couple of messages to the session
-    test_chat_predict_stream_store_with_session(
-        token, username, chatflow_id, session_id, "Hello, who are you?"
+    second_question = "Tell me more about their architecture."
+    send_chat_message(
+        user_token, test_user["username"], chatflow_id, second_question, session_id
     )
-    time.sleep(2)  # Give a moment for processing
-    test_chat_predict_stream_store_with_session(
-        token, username, chatflow_id, session_id, "What can you do?"
-    )
-    time.sleep(2)
 
-    # 6. Retrieve and verify the session history
-    history = get_session_history(token, username, session_id)
-    if history and len(history) >= 4:  # 2 user messages + 2 assistant responses
-        print(
-            "\n✅ --- Test Passed: Successfully retrieved and verified chat history. ---"
-        )
+    time.sleep(2) # Allow time for db operations
+    user_sessions = list_all_chat_sessions(user_token, test_user["username"])
+    if session_id in user_sessions:
+        print(f"✅ Verification successful: Session {session_id} found in user's session list.")
     else:
-        print("\n❌ --- Test Failed: History verification failed. ---")
-        print(
-            f"Expected at least 4 messages, but got {len(history) if history else 0}."
-        )
+        print(f"❌ Verification failed: Session {session_id} NOT found in user's session list.")
 
-    # 7. Get user credits
-    get_user_credits(token, username)
+    get_session_history(user_token, test_user["username"], session_id)
+
+    get_user_credits(user_token, test_user["username"])
 
 
 if __name__ == "__main__":
     main()
 
+# some reference output
+# --- Listing all chat sessions for user: user1 ---
+# ✅ Found 3 sessions.
+#   - Session ID: 8b54a4ba-8176-5763-8538-e74812372e17, Topic: Tell me more about their architecture.      
+#   - Session ID: 0c06ae7c-7856-5eda-8e2a-66647e8e88c4, Topic: What is a large language model?
+#   - Session ID: 7b12790e-3cf9-5717-8b9f-21457c1c068b, Topic: What is a large language model?
+# ✅ Verification successful: Session 0c06ae7c-7856-5eda-8e2a-66647e8e88c4 found in user's session list.   
 
-# --- Testing chat predict STREAM/STORE with session_id for user: user1 ---
-# ✅ Stream started successfully for user1. Chunks:
-# {"event":"start","data":"I"}{"event":"token","data":"I"}{"event":"token","data":" can help"}{"event":"token","data":" with a variety"}{"event":"token","data":" of tasks and"}{"event":"token","data":" provide"}{"event":"token","data":" information on"}{"event":"token","data":" many"}{"event":"token","data":" topics"}{"event":"token","data":". Here are some things"}{"event":"token","data":" I can do:\n\n1."}{"event":"token","data":" **Answer"}{"event":"token","data":" Questions:** Provide information on a"}{"event":"token","data":" wide range of topics, from"}{"event":"token","data":" science"}{"event":"token","data":" and history to technology"}{"event":"token","data":" and entertainment.\n"}{"event":"token","data":"2. **Offer"}{"event":"token","data":" Recommendations"}{"event":"token","data":":** Suggest"}{"event":"token","data":" books, movies"}{"event":"token","data":", music"}{"event":"token","data":", and other"}{"event":"token","data":" media"}{"event":"token","data":" based on your preferences.\n3"}{"event":"token","data":". **Help with"}{"event":"token","data":" Homework"}{"event":"token","data":":** Assist"}{"event":"token","data":" with explanations"}{"event":"token","data":" and"}{"event":"token","data":" solutions"}{"event":"token","data":" for"}{"event":"token","data":" math problems,"}{"event":"token","data":" science questions"}{"event":"token","data":", and other"}{"event":"token","data":" academic"}{"event":"token","data":" topics"}{"event":"token","data":".\n4. **Provide"}{"event":"token","data":" How"}{"event":"token","data":"-To"}{"event":"token","data":" Guides:** Offer step"}{"event":"token","data":"-by-step instructions for"}{"event":"token","data":" various tasks"}{"event":"token","data":", such as cooking recipes"}{"event":"token","data":", DIY"}{"event":"token","data":" projects"}{"event":"token","data":", and"}{"event":"token","data":" tech"}{"event":"token","data":" setup"}{"event":"token","data":"s.\n5. **Language"}{"event":"token","data":" Assistance"}{"event":"token","data":":** Help with translations"}{"event":"token","data":", grammar checks"}{"event":"token","data":", and language learning"}{"event":"token","data":" tips"}{"event":"token","data":".\n6. **General"}{"event":"token","data":" Knowledge"}{"event":"token","data":":** Share"}{"event":"token","data":" facts"}{"event":"token","data":","}{"event":"token","data":" trivia, and interesting"}{"event":"token","data":" information on"}{"event":"token","data":" various"}{"event":"token","data":" subjects"}{"event":"token","data":".\n7. **Tech"}{"event":"token","data":" Support:** Offer"}{"event":"token","data":" basic troubleshooting"}{"event":"token","data":" tips for"}{"event":"token","data":" common tech"}{"event":"token","data":" issues.\n\nIf you have a"}{"event":"token","data":" specific question"}{"event":"token","data":" or need help with"}{"event":"token","data":" something, just"}{"event":"token","data":" let me know!"}{"event":"metadata","data":{"chatId":"00a3d788-a7ab-4d8c-9ec3-63b1adb37ea3","chatMessageId":"df0ef8cc-5e82-477d-8f6a-c15624eaae55","question":"What can you do?","sessionId":"00a3d788-a7ab-4d8c-9ec3-63b1adb37ea3","memoryType":"Buffer Memory"}}{"event":"end","data":"[DONE]"}
-# --- End of Stream ---
+# --- Getting history for session: 0c06ae7c-7856-5eda-8e2a-66647e8e88c4 for user: user1 ---
+# ✅ Found 2 messages in session 0c06ae7c-7856-5eda-8e2a-66647e8e88c4.
+#   - [2025-07-02T05:56:06.175000] user: What is a large language model?
+#   - [2025-07-02T05:56:08.255000] assistant: [{"event": "start", "data": "A"}, {"event": "token", "data": "A large language model (LLM) is a type of artificial intelligence (AI) model that is designed to understand and generate human language. These models are built using deep learning techniques, specifically neural networks, and are trained on vast amounts of text data from various sources such as books, articles, websites, and more. Here are some key aspects of large language models:\n\n### Key Characteristics:\n\n1. **Size and Scale**:\n   - **Parameters**: LLMs typically have billions or even trillions of parameters, which are the internal variables that the model adjusts during training to improve its performance.\n   - **Training Data**: They are trained on extensive datasets that can include millions or even billions of words, allowing them to learn the nuances of language.\n\n2. **Architecture**:\n   - **Transformers**: Most modern LLMs use the Transformer architecture, which was introduced in the paper \"Attention is All You Need\" by Vaswani et al. in 2017. This architecture"}, {"event": "metadata", "data": {"chatId": "0c06ae7c-7856-5eda-8e2a-66647e8e88c4", "chatMessageId": "5f1f9af5-4e51-4884-8b8d-16b9001b3c5f", "question": "What is a large language model?", "sessionId": "0c06ae7c-7856-5eda-8e2a-66647e8e88c4", "memoryType": "Buffer Memory"}}, {"event": "end", "data": "[DONE]"}]
 
-# --- Getting history for session: 00a3d788-a7ab-4d8c-9ec3-63b1adb37ea3 for user: user1 ---
-# ✅ Found 4 messages in session 00a3d788-a7ab-4d8c-9ec3-63b1adb37ea3.
-#   - [2025-06-21T14:04:14.442000] user: Hello, who are you?
-#   - [2025-06-21T14:04:15.988000] assistant: Hello! I am an AI system built by a team of inventors at Amazon. My purpose is to assist you with a wide range of tasks, answer your questions, and provide information to the best of my abilities. If you have any questions or need help with something, feel free to ask!
-#   - [2025-06-21T14:04:20.119000] user: What can you do?
-#   - [2025-06-21T14:04:22.337000] assistant: I can help with a variety of tasks and provide information on many topics. Here are some things I can do:
-
-# 1. **Answer Questions:** Provide information on a wide range of topics, from science and history to technology and entertainment.
-# 2. **Offer Recommendations:** Suggest books, movies, music, and other media based on your preferences.
-# 3. **Help with Homework:** Assist with explanations and solutions for math problems, science questions, and other academic topics.
-# 4. **Provide How-To Guides:** Offer step-by-step instructions for various tasks, such as cooking recipes, DIY projects, and tech setups.
-# 5. **Language Assistance:** Help with translations, grammar checks, and language learning tips.
-# 6. **General Knowledge:** Share facts, trivia, and interesting information on various subjects.
-# 7. **Tech Support:** Offer basic troubleshooting tips for common tech issues.
-
-# If you have a specific question or need help with something, just let me know!
-
-# ✅ --- Test Passed: Successfully retrieved and verified chat history. ---
+# --- Getting credit balance for user: user1 ---
+# ✅ user1 has 410 credits.

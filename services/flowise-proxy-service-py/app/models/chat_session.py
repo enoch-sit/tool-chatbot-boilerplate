@@ -7,7 +7,7 @@ import uuid
 class ChatSession(Document):
     """Represents a single chat conversation session."""
 
-    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()), unique=True, index=True)
+    session_id: str = Field(..., index=True)
     user_id: str = Field(..., index=True)
     chatflow_id: str = Field(..., index=True)
     topic: Optional[str] = Field(None, index=True)

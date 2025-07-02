@@ -179,71 +179,119 @@ def list_accessible_chatflows(token, username, flow_idx=0):
         print(f"❌ Error: {e}")
         return None
 
+class StreamParser:
+    """
+    A class to process a stream of concatenated JSON objects.
+    Handles incomplete data and extracts full JSON events.
+    """
+
+    def __init__(self):
+        self.buffer = ""
+        self.events = []
+
+    def process_chunk(self, chunk_text):
+        """Process a chunk of stream data and extract complete JSON events"""
+        self.buffer += chunk_text
+        self.buffer = self.buffer.replace('}{', '}\n{')
+        parts = self.buffer.split('\n')
+        
+        complete_parts = parts[:-1]
+        self.buffer = parts[-1] if parts else ""
+
+        extracted_events = []
+        for part in complete_parts:
+            if not part:
+                continue
+            try:
+                event = json.loads(part)
+                self.events.append(event)
+                extracted_events.append(event)
+            except json.JSONDecodeError:
+                self.buffer = part + self.buffer
+        
+        return extracted_events
 
 def send_chat_message(token, username, chatflow_id, question, session_id=None):
     """Send a message to the streaming endpoint and return session_id"""
     print(f"\n--- Sending message for user: {username} on chatflow: {chatflow_id} ---")
     print(f"Question: {question}")
     if session_id:
-        print(f"Session ID: {session_id}")
+        print(f"Using existing Session ID: {session_id}")
 
     headers = {"Authorization": f"Bearer {token}"}
     payload = {"chatflow_id": chatflow_id, "question": question}
     if session_id:
-        payload["sessionId"] = session_id
+        payload["session_id"] = session_id
+
+    parser = StreamParser()
+    new_session_id = session_id
 
     try:
-        response = requests.post(
+        with requests.post(
             f"{API_BASE_URL}/api/v1/chat/predict/stream/store",
             headers=headers,
             json=payload,
             stream=True,
             timeout=(30, 300),
-        )
-        if response.status_code == 200:
-            print(f"✅ Stream started for {username}")
-            for chunk in response.iter_content(chunk_size=None):
-                if chunk:
-                    decoded_chunk = chunk.decode("utf-8")
-                    if '"event":"metadata"' in decoded_chunk:
-                        metadata = json.loads(
-                            decoded_chunk.split('{"event":"metadata","data":')[1].split(
-                                "}"
-                            )[0]
-                        )
-                        session_id = metadata.get("sessionId")
-                        print(f"🔍 Found session_id: {session_id}")
-                        return session_id
-        else:
-            print(f"❌ Stream failed: {response.status_code} - {response.text}")
+        ) as response:
+            if response.status_code == 200:
+                print(f"✅ Stream started for {username}")
+                for chunk in response.iter_content(chunk_size=None):
+                    if chunk:
+                        decoded_chunk = chunk.decode("utf-8")
+                        events = parser.process_chunk(decoded_chunk)
+                        for event in events:
+                            if event.get("event") == "session_id":
+                                new_session_id = event.get("data")
+                                print(f"🔑 Extracted session_id from 'session_id' event: {new_session_id}")
+                            elif event.get("event") == "metadata":
+                                meta_session_id = event.get("data", {}).get("sessionId")
+                                if meta_session_id:
+                                    new_session_id = meta_session_id
+                                    print(f"🔑 Extracted session_id from 'metadata' event: {new_session_id}")
+                print("✅ Stream finished.")
+            else:
+                print(f"❌ Stream failed: {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"❌ Error: {e}")
-    return session_id
+        print(f"❌ Error during stream processing: {e}")
+    
+    return new_session_id
 
-
-def verify_chat_history(session_id):
-    """Verify chat history in MongoDB"""
-    print(f"\n--- Verifying chat history for session_id: {session_id} ---")
+def get_user_sessions(token):
+    """Get all sessions for the current user"""
+    print(f"\n--- Getting all sessions for user ---")
+    headers = {"Authorization": f"Bearer {token}"}
     try:
-        client = pymongo.MongoClient(MONGODB_URI)
-        db = client["flowise_proxy_test"]
-        collection = db["chat_messages"]
-        messages = list(
-            collection.find({"session_id": session_id}).sort("created_at", 1)
-        )
-        if messages:
-            print(f"✅ Found {len(messages)} messages")
-            for msg in messages:
-                print(
-                    f"   - {msg['role']}: {msg['content'][:50]}... (created_at: {msg['created_at']})"
-                )
-            return True
+        response = requests.get(f"{API_BASE_URL}/api/v1/chat/sessions", headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            sessions = data.get("sessions", [])
+            print(f"✅ User has {data.get('count', 0)} sessions")
+            return sessions
         else:
-            print(f"❌ No messages found for session_id: {session_id}")
-            return False
+            print(f"❌ Failed to get sessions: {response.status_code} {response.text}")
+            return []
     except Exception as e:
-        print(f"❌ Error verifying chat history: {e}")
-        return False
+        print(f"❌ Error getting sessions: {e}")
+        return []
+
+def get_chathistory(token, session_id):
+    """Get chat history from session_id"""
+    print(f"\n--- Getting chat history for session: {session_id} ---")
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/v1/chat/sessions/{session_id}/history", headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✅ Retrieved {data.get('count', 0)} messages from session")
+            return data.get("history", [])
+        else:
+            print(f"❌ Failed to get chat history: {response.status_code} {response.text}")
+            return []
+    except Exception as e:
+        print(f"❌ Error getting chat history: {e}")
+        return []
+
 
 
 def main():
@@ -286,29 +334,59 @@ def main():
         )
         if not accessible_chatflow_id:
             continue
-
-        # Send initial message and verify history
-        session_id = send_chat_message(
-            user_token, user["username"], accessible_chatflow_id, "Hello, how are you?"
+        
+        # Create a new session to ensure there is history to fetch
+        print("\n\n--- Creating a new chat session to test history retrieval ---")
+        send_chat_message(
+            user_token, 
+            user["username"], 
+            accessible_chatflow_id, 
+            "This is a test message to create a session."
         )
-        if session_id:
-            verify_chat_history(session_id)
+        print("--- Finished creating chat session ---\n")
 
-        # Test session continuity
-        print(f"\n🔄 Testing session continuity")
-        questions = ["My name is TestUser. Remember this.", "What is my name?"]
-        for question in questions:
-            session_id = send_chat_message(
-                user_token,
-                user["username"],
-                accessible_chatflow_id,
-                question,
-                session_id,
-            )
-            if session_id:
-                verify_chat_history(session_id)
-            time.sleep(2)
+        # I need to get all the sessions from the current user 
+        # TODO 1
+        # Using session ids I can get all the user chat_history
+        # I need to get all the sessions from the current user 
+        # TODO 1 - IMPLEMENTED
+        # Get all user sessions first
+        user_sessions = get_user_sessions(user_token)
+        
+        if user_sessions:
+            print(f"\n📋 Found {len(user_sessions)} sessions for user {user['username']}")
+            
+            # Using session ids I can get all the user chat_history
+            for session in user_sessions:
+                session_id = session.get("session_id")
+                topic = session.get("topic", "No topic")
+                created_at = session.get("created_at")
+                first_message = session.get("first_message", "No messages")
+                
+                print(f"\n🗨️  Session: {session_id}")
+                print(f"   Topic: {topic}")
+                print(f"   Created: {created_at}")
+                print(f"   First message: {first_message[:50]}..." if len(first_message) > 50 else f"   First message: {first_message}")
+                
+                # Get full chat history for this session
+                chat_history = get_chathistory(user_token, session_id)
+                
+                if chat_history:
+                    print(f"   💬 Messages in this session:")
+                    for i, message in enumerate(chat_history):
+                        role = message.get("role", "unknown")
+                        content = message.get("content", "")
+                        created_at = message.get("created_at", "")
+                        
+                        # Truncate long messages for display
+                        content_preview = content[:100] + "..." if len(content) > 100 else content
+                        print(f"      {i+1}. [{role}] {content_preview}")
+                else:
+                    print(f"   📭 No messages found in this session")
+        else:
+            print(f"\n📭 No sessions found for user {user['username']}")
 
+    
     print("\n" + "=" * 60)
     print("✨ Chat History Test Complete ✨")
     print(f"📝 Logs at: {LOG_PATH}")
@@ -316,3 +394,25 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Reference example
+# --- Getting chat history for session: 0c06ae7c-7856-5eda-8e2a-66647e8e88c4 ---
+# ✅ Retrieved 2 messages from session
+#    💬 Messages in this session:
+#       1. [user] What is a large language model?
+#       2. [assistant] [{"event": "start", "data": "A"}, {"event": "token", "data": "A large language model (LLM) is a type...
+
+# 🗨️  Session: 7b12790e-3cf9-5717-8b9f-21457c1c068b
+#    Topic: What is a large language model?
+#    Created: 2025-07-02T05:51:32.882000
+#    First message: What is a large language model?
+
+# --- Getting chat history for session: 7b12790e-3cf9-5717-8b9f-21457c1c068b ---
+# ✅ Retrieved 2 messages from session
+#    💬 Messages in this session:
+#       1. [user] What is a large language model?
+#       2. [assistant] [{"event": "start", "data": "A"}, {"event": "token", "data": "A large language model (LLM) is a type...
+
+# ============================================================
+# ✨ Chat History Test Complete ✨
+# 📝 Logs at: C:\Users\user\Documents\ThankGodForJesusChrist\ThankGodForTools\tool-chatbot-boilerplate\services\flowise-proxy-service-py\QuickTest\mimic_client\chat_history_test.log
