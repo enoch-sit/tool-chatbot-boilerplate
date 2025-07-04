@@ -18,14 +18,14 @@ export const parseMixedContent = (rawContent: string): ContentBlock[] => {
   while ((match = regex.exec(rawContent)) !== null) {
     // Capture any text that appeared before this block
     if (match.index > lastIndex) {
-      const textContent = rawContent.substring(lastIndex, match.index).trim();
-      if (textContent) {
+      const textContent = rawContent.substring(lastIndex, match.index);
+      if (textContent && textContent.trim()) {
         blocks.push({ type: 'text', content: textContent });
       }
     }
 
     const language = match[1]?.toLowerCase() || 'text';
-    const code = match[2].trim();
+    const code = match[2];
 
     if (language === 'mermaid' || language === 'mindmap') {
       blocks.push({ type: language, content: code });
@@ -38,8 +38,8 @@ export const parseMixedContent = (rawContent: string): ContentBlock[] => {
 
   // Capture any remaining text after the last block
   if (lastIndex < rawContent.length) {
-    const remainingText = rawContent.substring(lastIndex).trim();
-    if (remainingText) {
+    const remainingText = rawContent.substring(lastIndex);
+    if (remainingText && remainingText.trim()) {
       blocks.push({ type: 'text', content: remainingText });
     }
   }

@@ -81,12 +81,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * Evidence from mimic_client_06: history endpoint provides message list
    */
   setCurrentSession: async (session) => {
+    // Normalize session object to ensure it has session_id and correct structure
+    if (session && (session as any).id && !(session as any).session_id) {
+      // If session comes from a source with 'id' instead of 'session_id'
+      session = {
+        ...session,
+        session_id: (session as any).id,
+      };
+      delete (session as any).id;
+    }
     set({ currentSession: session, isLoading: true, messages: [] });
     
     if (session) {
       try {
         const history = await getSessionHistory(session.session_id);
         set({ messages: mapHistoryToMessages(history), isLoading: false });
+        // Always set currentSession to ensure session_id is up to date
+        set({ currentSession: { ...session, session_id: session.session_id } });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load session history';
         set({ error: errorMessage, isLoading: false });
@@ -131,7 +142,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * Evidence from mimic_client_05/06: sessionId is passed in predict payload
    */
   streamAssistantResponse: async (prompt: string) => {
-    const { currentSession, currentChatflow, addMessage, updateMessage } = get();
+    const { currentSession, currentChatflow, addMessage, updateMessage, setCurrentSession } = get();
     if (!currentChatflow) {
       get().setError("Cannot send message: No chatflow selected.");
       return;
@@ -197,6 +208,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ),
           });
         }
+        // Ensure currentSession is set in the store for next message
+        setCurrentSession(newSessionObj);
         isNewSession = false;
       }
       // Also handle metadata event for sessionId (robustness)

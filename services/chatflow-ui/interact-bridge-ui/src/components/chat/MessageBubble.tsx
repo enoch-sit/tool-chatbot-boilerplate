@@ -49,12 +49,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     const nonTokenEvents = message.streamEvents.filter(e => e.event !== 'token');
     return (
       <Box>
-        {/* Render accumulated mixed content from tokens */}
-        {tokenContent && <MixedContentRenderer content={tokenContent} />}
+        
         {/* Render special UI for other events */}
         {nonTokenEvents.map((event, idx) => (
           <div key={idx}>{renderEvent(event)}</div>
         ))}
+        {/* Render accumulated mixed content from tokens */}
+        {tokenContent && <MixedContentRenderer content={tokenContent} />}
       </Box>
     );
   }
