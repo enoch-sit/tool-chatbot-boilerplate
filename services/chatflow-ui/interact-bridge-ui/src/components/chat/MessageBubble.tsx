@@ -1,19 +1,64 @@
 // src/components/chat/MessageBubble.tsx
 import React from 'react';
 import { Box, Typography, Chip, CircularProgress } from '@mui/joy';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import type { Message } from '../../types/chat';
+import type { Message, StreamEvent } from '../../types/chat';
 import CodeBlock from '../renderers/CodeBlock';
 import MermaidDiagram from '../renderers/MermaidDiagram';
+import AgentFlowEventUI from './AgentFlowEventUI';
+import NextAgentFlowUI from './NextAgentFlowUI';
+import AgentFlowExecutedDataUI from './AgentFlowExecutedDataUI';
+import CalledToolsUI from './CalledToolsUI';
+import { MixedContentRenderer } from '../renderers/MixedContent';
 import 'highlight.js/styles/github-dark.css';
 
 interface MessageBubbleProps {
   message: Message;
 }
 
+// Helper to accumulate all token event data into a single string
+const getAccumulatedTokenContent = (events: StreamEvent[]) => {
+  return events
+    .filter(e => e.event === 'token' && typeof e.data === 'string')
+    .map(e => e.data)
+    .join('');
+};
+
+const renderEvent = (event: StreamEvent) => {
+  if (!('data' in event)) return null;
+  switch (event.event) {
+    case 'agentFlowEvent':
+      return <AgentFlowEventUI data={event.data} />;
+    case 'nextAgentFlow':
+      return <NextAgentFlowUI data={event.data} />;
+    case 'agentFlowExecutedData':
+      return <AgentFlowExecutedDataUI data={event.data} />;
+    case 'calledTools':
+      return <CalledToolsUI data={event.data} />;
+    // token events are handled in accumulation below
+    default:
+      return null;
+  }
+};
+
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+  // If message has streamEvents, handle token accumulation and event rendering
+  if (message.streamEvents) {
+    // Accumulate all token data into a single string
+    const tokenContent = getAccumulatedTokenContent(message.streamEvents);
+    // Render all non-token events
+    const nonTokenEvents = message.streamEvents.filter(e => e.event !== 'token');
+    return (
+      <Box>
+        {/* Render accumulated mixed content from tokens */}
+        {tokenContent && <MixedContentRenderer content={tokenContent} />}
+        {/* Render special UI for other events */}
+        {nonTokenEvents.map((event, idx) => (
+          <div key={idx}>{renderEvent(event)}</div>
+        ))}
+      </Box>
+    );
+  }
+
   const { content, sender, isStreaming = false, timeMetadata } = message;
 
   // Process content to handle special AI elements
@@ -66,56 +111,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           </Box>
         )}
 
-        {/* Render main content as markdown */}
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeHighlight]}
-          components={{
-            code({ node, className, children, ...props }) {
-              if (node.type === 'inlineCode') {
-                // Handle inline code
-                return (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                );
-              } else if (node.type === 'code') {
-                // Handle block code
-                const match = /language-(\w+)/.exec(className || '');
-                const language = match ? match[1] : '';
-                if (language === 'mermaid') {
-                  return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
-                }
-                return <CodeBlock code={String(children).replace(/\n$/, '')} language={language} />;
-              }
-              // Fallback (should not happen)
-              return null;
-            },
-            // Style markdown elements for Joy UI
-            h1: ({ children }) => <Typography level="h2" sx={{ my: 1.5 }}>{children}</Typography>,
-            h2: ({ children }) => <Typography level="h3" sx={{ my: 1 }}>{children}</Typography>,
-            h3: ({ children }) => <Typography level="h4" sx={{ my: 0.5 }}>{children}</Typography>,
-            p: ({ children }) => <Typography sx={{ my: 0.5, lineHeight: 1.6 }}>{children}</Typography>,
-            blockquote: ({ children }) => (
-              <Box sx={{ 
-                borderLeft: '3px solid',
-                borderColor: 'primary.300',
-                pl: 2,
-                py: 0.5,
-                my: 1,
-                bgcolor: 'background.level1',
-                borderRadius: 'sm',
-                fontStyle: 'italic'
-              }}>
-                {children}
-              </Box>
-            ),
-            ul: ({ children }) => <Box component="ul" sx={{ my: 0.5, pl: 3 }}>{children}</Box>,
-            ol: ({ children }) => <Box component="ol" sx={{ my: 0.5, pl: 3 }}>{children}</Box>,
-          }}
-        >
-          {mainContent}
-        </ReactMarkdown>
+        {/* Render main content as mixed content (markdown/code/mermaid) */}
+        <MixedContentRenderer content={mainContent} />
 
         {/* Show streaming indicator */}
         {isStreaming && (

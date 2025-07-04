@@ -789,20 +789,22 @@ def run_comprehensive_user_chatflow_tests():
             admin_token, test_chatflow_id
         )
     else:
-        test_results["bulk_add_users"] = True  # Skip if no users to bulk add
+        print("ℹ️ No users for bulk assignment, skipping test.")
+        test_results["bulk_add_users"] = True  # Mark as passed
         test_results["list_users_after_bulk"] = True
 
     # Test user removal using email
     test_results["remove_user"] = test_remove_user_from_chatflow(
         admin_token, test_chatflow_id, REGULAR_USERS[0]["email"]
     )
+
     test_results["list_users_after_remove"] = test_list_chatflow_users(
         admin_token, test_chatflow_id
     )
 
     # Print summary
     print("\n" + "=" * 60)
-    print("📊 ASSIGNMENT TEST SUMMARY")
+    print("📊 USER-TO-CHATFLOW TEST SUMMARY")
     print("=" * 60)
 
     total_tests = len(test_results)
@@ -813,14 +815,11 @@ def run_comprehensive_user_chatflow_tests():
         print(f"{test_name.replace('_', ' ').title()}: {status}")
 
     print(f"\nOverall Result: {passed_tests}/{total_tests} tests passed")
-    print(f"Test Chatflow ID: {test_chatflow_id}")
 
     if passed_tests == total_tests:
-        print(
-            "🎉 ALL TESTS PASSED! User-to-chatflow assignment functionality is working correctly."
-        )
+        print("🎉 ALL USER-TO-CHATFLOW TESTS PASSED!")
     else:
-        print("⚠️  Some tests failed. Please check the implementation.")
+        print("⚠️  Some user-to-chatflow tests failed.")
 
     # Log final results
     with open(LOG_PATH, "a") as log_file:
@@ -833,8 +832,11 @@ def run_comprehensive_user_chatflow_tests():
 
 
 if __name__ == "__main__":
-    run_comprehensive_chatflow_tests()
-    run_comprehensive_user_chatflow_tests()
+    # Default to running chatflow sync tests
+    if len(sys.argv) > 1 and sys.argv[1] == "user_assignment":
+        run_comprehensive_user_chatflow_tests()
+    else:
+        run_comprehensive_chatflow_tests()
 
 '''
 Example of the output of the tests:

@@ -19,6 +19,7 @@ import uuid
 import hashlib
 from datetime import datetime
 import json
+from json_repair import repair_json
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -312,13 +313,13 @@ async def chat_predict(
             if not response_received or not full_response:
                 # Log failed transaction but don't refund credits automatically
                 await accounting_service.log_transaction(
-                    user_id, "chat", chatflow_id, cost, False
+                    user_token, user_id, "chat", chatflow_id, cost, False
                 )
                 raise HTTPException(status_code=503, detail="Chat service unavailable")
 
             # 7. Log successful transaction
             await accounting_service.log_transaction(
-                user_id, "chat", chatflow_id, cost, True
+                user_token, user_id, "chat", chatflow_id, cost, True
             )
 
             # 8. Return consolidated response
@@ -336,7 +337,7 @@ async def chat_predict(
         except Exception as processing_error:
             # Log failed processing
             await accounting_service.log_transaction(
-                user_id, "chat", chatflow_id, cost, False
+                user_token, user_id, "chat", chatflow_id, cost, False
             )
             raise HTTPException(
                 status_code=500,
@@ -351,7 +352,6 @@ async def chat_predict(
 
 # --- Testing chat predict STREAM for user: user2 on chatflow ---
 # ✅ Stream started successfully for user2. Chunks:
-# {"event":"start","data":"Of"}{"event":"token","data":"Of"}{"event":"token","data":" course! Let me tell you"}{"event":"token","data":" a whimsical"}{"event":"token","data":" tale"}{"event":"token","data":" about"}{"event":"token","data":" a small"}{"event":"token","data":" village"}{"event":"token","data":" named Gli"}{"event":"token","data":"mmerwood"}{"event":"token","data":".\n\n---\n\nIn"}{"event":"token","data":" a lush"}{"event":"token","data":" valley surrounded"}{"event":"token","data":" by towering"}{"event":"token","data":" trees"}{"event":"token","data":" and sparkling"}{"event":"token","data":" streams"}{"event":"token","data":", there"}{"event":"token","data":" lay"}{"event":"token","data":" a quaint"}{"event":"token","data":" village called"}{"event":"token","data":" Glimmerwood. The"}{"event":"token","data":" village was known"}{"event":"token","data":" for its enchanting"}{"event":"token","data":" beauty"}{"event":"token","data":" and the magical"}{"event":"token","data":" glow that emanate"}{"event":"token","data":"d from the fire"}{"event":"token","data":"flies at"}{"event":"token","data":" night,"}{"event":"token","data":" giving it"}{"event":"token","data":" its"}{"event":"token","data":" name.\n\nAt"}{"event":"token","data":" the heart of Gli"}{"event":"token","data":"mmerwood lived"}{"event":"token","data":" a young"}{"event":"token","data":" girl named Elara."}{"event":"token","data":" Elara had"}{"event":"token","data":" a heart"}{"event":"token","data":" full of curiosity and a"}{"event":"token","data":" mind"}{"event":"token","data":" brimming with dreams. She loved"}{"event":"token","data":" exploring"}{"event":"token","data":" the forest"}{"event":"token","data":", discovering"}{"event":"token","data":" hidden nook"}{"event":"token","data":"s, and listening"}{"event":"token","data":" to the whispers"}{"event":"token","data":" of the wind"}{"event":"token","data":".\n\nOne day, while"}{"event":"token","data":" wandering through the woods"}{"event":"token","data":", Elara stumbled upon an"}{"event":"token","data":" ancient, g"}{"event":"token","data":"narled tree with"}{"event":"token","data":" a hollow"}{"event":"token","data":" trunk"}{"event":"token","data":". Peer"}{"event":"token","data":"ing inside"}{"event":"token","data":", she saw"}{"event":"token","data":" a faint"}{"event":"token","data":","}{"event":"token","data":" shimmering"}{"event":"token","data":" light."}{"event":"token","data":" Intrigue"}{"event":"token","data":"d, she crawled"}{"event":"token","data":" in"}{"event":"token","data":", and found"}{"event":"token","data":" herself in a secret"}{"event":"token","data":" chamber"}{"event":"token","data":" filled"}{"event":"token","data":" with glowing"}{"event":"token","data":" crystals and mystical"}{"event":"token","data":" artifacts.\n\nIn"}{"event":"token","data":" the center of the chamber"}{"event":"token","data":" stood a small"}{"event":"token","data":", ornate"}{"event":"token","data":" chest"}{"event":"token","data":". El"}{"event":"token","data":"ara approached"}{"event":"token","data":" it"}{"event":"token","data":", and"}{"event":"token","data":","}{"event":"token","data":" with a trembling"}{"event":"token","data":" hand, opened the lid"}{"event":"token","data":". Inside"}{"event":"token","data":", she"}{"event":"token","data":" found a beautiful"}{"event":"token","data":", intricately designed"}{"event":"token","data":" pendant"}{"event":"token","data":"."}{"event":"token","data":" As"}{"event":"token","data":" she touched"}{"event":"token","data":" it, a"}{"event":"token","data":" warm,"}{"event":"token","data":" comforting"}{"event":"token","data":" light enveloped her,"}{"event":"token","data":" and she"}{"event":"token","data":" heard"}{"event":"token","data":" a soft"}{"event":"token","data":" voice in"}{"event":"token","data":" her mind"}{"event":"token","data":".\n\n\"You"}{"event":"token","data":" have found"}{"event":"token","data":" the Heart"}{"event":"token","data":" of Gli"}{"event":"token","data":"mmerwood,\" the"}{"event":"token","data":" voice said."}{"event":"token","data":" \"This"}{"event":"token","data":" pendant holds"}{"event":"token","data":" the magic"}{"event":"token","data":" of the forest and"}{"event":"token","data":" the wisdom"}{"event":"token","data":" of the ancient"}{"event":"token","data":"s"}{"event":"token","data":". Use"}{"event":"token","data":" it wisely"}{"event":"token","data":".\"\n\n"}{"event":"token","data":"El"}{"event":"token","data":"ara,"}{"event":"token","data":" now the"}{"event":"token","data":" guardian of the Heart"}{"event":"token","data":" of Glimmerwood, felt"}{"event":"token","data":" a surge"}{"event":"token","data":" of responsibility and"}{"event":"token","data":" excitement. She returned"}{"event":"token","data":" to"}{"event":"token","data":" the village, pendant"}{"event":"token","data":" in"}{"event":"token","data":" hand, and shared"}{"event":"token","data":" her discovery"}{"event":"token","data":" with the"}{"event":"token","data":" elders"}{"event":"token","data":". They"}{"event":"token","data":" were overjoyed"}{"event":"token","data":" and"}{"event":"token","data":" explained"}{"event":"token","data":" that the Heart"}{"event":"token","data":" of Glimmerwood had been"}{"event":"token","data":" lost for generations"}{"event":"token","data":".\n\nWith"}{"event":"token","data":" the pendant'"}{"event":"token","data":"s power, El"}{"event":"token","data":"ara began to help"}{"event":"token","data":" the villagers"}{"event":"token","data":" in"}{"event":"token","data":" extraordinary"}{"event":"token","data":" ways. She"}{"event":"token","data":" healed"}{"event":"token","data":" the sick"}{"event":"token","data":", brought"}{"event":"token","data":" rain"}{"event":"token","data":" during"}{"event":"token","data":" drought"}{"event":"token","data":"s, and even communicated"}{"event":"token","data":" with the animals"}{"event":"token","data":" of"}{"event":"token","data":" the forest to"}{"event":"token","data":" ensure harmony"}{"event":"token","data":". The village"}{"event":"token","data":" thrived"}{"event":"token","data":" like"}{"event":"token","data":" never before,"}{"event":"token","data":" and the"}{"event":"token","data":" magic"}{"event":"token","data":" of Glimmerwood grew"}{"event":"token","data":" stronger"}{"event":"token","data":".\n\nHowever"}{"event":"token","data":", not"}{"event":"token","data":" all was"}{"event":"token","data":" well."}{"event":"token","data":" A"}{"event":"token","data":" dark shadow"}{"event":"token","data":" loomed"}{"event":"token","data":" on"}{"event":"token","data":" the horizon"}{"event":"token","data":". A"}{"event":"token","data":" neighboring"}{"event":"token","data":" village"}{"event":"token","data":", envious"}{"event":"token","data":" of Gli"}{"event":"token","data":"mmerwood's prosperity"}{"event":"token","data":", sought to claim"}{"event":"token","data":" the Heart"}{"event":"token","data":" for"}{"event":"token","data":" themselves"}{"event":"token","data":". They"}{"event":"token","data":" sent a group"}{"event":"token","data":" of thieves"}{"event":"token","data":" to steal the pendant"}{"event":"token","data":".\n\nOne"}{"event":"token","data":" moon"}{"event":"token","data":"less night, the thieves"}{"event":"token","data":" crept"}{"event":"token","data":" into Gli"}{"event":"token","data":"mmerwood,"}{"event":"token","data":" but"}{"event":"token","data":" Elara, guided"}{"event":"token","data":" by the pendant'"}{"event":"token","data":'s light'}{"event":"token","data":", confronted"}{"event":"token","data":" them. She"}{"event":"token","data":" stood tall, the"}{"event":"token","data":" Heart"}{"event":"token","data":" of Gli"}{"event":"token","data":"mmerwood glowing brightly"}{"event":"token","data":" in her hand"}{"event":"token","data":". The thieves"}{"event":"token","data":", blinded"}{"event":"token","data":" by the radiant"}{"event":"token","data":" light, fled"}{"event":"token","data":" in"}{"event":"token","data":" fear.\n\n"}{"event":"token","data":"Elara realized"}{"event":"token","data":" that the true"}{"event":"token","data":" power of the Heart"}{"event":"token","data":" lay"}{"event":"token","data":" not just in"}{"event":"token","data":" its magic,"}{"event":"token","data":" but in the unity"}{"event":"token","data":" and courage of"}{"event":"token","data":" the villagers"}{"event":"token","data":". She"}{"event":"token","data":" rallied the"}{"event":"token","data":" people of"}{"event":"token","data":" Glimmerwood, and"}{"event":"token","data":" together, they fortified"}{"event":"token","data":" their village"}{"event":"token","data":" and stood"}{"event":"token","data":" ready"}{"event":"token","data":" to"}{"event":"token","data":" defend their home"}{"event":"token","data":".\n\nIn"}{"event":"token","data":" the end, the neighboring"}{"event":"token","data":" village,"}{"event":"token","data":" witnessing"}{"event":"token","data":" the strength"}{"event":"token","data":" and harmony"}{"event":"token","data":" of Glimmerwood, withdrew"}{"event":"token","data":" their hostile"}{"event":"token","data":" intentions. They"}{"event":"token","data":" sought"}{"event":"token","data":" peace instead"}{"event":"token","data":", and the"}{"event":"token","data":" two villages"}{"event":"token","data":" formed"}{"event":"token","data":" a lasting"}{"event":"token","data":" alliance.\n\n"}{"event":"token","data":"El"}{"event":"token","data":"ara continued to be"}{"event":"token","data":" the guardian of the"}{"event":"token","data":" Heart of Glimmerwood,"}{"event":"token","data":" using"}{"event":"token","data":" its"}{"event":"token","data":" power"}{"event":"token","data":" to protect and"}{"event":"token","data":" nurture her village"}{"event":"token","data":". The"}{"event":"token","data":" legend"}{"event":"token","data":" of"}{"event":"token","data":" the"}{"event":"token","data":" Heart"}{"event":"token","data":" spread"}{"event":"token","data":" far"}{"event":"token","data":" and wide, and"}{"event":"token","data":" Gli"}{"event":"token","data":"mmerwood became a beacon of"}{"event":"token","data":" hope and magic"}{"event":"token","data":" in the land"}{"event":"token","data":".\n\nAnd so, the"}{"event":"token","data":" village"}{"event":"token","data":" of Glimmerwood thrived,"}{"event":"token","data":" its"}{"event":"token","data":" people"}{"event":"token","data":" living"}{"event":"token","data":" in"}{"event":"token","data":" harmony with"}{"event":"token","data":" nature, guided"}{"event":"token","data":" by the light"}{"event":"token","data":" of the Heart and"}{"event":"token","data":" the bravery"}{"event":"token","data":" of a"}{"event":"token","data":" young girl who"}{"event":"token","data":" believed"}{"event":"token","data":" in the magic"}{"event":"token","data":" within"}{"event":"token","data":".\n\n"}{"event":"token","data":"---\n\nI"}{"event":"token","data":" hope you enjoyed"}{"event":"token","data":" the"}{"event":"token","data":" story of"}{"event":"token","data":" Glimmerwood!"}{"event":"metadata","data":{"chatId":"d254941e-1eef-594c-9c4e-b35b57654b13","chatMessageId":"385f38d4-81f4-445d-85b1-dcb7c982ffc5","question":"Tell me a story.","sessionId":"d254941e-1eef-594c-9c4e-b35b57654b13","memoryType":"Buffer Memory"}}{"event":"end","data":"[DONE]"}
 # --- End of Stream ---
 @router.post("/predict/stream")
 async def chat_predict_stream(
@@ -430,19 +430,19 @@ async def chat_predict_stream(
                 # Log transaction after the stream is finished
                 if response_streamed:
                     await accounting_service.log_transaction(
-                        user_id, "chat", chatflow_id, cost, True
+                        user_token, user_id, "chat", chatflow_id, cost, True
                     )
                 else:
                     # If no data was streamed, log as a failed transaction
                     await accounting_service.log_transaction(
-                        user_id, "chat", chatflow_id, cost, False
+                        user_token, user_id, "chat", chatflow_id, cost, False
                     )
 
             except Exception as e:
                 # Log the error for debugging
                 print(f"Error during raw stream processing: {e}")
                 await accounting_service.log_transaction(
-                    user_id, "chat", chatflow_id, cost, False
+                    user_token, user_id, "chat", chatflow_id, cost, False
                 )
                 # Yield a final error message in the stream if something goes wrong.
                 yield f"STREAM_ERROR: {str(e)}"
@@ -492,8 +492,16 @@ async def chat_predict_stream_store(
 
         # 5. Create session_id and prepare user message, but do not save it yet.
         # This prevents orphaned user messages if the stream fails.
-        session_id = chat_request.sessionId or create_session_id(user_id, chatflow_id)
+        
+        new_session_id = False
+        if "sessionId" in chat_request:
+            session_id = chat_request.sessionId 
+        else: 
+            session_id = create_session_id(user_id, chatflow_id)
+            new_session_id = True
+
         user_message = ChatMessage(
+            chatflow_id=chatflow_id,
             session_id=session_id,
             user_id=user_id,
             role="user",
@@ -502,8 +510,9 @@ async def chat_predict_stream_store(
         # await user_message.insert() # This is deferred until the stream is successful
 
         async def stream_generator() -> AsyncGenerator[str, None]:
-            full_assistant_response = ""
-            buffer = ""
+            """Generator to stream responses from Flowise and store messages."""
+            # List to collect full assistant response chunks
+            full_assistant_response_ls = []
             try:
                 # Initialize Flowise client
                 flowise_client = Flowise(
@@ -512,6 +521,8 @@ async def chat_predict_stream_store(
 
                 override_config = chat_request.overrideConfig or {}
                 override_config["sessionId"] = session_id
+
+                
 
                 uploads = None
                 if chat_request.uploads:
@@ -528,64 +539,108 @@ async def chat_predict_stream_store(
 
                 completion = flowise_client.create_prediction(prediction_data)
 
+                # 🔥 STREAM SESSION_ID AS FIRST CHUNK
+                session_chunk_first = json.dumps({
+                    "event": "session_id",
+                    "data": session_id,
+                    "chatflow_id": chatflow_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "status": "streaming_started"
+                })
+                yield session_chunk_first
+
                 response_streamed = False
                 for chunk in completion:
+
                     chunk_str = ""
                     if isinstance(chunk, bytes):
                         chunk_str = chunk.decode("utf-8", errors="ignore")
                     else:
                         chunk_str = str(chunk)
-
-                    buffer += chunk_str
-
-                    decoder = json.JSONDecoder()
-                    pos = 0
-                    while pos < len(buffer):
-                        # Skip whitespace
-                        if buffer[pos].isspace():
-                            pos += 1
-                            continue
-                        try:
-                            obj, end_pos = decoder.raw_decode(buffer[pos:])
-
-                            # Process object
-                            if obj.get("event") == "token":
-                                full_assistant_response += obj.get("data", "")
-
-                            pos += end_pos
-                        except json.JSONDecodeError:
-                            # Incomplete JSON object in buffer, wait for next chunk
-                            break
-
-                    # Keep the unparsed part of the buffer
-                    buffer = buffer[pos:]
-
-                    yield chunk_str
+                    good_json_string = repair_json(chunk_str)
+                    full_assistant_response_ls.append(good_json_string)
+                    print(good_json_string)
+                    print("--")
+                    yield good_json_string
                     response_streamed = True
 
-                if response_streamed and full_assistant_response.strip():
+                
+
+                if response_streamed:
+
+                    def process_json(full_assistant_response_ls):
+                        """
+                        Process a list of JSON strings, combine consecutive token events, and return as a JSON array string.
+
+                        Args:
+                            full_assistant_response_ls (list): List of JSON strings representing events.
+                        Returns:
+                            str: A single JSON array string with events in the correct order.
+                        """
+                        result = []  # List to store the final sequence of event objects
+                        token_data = ""  # String to accumulate data from "token" events
+
+                        for good_json_string in full_assistant_response_ls:
+                            try:
+                                obj = json.loads(
+                                    good_json_string
+                                )  # Parse JSON string to dictionary
+                                if obj["event"] == "token":
+                                    token_data += obj["data"]  # Accumulate token data
+                                else:
+                                    # If we have accumulated token data, add it as a single event
+                                    if token_data:
+                                        result.append(
+                                            {"event": "token", "data": token_data}
+                                        )
+                                        token_data = ""  # Reset token data
+                                    result.append(obj)  # Add the non-token event
+                            except json.JSONDecodeError:
+                                continue  # Skip invalid JSON strings
+
+                        # If there are any remaining tokens (e.g., at the end of the list), add them
+                        if token_data:
+                            result.append({"event": "token", "data": token_data})
+
+                        # Convert the list of objects to a JSON array string
+                        
+                        return json.dumps(result)
+
                     await accounting_service.log_transaction(
-                        user_id, "chat", chatflow_id, cost, True
+                        user_token, user_id, "chat", chatflow_id, cost, True
                     )
                     # Save user message first, then assistant message
                     await user_message.insert()
                     assistant_message = ChatMessage(
+                        chatflow_id=chatflow_id,
                         session_id=session_id,
                         user_id=user_id,
                         role="assistant",
-                        content=full_assistant_response,
+                        content=process_json(full_assistant_response_ls),
                     )
                     await assistant_message.insert()
+                    print(f"Storing assistant message: {assistant_message}")
+                    if(new_session_id):
+                        topic = chat_request.question[:50] + "..." if len(chat_request.question) > 50 else chat_request.question
+                        new_chat_session = ChatSession(
+                            session_id=session_id,
+                            user_id=user_id,
+                            chatflow_id=chatflow_id,
+                            topic=topic  #or auto-generated
+                        )
+                        await new_chat_session.insert()
+                    
                 else:
                     # If no data was streamed or the response is empty, log as a failed transaction
                     await accounting_service.log_transaction(
-                        user_id, "chat", chatflow_id, cost, False
+                        user_token, user_id, "chat", chatflow_id, cost, False
                     )
+                    print("No response streamed, logging as failed transaction")
 
             except Exception as e:
                 print(f"Error during stream processing and storing: {e}")
                 await accounting_service.log_transaction(
-                    user_id, "chat", chatflow_id, cost, False
+                    user_token, user_id, "chat", chatflow_id, cost, False
                 )
                 yield f"STREAM_ERROR: {str(e)}"
 
@@ -598,7 +653,9 @@ async def chat_predict_stream_store(
 
 
 @router.get("/credits")
-async def get_user_credits(request: Request, current_user: Dict = Depends(authenticate_user)):
+async def get_user_credits(
+    request: Request, current_user: Dict = Depends(authenticate_user)
+):
     """Get current user's credit balance"""
     try:
         accounting_service = AccountingService()
@@ -607,7 +664,7 @@ async def get_user_credits(request: Request, current_user: Dict = Depends(authen
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Invalid authorization header")
-        
+
         user_token = auth_header.split(" ")[1]
 
         credits = await accounting_service.check_user_credits(user_id, user_token)
@@ -655,112 +712,49 @@ async def get_my_assigned_chatflows(current_user: Dict = Depends(authenticate_us
             status_code=500, detail=f"Failed to retrieve assigned chatflows: {str(e)}"
         )
 
+# Create session_id should be done when users post their first message
+# @router.post("/sessions", response_model=SessionResponse, status_code=201)
+# async def create_chat_session(
+#     session_request: CreateSessionRequest,
+#     current_user: Dict = Depends(authenticate_user),
+# ):
+#     """
+#     Creates a new chat session for a user with a specific chatflow.
+#     This endpoint validates user permissions before creating the session.
+#     """
+#     try:
+#         auth_service = AuthService()
+#         user_id = current_user.get("user_id")
+#         chatflow_id = session_request.chatflow_id
 
-@router.post("/sessions", response_model=SessionResponse, status_code=201)
-async def create_chat_session(
-    session_request: CreateSessionRequest,
-    current_user: Dict = Depends(authenticate_user),
-):
-    """
-    Creates a new chat session for a user with a specific chatflow.
-    This endpoint validates user permissions before creating the session.
-    """
-    try:
-        auth_service = AuthService()
-        user_id = current_user.get("user_id")
-        chatflow_id = session_request.chatflow_id
+#         # 1. Validate user has access to the chatflow before creating a session
+#         if not await auth_service.validate_user_permissions(user_id, chatflow_id):
+#             raise HTTPException(
+#                 status_code=403, detail="Access denied to this chatflow"
+#             )
 
-        # 1. Validate user has access to the chatflow before creating a session
-        if not await auth_service.validate_user_permissions(user_id, chatflow_id):
-            raise HTTPException(
-                status_code=403, detail="Access denied to this chatflow"
-            )
+#         # 2. Create and store the new session
+#         new_session = ChatSession(
+#             user_id=user_id, chatflow_id=chatflow_id, topic=session_request.topic
+#         )
+#         await new_session.insert()
 
-        # 2. Create and store the new session
-        new_session = ChatSession(
-            user_id=user_id, chatflow_id=chatflow_id, topic=session_request.topic
-        )
-        await new_session.insert()
+#         return SessionResponse(
+#             session_id=new_session.session_id,
+#             chatflow_id=new_session.chatflow_id,
+#             user_id=new_session.user_id,
+#             topic=new_session.topic,
+#             created_at=new_session.created_at,
+#         )
 
-        return SessionResponse(
-            session_id=new_session.session_id,
-            chatflow_id=new_session.chatflow_id,
-            user_id=new_session.user_id,
-            topic=new_session.topic,
-            created_at=new_session.created_at,
-        )
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500, detail=f"Failed to create session: {str(e)}"
+#         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to create session: {str(e)}"
-        )
-
-
-@router.get("/sessions", response_model=SessionListResponse)
-async def get_all_user_sessions(current_user: Dict = Depends(authenticate_user)):
-    """
-    Retrieves a summary of all chat sessions for the current user,
-    including the first message of each conversation.
-    """
-    user_id = current_user.get("user_id")
-
-    # This aggregation pipeline fetches sessions and joins them with the first user message.
-    pipeline = [
-        {"$match": {"user_id": user_id}},  # Filter sessions for the current user
-        {"$sort": {"created_at": -1}},  # Show the most recent sessions first
-        {
-            "$lookup": {
-                "from": "chat_messages",
-                "let": {"session_id": "$session_id"},
-                "pipeline": [
-                    {
-                        # This $match stage filters documents within the chat_messages collection.
-                        "$match": {
-                            # $expr allows us to use aggregation expressions for more complex comparisons.
-                            "$expr": {
-                                # $and ensures all conditions are met.
-                                "$and": [
-                                    # Condition 1: The message's session_id must match the session_id
-                                    # from the outer ChatSession document (referenced by $$session_id).
-                                    {"$eq": ["$session_id", "$$session_id"]},
-                                    # Condition 2: We only want messages where the role is 'user'.
-                                    {"$eq": ["$role", "user"]},
-                                ]
-                            }
-                        }
-                    },
-                    {"$sort": {"created_at": 1}},  # Find the earliest message
-                    {"$limit": 1},  # Get only the first one
-                ],
-                "as": "first_message_doc",
-            }
-        },
-        {
-            # Deconstruct the array, keeping sessions even if they have no messages
-            "$unwind": {
-                "path": "$first_message_doc",
-                "preserveNullAndEmptyArrays": True,
-            }
-        },
-        {
-            # Shape the final output
-            "$project": {
-                "session_id": 1,
-                "chatflow_id": 1,
-                "topic": 1,
-                "created_at": 1,
-                "first_message": "$first_message_doc.content",
-            }
-        },
-    ]
-
-    session_summaries = await ChatSession.aggregate(pipeline).to_list()
-
-    return {"sessions": session_summaries, "count": len(session_summaries)}
-
-
+# for indivduals to get their own history
 @router.get("/sessions/{session_id}/history", response_model=ChatHistoryResponse)
 async def get_chat_history(
     session_id: str, current_user: Dict = Depends(authenticate_user)
@@ -794,3 +788,30 @@ async def get_chat_history(
     ]
 
     return {"history": history_list, "count": len(history_list)}
+
+
+@router.get("/sessions", response_model=SessionListResponse)
+async def get_all_user_sessions(current_user: Dict = Depends(authenticate_user)):
+    """
+    Retrieves a summary of all chat sessions for the current user,
+    """
+    user_id = current_user.get("user_id")
+
+    # Find all sessions for the current user, sorted by creation date.
+    sessions = await ChatSession.find(ChatSession.user_id == user_id).sort(-ChatSession.created_at).to_list()
+
+    # The response model `SessionListResponse` expects a list of `SessionSummary` objects.
+    # We need to map the fields from the `ChatSession` documents to `SessionSummary` objects.
+    session_summaries = [
+        SessionSummary(
+            session_id=session.session_id,
+            chatflow_id=session.chatflow_id,
+            topic=session.topic,
+            created_at=session.created_at,
+            first_message=None  # Explicitly set to None as it's no longer fetched
+        )
+        for session in sessions
+    ]
+
+    return {"sessions": session_summaries, "count": len(session_summaries)}
+

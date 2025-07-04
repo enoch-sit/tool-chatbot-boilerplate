@@ -8,24 +8,11 @@
  * type safety and preventing data-related bugs.
  */
 
-/**
- * Represents a single chat message in a session. This is a fundamental object
- * used to display the conversation history in the UI.
- */
-// export interface Message {
-//   id?: string; // Optional ID, as it may not be present on new messages
-//   session_id: string;
-//   sender: 'user' | 'bot' | 'system'; // Differentiates between user, AI, and system messages
-//   content: string; // The textual content of the message
-//   timestamp?: string;
-//   metadata?: Record<string, any>; // For any extra data associated with the message
-//   streamEvents?: StreamEvent[]; // Stores the raw events for a bot message, for debugging or reprocessing
-// }
 
 export interface Message {
   id?: string;
   session_id: string;
-  sender: 'user' | 'bot' | 'system';
+  sender: string, //'user' | 'bot' | 'agent' | 'system';
   content: string;
   timestamp?: string;
   metadata?: Record<string, any>;
@@ -47,7 +34,7 @@ export interface ChatSession {
   topic: string; // A title or topic for the session
   created_at: string;
   chatflow_id: string; // The ID of the agent being chatted with
-  user_id: string;
+  user_id?: string;
 }
 
 
@@ -101,6 +88,7 @@ export interface MetadataEvent {
 
 export interface EndEvent {
   event: 'end'; // Signals the end of the entire streaming response
+  data: string
 }
 
 /**
@@ -127,6 +115,17 @@ export interface ContentEvent {
   };
 }
 
+export interface SessionIdEvent {
+  event: 'session_id';
+  data: string; // The new session_id
+}
+
+export type ContentBlock =
+  | { type: 'text'; content: string }
+  | { type: 'code'; content: string; language: string }
+  | { type: 'mermaid'; content: string }
+  | { type: 'mindmap'; content: string };
+
 // Update the StreamEvent union type
 export type StreamEvent =
   | TokenEvent
@@ -137,6 +136,9 @@ export type StreamEvent =
   | CalledToolsEvent
   | UsageMetadataEvent
   | MetadataEvent
-  | EndEvent;
+  | EndEvent
+  | SessionIdEvent; // <-- Add this;
+
+
 
 

@@ -12,17 +12,6 @@ export const getUserSessions = async (): Promise<ChatSession[]> => {
 };
 
 /**
- * Creates a new chat session for a given chatflow.
- */
-export const createSession = async (chatflowId: string, topic: string): Promise<ChatSession> => {
-  const response = await apiClient.post<ChatSession>('/api/v1/chat/sessions', {
-    chatflow_id: chatflowId,
-    topic
-  });
-  return response.data;
-};
-
-/**
  * Retrieves the full message history for a specific chat session.
  */
 export const getSessionHistory = async (sessionId: string): Promise<Message[]> => {

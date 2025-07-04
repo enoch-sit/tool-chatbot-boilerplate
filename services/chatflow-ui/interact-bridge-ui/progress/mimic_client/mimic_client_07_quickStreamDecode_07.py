@@ -527,12 +527,12 @@ def investigate_stream_format(token, username, chatflow_id, question, session_id
         if response.status_code == 200:
             print(f"✅ Stream started successfully for {username}. Processing chunks:")
 
-            # Initialize stream parser [[1]][doc_1]
+            # Initialize stream parser 
             stream_parser = StreamParser()
             chunk_count = 0
 
             try:
-                # Process stream using enhanced parser [[2]][doc_2]
+                # Process stream using enhanced parser 
                 for chunk in response.iter_content(chunk_size=None):
                     if chunk:
                         chunk_count += 1

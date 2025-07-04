@@ -22,7 +22,7 @@ export const usePermissions = () => {
 
     return {
       isStrictlyAdmin: hasRole('admin'),
-      canAccessAdmin: hasRole(['admin', 'supervisor']),
+      canAccessAdmin: hasRole(['admin']),
       canManageUsers: hasPermission('manage_users'),
       canManageChatflows: hasPermission('manage_chatflows'),
       canViewAnalytics: hasPermission('view_analytics'),

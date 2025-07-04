@@ -13,9 +13,10 @@
 import { create } from 'zustand';
 import { streamChatAndStore } from '../api/chat';
 import { getMyChatflows } from '../api/chatflows';
-import { createSession, getUserSessions, getSessionHistory } from '../api/sessions';
+import { getUserSessions, getSessionHistory } from '../api/sessions';
 import type { Message, ChatSession, StreamEvent } from '../types/chat';
 import type {Chatflow} from '../types/chatflow';
+import { mapHistoryToMessages } from '../utils/chatParser';
 
 /**
  * Defines the shape of the chat state, including all data and status flags
@@ -39,7 +40,6 @@ interface ChatState {
   clearMessages: () => void; // Clears all messages from the current session.
   setCurrentSession: (session: ChatSession | null) => Promise<void>; // Switches the active session.
   setCurrentChatflow: (chatflow: Chatflow | null) => void; // Selects a chatflow to interact with.
-  createNewSession: (chatflowId: string, topic: string) => Promise<ChatSession>; // Creates a new chat session.
   loadChatflows: () => Promise<void>; // Fetches the list of available chatflows.
   loadSessions: () => Promise<void>; // Fetches the user's chat sessions.
   streamAssistantResponse: (prompt: string) => Promise<void>; // The core action to send a prompt and handle the streamed response.
@@ -86,7 +86,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (session) {
       try {
         const history = await getSessionHistory(session.session_id);
-        set({ messages: history, isLoading: false });
+        set({ messages: mapHistoryToMessages(history), isLoading: false });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load session history';
         set({ error: errorMessage, isLoading: false });
@@ -98,31 +98,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   /** Sets the currently selected chatflow. */
   setCurrentChatflow: (chatflow) => set({ currentChatflow: chatflow }),
-
-  /**
-   * Creates a new chat session for a given chatflow.
-   * Evidence from mimic_client_05: successful creation returns session_id
-   */
-  createNewSession: async (chatflowId: string, topic: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const session = await createSession(chatflowId, topic);
-      
-      // Add to sessions list and set as current
-      set(state => ({ 
-        sessions: [session, ...state.sessions], 
-        currentSession: session, 
-        isLoading: false,
-        messages: [] // Clear messages for new session
-      }));
-      
-      return session;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create session';
-      set({ error: errorMessage, isLoading: false });
-      throw error;
-    }
-  },
 
   /** Fetches the list of chatflows the user has access to from the backend. */
   loadChatflows: async () => {
@@ -157,16 +132,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
    */
   streamAssistantResponse: async (prompt: string) => {
     const { currentSession, currentChatflow, addMessage, updateMessage } = get();
-
-    if (!currentSession || !currentChatflow) {
-      get().setError("Cannot send message: No active session or chatflow selected.");
+    if (!currentChatflow) {
+      get().setError("Cannot send message: No chatflow selected.");
       return;
     }
 
-    // Add user message
+    // If no session, send with empty session_id and handle session creation in stream
+    let sessionId = currentSession?.session_id || '';
+    let isNewSession = !currentSession;
+    let newSessionObj: ChatSession | undefined = undefined;
+
+    // Add user message (session_id may be empty for first message)
     const userMessage: Message = {
       id: Date.now().toString(),
-      session_id: currentSession.session_id,
+      session_id: sessionId,
       sender: 'user',
       content: prompt,
       timestamp: new Date().toISOString(),
@@ -177,7 +156,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const assistantMessageId = (Date.now() + 1).toString();
     const assistantMessage: Message = {
       id: assistantMessageId,
-      session_id: currentSession.session_id,
+      session_id: sessionId,
       sender: 'bot',
       content: '',
       timestamp: new Date().toISOString(),
@@ -189,26 +168,90 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ isStreaming: true, error: null });
 
     let accumulatedContent = '';
+    let accumulatedTokenEvents: StreamEvent[] = [];
 
     const onStreamEvent = (event: StreamEvent) => {
+      // Handle session_id event for new session
+      if (isNewSession && event.event === 'session_id' && typeof event.data === 'string') {
+        sessionId = event.data;
+        // Create new session object and set as currentSession
+        newSessionObj = {
+          session_id: sessionId,
+          chatflow_id: currentChatflow.id,
+          topic: prompt.slice(0, 32) || 'New Chat',
+          created_at: new Date().toISOString(),
+        };
+        if (newSessionObj) {
+          const filteredSessions = get().sessions.filter(
+            (s): s is ChatSession => !!s && s.session_id !== sessionId
+          );
+          set({
+            currentSession: newSessionObj,
+            sessions: [newSessionObj, ...filteredSessions],
+          });
+          set({
+            messages: get().messages.map(m =>
+              m.id === userMessage.id || m.id === assistantMessageId
+                ? { ...m, session_id: sessionId }
+                : m
+            ),
+          });
+        }
+        isNewSession = false;
+      }
+      // Also handle metadata event for sessionId (robustness)
+      if (isNewSession && event.event === 'metadata' && event.data && typeof event.data.sessionId === 'string') {
+        sessionId = event.data.sessionId;
+        newSessionObj = {
+          session_id: sessionId,
+          chatflow_id: currentChatflow.id,
+          topic: prompt.slice(0, 32) || 'New Chat',
+          created_at: new Date().toISOString(),
+        };
+        if (newSessionObj) {
+          const filteredSessions = get().sessions.filter(
+            (s): s is ChatSession => !!s && s.session_id !== sessionId
+          );
+          set({
+            currentSession: newSessionObj,
+            sessions: [newSessionObj, ...filteredSessions],
+          });
+          set({
+            messages: get().messages.map(m =>
+              m.id === userMessage.id || m.id === assistantMessageId
+                ? { ...m, session_id: sessionId }
+                : m
+            ),
+          });
+        }
+        isNewSession = false;
+      }
       if (event.event === 'content' && event.data?.content) {
-        // Handle complete content updates [[4]][doc_4][[5]][doc_5]
         const contentData = event.data;
         accumulatedContent = contentData.content;
-        
         updateMessage(assistantMessageId, {
           content: accumulatedContent,
           timeMetadata: contentData.timeMetadata,
           streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event]
         });
       } else if (event.event === 'token' && typeof event.data === 'string') {
-        // Handle incremental token updates
         accumulatedContent += event.data;
+        accumulatedTokenEvents.push(event);
         updateMessage(assistantMessageId, {
-          content: accumulatedContent
+          content: accumulatedContent,
+          streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event]
+        });
+      } else if (
+        event.event === 'agentFlowEvent' ||
+        event.event === 'nextAgentFlow' ||
+        event.event === 'agentFlowExecutedData' ||
+        event.event === 'calledTools'
+      ) {
+        // Add these events to streamEvents for special UI rendering
+        updateMessage(assistantMessageId, {
+          streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event]
         });
       } else if (event.event === 'end') {
-        // Mark streaming as complete
         updateMessage(assistantMessageId, {
           isStreaming: false
         });
@@ -228,7 +271,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await streamChatAndStore(
         currentChatflow.id,
-        currentSession.session_id,
+        sessionId,
         prompt,
         onStreamEvent,
         onError

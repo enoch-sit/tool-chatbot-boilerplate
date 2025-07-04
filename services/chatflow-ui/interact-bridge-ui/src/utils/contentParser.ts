@@ -1,6 +1,6 @@
 // src/utils/contentParser.ts
 // [ADDED] This entire section is new to support mixed content rendering.
-import { ContentBlock } from '../store/chatStore';
+import type { ContentBlock } from '../types/chat';
 
 /**
  * Parses a raw string from the AI into an array of content blocks.

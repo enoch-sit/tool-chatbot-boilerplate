@@ -78,7 +78,7 @@ const transformLoginResponse = (data: LoginResponse): { user: User; tokens: Auth
   };
 
   // Derive permissions from role
-  const permissions = ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.user;
+  const permissions = ROLE_PERMISSIONS[user?.role] || ROLE_PERMISSIONS.user;
   
   const enrichedUser: User = {
     ...user,

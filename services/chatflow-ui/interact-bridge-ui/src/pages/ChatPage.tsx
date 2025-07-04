@@ -15,7 +15,7 @@
  * - Displaying loading and error states to the user.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Box,
   Sheet,
@@ -23,21 +23,17 @@ import {
   Button,
   Select,
   Option,
-  Input,
-  Modal,
-  ModalDialog,
-  ModalClose,
-  Stack,
   Alert,
+  Stack, // Add Stack here
 } from '@mui/joy';
+
+import { NoSsr } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '../store/chatStore';
 import { useAuth } from '../hooks/useAuth';
 import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
-import AddIcon from '@mui/icons-material/Add';
 import FolderIcon from '@mui/icons-material/Folder';
-import NoSsr from '@mui/material/NoSsr';
 
 const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -54,14 +50,10 @@ const ChatPage: React.FC = () => {
     error,
     loadChatflows,
     loadSessions,
-    createNewSession,
     setCurrentChatflow,
     setCurrentSession,
     setError,
   } = useChatStore();
-
-  const [showNewSessionModal, setShowNewSessionModal] = useState(false);
-  const [newSessionTopic, setNewSessionTopic] = useState('');
 
   // On component mount, load the initial data required for the page.
   useEffect(() => {
@@ -90,41 +82,14 @@ const ChatPage: React.FC = () => {
    * Handles the user selecting a different session from the dropdown.
    * The store action will then take care of loading the message history for that session.
    */
-  // const handleSessionChange = (
-  //   event: React.SyntheticEvent | null,
-  //   newValue: string | null
-  // ) => {
-  //   if (newValue) {
-  //     const selectedSession = sessions.find(s => s.id === newValue);
-  //     if (selectedSession) {
-  //       setCurrentSession(selectedSession);
-  //     }
-  //   }
-  // };
   const handleSessionChange = (event: any, newValue: string | null) => {
-  console.log('Session change triggered with value:', newValue);
-  if (newValue && sessions) {
-    const selectedSession = sessions.find(s => s.session_id === newValue); // ✅ Use session_id
-    console.log('Found session:', selectedSession);
-    if (selectedSession) {
-      setCurrentSession(selectedSession);
-    }
-  }
-};
-
-  /**
-   * Handles the creation of a new chat session.
-   * It calls the store action with the topic and current chatflow ID.
-   */
-  const handleCreateSession = async () => {
-    if (!currentChatflow || !newSessionTopic.trim()) return;
-    try {
-      await createNewSession(currentChatflow.id, newSessionTopic);
-      setShowNewSessionModal(false);
-      setNewSessionTopic('');
-    } catch (error) {
-      console.error('Failed to create session:', error);
-      // The store will handle setting the error state.
+    console.log('Session change triggered with value:', newValue);
+    if (newValue && sessions) {
+      const selectedSession = sessions.find(s => s.session_id === newValue); // ✅ Use session_id
+      console.log('Found session:', selectedSession);
+      if (selectedSession) {
+        setCurrentSession(selectedSession);
+      }
     }
   };
 
@@ -137,40 +102,31 @@ const ChatPage: React.FC = () => {
           <Typography level="body-sm" color="neutral">{t('auth.welcome')}, {user?.username}</Typography>
         </Stack>
         <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-          
-            <Select 
-              placeholder={t('chat.selectChatflow')} value={currentChatflow?.id || ''} 
-              onChange={handleChatflowChange} 
-              startDecorator={<FolderIcon />} 
-              sx={{ minWidth: 200 }} 
-              disabled={isLoading}>
-              {chatflows.map((chatflow) => (<Option key={chatflow.id} value={chatflow.id}>{chatflow.name}</Option>))}
-            </Select>
-            <NoSsr>
-            <Select 
-              placeholder={t('chat.selectSession', 'Select session')} 
-              value={currentSession?.session_id || ''} 
-              onChange={handleSessionChange} 
-              sx={{ minWidth: 200 }} 
-              disabled={!currentChatflow || isLoading}
-            >
-              
-               {(() => {
-                  console.log('Sessions data:', sessions); // Move console.log here
-                  return sessions
-                    .filter(s => s.chatflow_id === currentChatflow?.id)
-                    .map((session, idx) => {
-                      console.log('Rendering session:', session, 'at index:', idx);
-                      return (
-                        <Option key={String(session.session_id) + String(idx)} value={session.session_id}>
-                          {session.topic}
-                        </Option>
-                      );
-                    });
-                })()}
-            </Select>
+          <Select 
+            placeholder={t('chat.selectChatflow')} value={currentChatflow?.id || ''} 
+            onChange={handleChatflowChange} 
+            startDecorator={<FolderIcon />} 
+            sx={{ minWidth: 200 }} 
+            disabled={isLoading}>
+            {chatflows.map((chatflow) => (<Option key={chatflow.id} value={chatflow.id}>{chatflow.name}</Option>))}
+          </Select>
+          <NoSsr>
+          <Select 
+            placeholder={t('chat.selectSession', 'Select session')} 
+            value={currentSession?.session_id || ''} 
+            onChange={handleSessionChange} 
+            sx={{ minWidth: 200 }} 
+            disabled={!currentChatflow || isLoading}
+          >
+            {sessions
+              .filter(s => s.chatflow_id === currentChatflow?.id)
+              .map((session, idx) => (
+                <Option key={String(session.session_id) + String(idx)} value={session.session_id}>
+                  {session.topic}
+                </Option>
+              ))}
+          </Select>
           </NoSsr>
-          <Button startDecorator={<AddIcon />} onClick={() => setShowNewSessionModal(true)} disabled={!currentChatflow || isLoading}>{t('chat.newSession')}</Button>
         </Stack>
       </Sheet>
 
@@ -179,39 +135,22 @@ const ChatPage: React.FC = () => {
 
       {/* Main Chat Area: Renders either the conversation or a prompt to start */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {currentSession ? (
+        {currentChatflow ? (
           <>
             <MessageList />
             <ChatInput />
           </>
         ) : (
-          // This is the placeholder view shown when no session is active.
+          // Placeholder view when no chatflow is selected
           <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
             <Stack spacing={2}>
               <Typography level="h4" color="neutral">
-                {currentChatflow ? t('chat.selectSessionPrompt', 'Select a session or create a new one') : t('chat.selectChatflowPrompt', 'Select a chatflow to start chatting')}
+                {t('chat.selectChatflowPrompt', 'Select a chatflow to start chatting')}
               </Typography>
-              {currentChatflow && (<Button variant="outlined" startDecorator={<AddIcon />} onClick={() => setShowNewSessionModal(true)}>{t('chat.createSession')}</Button>)}
             </Stack>
           </Box>
         )}
       </Box>
-
-      {/* Modal for creating a new session */}
-      <Modal open={showNewSessionModal} onClose={() => setShowNewSessionModal(false)}>
-        <ModalDialog>
-          <ModalClose />
-          <Typography level="h4" sx={{ mb: 2 }}>{t('chat.createSession')}</Typography>
-          <Stack spacing={2}>
-            <Typography level="body-md">Chatflow: {currentChatflow?.name}</Typography>
-            <Input placeholder={t('chat.sessionTopic')} value={newSessionTopic} onChange={(e) => setNewSessionTopic(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newSessionTopic.trim()) { handleCreateSession(); } }} />
-            <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-              <Button variant="plain" onClick={() => setShowNewSessionModal(false)}>{t('common.cancel')}</Button>
-              <Button onClick={handleCreateSession} disabled={!newSessionTopic.trim() || isLoading}>{t('common.create', 'Create')}</Button>
-            </Stack>
-          </Stack>
-        </ModalDialog>
-      </Modal>
     </Box>
   );
 };
