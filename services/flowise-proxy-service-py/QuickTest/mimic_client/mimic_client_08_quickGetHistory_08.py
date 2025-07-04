@@ -361,12 +361,10 @@ def main():
                 session_id = session.get("session_id")
                 topic = session.get("topic", "No topic")
                 created_at = session.get("created_at")
-                first_message = session.get("first_message", "No messages")
                 
                 print(f"\n🗨️  Session: {session_id}")
                 print(f"   Topic: {topic}")
                 print(f"   Created: {created_at}")
-                print(f"   First message: {first_message[:50]}..." if len(first_message) > 50 else f"   First message: {first_message}")
                 
                 # Get full chat history for this session
                 chat_history = get_chathistory(user_token, session_id)

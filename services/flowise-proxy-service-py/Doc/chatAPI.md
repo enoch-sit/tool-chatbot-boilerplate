@@ -179,3 +179,60 @@ Used for sending a prediction request to a chatflow.
   * `500 Internal Server Error`: If an unexpected error occurs.
 
 ---
+
+### Get Chat Sessions
+
+- **Endpoint**: `GET /api/v1/chat/sessions`
+- **Description**: Retrieves a summary of all chat sessions for the authenticated user.
+- **Authentication**: JWT Bearer token required.
+- **Success Response**:
+  - **Code**: `200 OK`
+  - **Content**:
+    ```json
+    {
+      "sessions": [
+        {
+          "session_id": "some-session-id",
+          "chatflow_id": "some-chatflow-id",
+          "topic": "Inquiry about product features",
+          "created_at": "2025-07-03T10:00:00Z"
+        }
+      ],
+      "count": 1
+    }
+    ```
+
+---
+
+### Get Chat Session History
+
+* **Endpoint**: `GET /api/v1/chat/sessions/{session_id}/history`
+* **Description**: Retrieves the message history of a specific chat session.
+* **Authentication**: JWT Bearer token required.
+* **URL Parameters**:
+  * `session_id`: The ID of the session whose history is to be retrieved.
+* **Success Response** (`200 OK`):
+  ```json
+  {
+    "session_id": "some-session-id",
+    "messages": [
+      {
+        "role": "user",
+        "content": "string",
+        "timestamp": "datetime"
+      },
+      {
+        "role": "assistant",
+        "content": "string",
+        "timestamp": "datetime"
+      }
+    ]
+  }
+  ```
+
+* **Error Responses**:
+  * `401 Unauthorized`: If the JWT is invalid or expired.
+  * `404 Not Found`: If the session ID does not exist.
+  * `500 Internal Server Error`: If an unexpected error occurs.
+
+---

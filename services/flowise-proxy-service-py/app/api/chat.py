@@ -783,6 +783,7 @@ async def get_chat_history(
             "role": msg.role,
             "content": msg.content,
             "created_at": msg.created_at,
+            "session_id": session_id,
         }
         for msg in messages
     ]
@@ -797,57 +798,21 @@ async def get_all_user_sessions(current_user: Dict = Depends(authenticate_user))
     """
     user_id = current_user.get("user_id")
 
-    # This aggregation pipeline fetches sessions and joins them with the first user message.
-    pipeline = [
-        {"$match": {"user_id": user_id}},  # Filter sessions for the current user
-        {"$sort": {"created_at": -1}},  # Show the most recent sessions first
-        {
-            "$lookup": {
-                "from": "chat_messages",
-                "let": {"session_id": "$session_id"},
-                "pipeline": [
-                    {
-                        # This $match stage filters documents within the chat_messages collection.
-                        "$match": {
-                            # $expr allows us to use aggregation expressions for more complex comparisons.
-                            "$expr": {
-                                # $and ensures all conditions are met.
-                                "$and": [
-                                    # Condition 1: The message's session_id must match the session_id
-                                    # from the outer ChatSession document (referenced by $$session_id).
-                                    {"$eq": ["$session_id", "$$session_id"]},
-                                    # Condition 2: We only want messages where the role is 'user'.
-                                    {"$eq": ["$role", "user"]},
-                                ]
-                            }
-                        }
-                    },
-                    {"$sort": {"created_at": 1}},  # Find the earliest message
-                    {"$limit": 1},  # Get only the first one
-                ],
-                "as": "first_message_doc",
-            }
-        },
-        {
-            # Deconstruct the array, keeping sessions even if they have no messages
-            "$unwind": {
-                "path": "$first_message_doc",
-                "preserveNullAndEmptyArrays": True,
-            }
-        },
-        {
-            # Shape the final output
-            "$project": {
-                "session_id": 1,
-                "chatflow_id": 1,
-                "topic": 1,
-                "created_at": 1,
-                "first_message": "$first_message_doc.content",
-            }
-        },
-    ]
+    # Find all sessions for the current user, sorted by creation date.
+    sessions = await ChatSession.find(ChatSession.user_id == user_id).sort(-ChatSession.created_at).to_list()
 
-    session_summaries = await ChatSession.aggregate(pipeline).to_list()
+    # The response model `SessionListResponse` expects a list of `SessionSummary` objects.
+    # We need to map the fields from the `ChatSession` documents to `SessionSummary` objects.
+    session_summaries = [
+        SessionSummary(
+            session_id=session.session_id,
+            chatflow_id=session.chatflow_id,
+            topic=session.topic,
+            created_at=session.created_at,
+            first_message=None  # Explicitly set to None as it's no longer fetched
+        )
+        for session in sessions
+    ]
 
     return {"sessions": session_summaries, "count": len(session_summaries)}
 
