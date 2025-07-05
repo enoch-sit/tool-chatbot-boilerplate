@@ -17,6 +17,7 @@ import { getUserSessions, getSessionHistory } from '../api/sessions';
 import type { Message, ChatSession, StreamEvent } from '../types/chat';
 import type {Chatflow} from '../types/chatflow';
 import { mapHistoryToMessages } from '../utils/chatParser';
+import { useDebugStore } from './debugStore';
 
 /**
  * Defines the shape of the chat state, including all data and status flags
@@ -38,6 +39,8 @@ interface ChatState {
   addMessage: (message: Message) => void; // Adds a new message to the list.
   updateMessage: (messageId: string, updates: Partial<Message>) => void; // Updates an existing message.
   clearMessages: () => void; // Clears all messages from the current session.
+  clearSession: () => void; // Clears the current session to start a new conversation.
+  clearSessionId: () => void; // Clears only the session ID to start a new session with next message.
   setCurrentSession: (session: ChatSession | null) => Promise<void>; // Switches the active session.
   setCurrentChatflow: (chatflow: Chatflow | null) => void; // Selects a chatflow to interact with.
   loadChatflows: () => Promise<void>; // Fetches the list of available chatflows.
@@ -76,11 +79,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
   /** Clears all messages, typically when switching sessions. */
   clearMessages: () => set({ messages: [] }),
 
+  /** Clears the current session, resetting the chat state. */
+  clearSession: () => {
+    const { addLog } = useDebugStore.getState();
+    set({ 
+      currentSession: null, 
+      messages: [],
+      error: null 
+    });
+    addLog(`Session cleared. Ready to start a new conversation.`);
+  },
+
+  /** Clears only the session ID to start a new session with the next message. */
+  clearSessionId: () => {
+    const { addLog } = useDebugStore.getState();
+    set({ 
+      currentSession: null,
+      messages: [], // For clarity, this clears messages, but you can keep them if desired
+      error: null 
+    });
+    addLog(`Session ID cleared. Next message will start a new session.`);
+  },
+
   /**
    * Sets the current session and loads its message history.
    * Evidence from mimic_client_06: history endpoint provides message list
    */
   setCurrentSession: async (session) => {
+    const { addLog } = useDebugStore.getState();
     // Normalize session object to ensure it has session_id and correct structure
     if (session && (session as any).id && !(session as any).session_id) {
       // If session comes from a source with 'id' instead of 'session_id'
@@ -93,6 +119,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ currentSession: session, isLoading: true, messages: [] });
     
     if (session) {
+      addLog(`Setting current session. ID: ${session.session_id}`);
       try {
         const history = await getSessionHistory(session.session_id);
         set({ messages: mapHistoryToMessages(history), isLoading: false });
@@ -142,14 +169,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * Evidence from mimic_client_05/06: sessionId is passed in predict payload
    */
   streamAssistantResponse: async (prompt: string) => {
-    const { currentSession, currentChatflow, addMessage, updateMessage, setCurrentSession } = get();
+    const { addLog } = useDebugStore.getState();
+    console.log("1. start handle sending");
+    const { currentSession, currentChatflow, addMessage, updateMessage } = get();
     if (!currentChatflow) {
       get().setError("Cannot send message: No chatflow selected.");
       return;
     }
 
-    // If no session, send with empty session_id and handle session creation in stream
+    // If no session, send with empty session_id and handle a new session in the stream
     let sessionId = currentSession?.session_id || '';
+    addLog(`User sending message. Current session ID: ${sessionId || 'None (new session)'}`);
     let isNewSession = !currentSession;
     let newSessionObj: ChatSession | undefined = undefined;
 
@@ -176,75 +206,85 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
     addMessage(assistantMessage);
 
+    console.log("3. disaplaying loading ui");
     set({ isStreaming: true, error: null });
 
     let accumulatedContent = '';
-    let accumulatedTokenEvents: StreamEvent[] = [];
+    const accumulatedTokenEvents: StreamEvent[] = [];
 
     const onStreamEvent = (event: StreamEvent) => {
+      const { addLog } = useDebugStore.getState();
+      console.log("2. get first stream", event);
       // Handle session_id event for new session
-      if (isNewSession && event.event === 'session_id' && typeof event.data === 'string') {
+      if (isNewSession && event.event === 'session_id' && event.data && typeof event.data === 'string') {
+        console.log("get token get session id");
         sessionId = event.data;
-        // Create new session object and set as currentSession
+        addLog(`Bot returned new session ID: ${sessionId}`);
+        // Create new session object
         newSessionObj = {
           session_id: sessionId,
           chatflow_id: currentChatflow.id,
           topic: prompt.slice(0, 32) || 'New Chat',
           created_at: new Date().toISOString(),
         };
-        if (newSessionObj) {
-          const filteredSessions = get().sessions.filter(
-            (s): s is ChatSession => !!s && s.session_id !== sessionId
-          );
-          set({
+        
+        // Atomically update all relevant state in a single operation
+        set(state => {
+          // Find any existing session with the same ID to prevent duplicates
+          const filteredSessions = state.sessions.filter(s => s.session_id !== sessionId);
+          
+          return {
             currentSession: newSessionObj,
-            sessions: [newSessionObj, ...filteredSessions],
-          });
-          set({
-            messages: get().messages.map(m =>
+            sessions: [newSessionObj!, ...filteredSessions],
+            // Back-fill the session_id for the user and assistant messages
+            messages: state.messages.map(m =>
               m.id === userMessage.id || m.id === assistantMessageId
                 ? { ...m, session_id: sessionId }
                 : m
             ),
-          });
-        }
-        // Ensure currentSession is set in the store for next message
-        setCurrentSession(newSessionObj);
-        isNewSession = false;
+          };
+        });
+
+        isNewSession = false; // Prevent this block from running again for this stream
       }
       // Also handle metadata event for sessionId (robustness)
-      if (isNewSession && event.event === 'metadata' && event.data && typeof event.data.sessionId === 'string') {
+      if (isNewSession && event.event === 'metadata' && event.data && event.data.sessionId && typeof event.data.sessionId === 'string') {
+        console.log("get token get session id from metadata");
         sessionId = event.data.sessionId;
+        addLog(`Bot returned new session ID from metadata: ${sessionId}`);
+        // Create new session object
         newSessionObj = {
           session_id: sessionId,
           chatflow_id: currentChatflow.id,
           topic: prompt.slice(0, 32) || 'New Chat',
           created_at: new Date().toISOString(),
         };
-        if (newSessionObj) {
-          const filteredSessions = get().sessions.filter(
-            (s): s is ChatSession => !!s && s.session_id !== sessionId
-          );
-          set({
+        
+        // Atomically update all relevant state in a single operation
+        set(state => {
+          // Find any existing session with the same ID to prevent duplicates
+          const filteredSessions = state.sessions.filter(s => s.session_id !== sessionId);
+          
+          return {
             currentSession: newSessionObj,
-            sessions: [newSessionObj, ...filteredSessions],
-          });
-          set({
-            messages: get().messages.map(m =>
+            sessions: [newSessionObj!, ...filteredSessions],
+            // Back-fill the session_id for the user and assistant messages
+            messages: state.messages.map(m =>
               m.id === userMessage.id || m.id === assistantMessageId
                 ? { ...m, session_id: sessionId }
                 : m
             ),
-          });
-        }
-        isNewSession = false;
+          };
+        });
+
+        isNewSession = false; // Prevent this block from running again for this stream
       }
+
       if (event.event === 'content' && event.data?.content) {
-        const contentData = event.data;
-        accumulatedContent = contentData.content;
+        accumulatedContent += event.data.content;
         updateMessage(assistantMessageId, {
           content: accumulatedContent,
-          timeMetadata: contentData.timeMetadata,
+          timeMetadata: event.data.timeMetadata,
           streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event]
         });
       } else if (event.event === 'token' && typeof event.data === 'string') {

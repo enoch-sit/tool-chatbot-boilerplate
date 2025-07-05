@@ -34,6 +34,7 @@ import { useAuth } from '../hooks/useAuth';
 import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
 import FolderIcon from '@mui/icons-material/Folder';
+import AddIcon from '@mui/icons-material/Add';
 
 const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -52,6 +53,7 @@ const ChatPage: React.FC = () => {
     loadSessions,
     setCurrentChatflow,
     setCurrentSession,
+    clearSession,
     setError,
   } = useChatStore();
 
@@ -62,11 +64,19 @@ const ChatPage: React.FC = () => {
   }, [loadChatflows, loadSessions]);
 
   /**
+   * Handles the user clicking the "New Chat" button.
+   * This clears the current session so the next message starts a new conversation.
+   */
+  const handleNewChat = () => {
+    clearSession();
+  };
+
+  /**
    * Handles the user selecting a different chatflow from the dropdown.
    * It updates the store, which will trigger a re-render and clear the session.
    */
   const handleChatflowChange = (
-    event: React.SyntheticEvent | null,
+    _event: React.SyntheticEvent | null,
     newValue: string | null
   ) => {
     if (newValue) {
@@ -82,7 +92,7 @@ const ChatPage: React.FC = () => {
    * Handles the user selecting a different session from the dropdown.
    * The store action will then take care of loading the message history for that session.
    */
-  const handleSessionChange = (event: any, newValue: string | null) => {
+  const handleSessionChange = (_event: any, newValue: string | null) => {
     console.log('Session change triggered with value:', newValue);
     if (newValue && sessions) {
       const selectedSession = sessions.find(s => s.session_id === newValue); // ✅ Use session_id
@@ -127,6 +137,17 @@ const ChatPage: React.FC = () => {
               ))}
           </Select>
           </NoSsr>
+          
+          {/* New Chat Button */}
+          <Button
+            variant="outlined"
+            startDecorator={<AddIcon />}
+            onClick={handleNewChat}
+            disabled={!currentChatflow || isLoading}
+            sx={{ minWidth: 120 }}
+          >
+            {t('chat.newChat', 'New Chat')}
+          </Button>
         </Stack>
       </Sheet>
 
@@ -134,7 +155,7 @@ const ChatPage: React.FC = () => {
       {error && (<Alert color="danger" variant="soft" endDecorator={<Button size="sm" variant="plain" onClick={() => setError(null)}>{t('common.close')}</Button>} sx={{ m: 2 }}>{error}</Alert>)}
 
       {/* Main Chat Area: Renders either the conversation or a prompt to start */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
         {currentChatflow ? (
           <>
             <MessageList />

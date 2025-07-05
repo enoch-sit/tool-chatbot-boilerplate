@@ -11,7 +11,7 @@
 
 export interface Message {
   id?: string;
-  session_id: string;
+  session_id?: string;
   sender: string, //'user' | 'bot' | 'agent' | 'system';
   content: string;
   timestamp?: string;

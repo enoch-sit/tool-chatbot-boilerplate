@@ -11,6 +11,7 @@ import DashboardPage from './pages/DashboardPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/layout/Layout';
 import './i18n';
+import DebugLog from './components/debug/DebugLog';
 
 function App() {
   const { checkAuthStatus, user } = useAuth();
@@ -30,6 +31,7 @@ function App() {
     <Router>
       <CssVarsProvider defaultMode="system">
         <CssBaseline />
+        <DebugLog />
         <Routes>
           <Route 
             path="/login" 

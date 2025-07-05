@@ -179,6 +179,7 @@ def list_accessible_chatflows(token, username, flow_idx=0):
         print(f"❌ Error: {e}")
         return None
 
+
 class StreamParser:
     """
     A class to process a stream of concatenated JSON objects.
@@ -192,9 +193,9 @@ class StreamParser:
     def process_chunk(self, chunk_text):
         """Process a chunk of stream data and extract complete JSON events"""
         self.buffer += chunk_text
-        self.buffer = self.buffer.replace('}{', '}\n{')
-        parts = self.buffer.split('\n')
-        
+        self.buffer = self.buffer.replace("}{", "}\n{")
+        parts = self.buffer.split("\n")
+
         complete_parts = parts[:-1]
         self.buffer = parts[-1] if parts else ""
 
@@ -208,8 +209,9 @@ class StreamParser:
                 extracted_events.append(event)
             except json.JSONDecodeError:
                 self.buffer = part + self.buffer
-        
+
         return extracted_events
+
 
 def send_chat_message(token, username, chatflow_id, question, session_id=None):
     """Send a message to the streaming endpoint and return session_id"""
@@ -243,19 +245,24 @@ def send_chat_message(token, username, chatflow_id, question, session_id=None):
                         for event in events:
                             if event.get("event") == "session_id":
                                 new_session_id = event.get("data")
-                                print(f"🔑 Extracted session_id from 'session_id' event: {new_session_id}")
+                                print(
+                                    f"🔑 Extracted session_id from 'session_id' event: {new_session_id}"
+                                )
                             elif event.get("event") == "metadata":
                                 meta_session_id = event.get("data", {}).get("sessionId")
                                 if meta_session_id:
                                     new_session_id = meta_session_id
-                                    print(f"🔑 Extracted session_id from 'metadata' event: {new_session_id}")
+                                    print(
+                                        f"🔑 Extracted session_id from 'metadata' event: {new_session_id}"
+                                    )
                 print("✅ Stream finished.")
             else:
                 print(f"❌ Stream failed: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"❌ Error during stream processing: {e}")
-    
+
     return new_session_id
+
 
 def get_user_sessions(token):
     """Get all sessions for the current user"""
@@ -275,23 +282,89 @@ def get_user_sessions(token):
         print(f"❌ Error getting sessions: {e}")
         return []
 
+
 def get_chathistory(token, session_id):
     """Get chat history from session_id"""
     print(f"\n--- Getting chat history for session: {session_id} ---")
     headers = {"Authorization": f"Bearer {token}"}
     try:
-        response = requests.get(f"{API_BASE_URL}/api/v1/chat/sessions/{session_id}/history", headers=headers)
+        response = requests.get(
+            f"{API_BASE_URL}/api/v1/chat/sessions/{session_id}/history", headers=headers
+        )
         if response.status_code == 200:
             data = response.json()
             print(f"✅ Retrieved {data.get('count', 0)} messages from session")
             return data.get("history", [])
         else:
-            print(f"❌ Failed to get chat history: {response.status_code} {response.text}")
+            print(
+                f"❌ Failed to get chat history: {response.status_code} {response.text}"
+            )
             return []
     except Exception as e:
         print(f"❌ Error getting chat history: {e}")
         return []
 
+
+def test_name_recall(user_token, username, chatflow_id):
+    """Test if the bot can recall the user's name from chat history"""
+    print("\n" + "=" * 20 + " TESTING NAME RECALL " + "=" * 20)
+
+    # 1. Start a conversation by telling the bot a name
+    session_id = send_chat_message(
+        user_token,
+        username,
+        chatflow_id,
+        "My name is John",
+    )
+
+    if not session_id:
+        print("❌ Failed to start conversation for name recall test.")
+        return
+
+    # Give a moment for processing
+    time.sleep(5)
+
+    # 2. Ask the bot to recall the name
+    send_chat_message(
+        user_token,
+        username,
+        chatflow_id,
+        "What is my name?",
+        session_id=session_id,
+    )
+
+    # Give a moment for processing
+    time.sleep(5)
+
+    # 2. Ask the bot to recall the name
+    send_chat_message(
+        user_token,
+        username,
+        chatflow_id,
+        "What is my name? Please recall it.",
+        session_id=session_id,
+    )
+
+    # 3. Get the history and verify
+    history = get_chathistory(user_token, session_id)
+
+    if history and len(history) >= 4:
+        print("✅ History found for name recall test.")
+        # The history should be [user, assistant, user, assistant]
+        user_question = history[-2].get("content")
+        assistant_response = history[-1].get("content")
+
+        print(f"   User asked: '{user_question}'")
+        print(f"   Assistant responded: '{assistant_response}'")
+
+        if "john" in assistant_response.lower():
+            print("✅ SUCCESS: Bot correctly recalled the name 'John'.")
+        else:
+            print("❌ FAILED: Bot did not recall the name 'John'.")
+    else:
+        print("❌ FAILED: Could not retrieve sufficient history for verification.")
+
+    print("=" * 20 + " FINISHED NAME RECALL TEST " + "=" * 20)
 
 
 def main():
@@ -315,7 +388,7 @@ def main():
     if not chatflow_ids:
         print("❌ No chatflows available. Exiting.")
         exit(1)
-    chatflow_selected = 1
+    chatflow_selected = 2
     chatflow_id = chatflow_ids[chatflow_selected]
     for user in REGULAR_USERS:
         assign_user_to_chatflow_by_email(admin_token, chatflow_id, user["email"])
@@ -334,57 +407,63 @@ def main():
         )
         if not accessible_chatflow_id:
             continue
-        
+
+        # Run the name recall test
+        test_name_recall(user_token, user["username"], accessible_chatflow_id)
+
         # Create a new session to ensure there is history to fetch
         print("\n\n--- Creating a new chat session to test history retrieval ---")
         send_chat_message(
-            user_token, 
-            user["username"], 
-            accessible_chatflow_id, 
-            "This is a test message to create a session."
+            user_token,
+            user["username"],
+            accessible_chatflow_id,
+            "This is a test message to create a session.",
         )
         print("--- Finished creating chat session ---\n")
 
-        # I need to get all the sessions from the current user 
+        # I need to get all the sessions from the current user
         # TODO 1
         # Using session ids I can get all the user chat_history
-        # I need to get all the sessions from the current user 
+        # I need to get all the sessions from the current user
         # TODO 1 - IMPLEMENTED
         # Get all user sessions first
         user_sessions = get_user_sessions(user_token)
-        
+
         if user_sessions:
-            print(f"\n📋 Found {len(user_sessions)} sessions for user {user['username']}")
-            
+            print(
+                f"\n📋 Found {len(user_sessions)} sessions for user {user['username']}"
+            )
+
             # Using session ids I can get all the user chat_history
             for session in user_sessions:
                 session_id = session.get("session_id")
                 topic = session.get("topic", "No topic")
                 created_at = session.get("created_at")
-                
+
                 print(f"\n🗨️  Session: {session_id}")
                 print(f"   Topic: {topic}")
                 print(f"   Created: {created_at}")
-                
+
                 # Get full chat history for this session
                 chat_history = get_chathistory(user_token, session_id)
-                
+
                 if chat_history:
                     print(f"   💬 Messages in this session:")
                     for i, message in enumerate(chat_history):
                         role = message.get("role", "unknown")
                         content = message.get("content", "")
                         created_at = message.get("created_at", "")
-                        
+
                         # Truncate long messages for display
-                        content_preview = content[:100] + "..." if len(content) > 100 else content
+                        content_preview = (
+                            content[:100] + "..." if len(content) > 100 else content
+                        )
                         print(f"      {i+1}. [{role}] {content_preview}")
                 else:
                     print(f"   📭 No messages found in this session")
         else:
             print(f"\n📭 No sessions found for user {user['username']}")
 
-    
     print("\n" + "=" * 60)
     print("✨ Chat History Test Complete ✨")
     print(f"📝 Logs at: {LOG_PATH}")

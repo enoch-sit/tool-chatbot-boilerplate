@@ -492,11 +492,19 @@ async def chat_predict_stream_store(
 
         # 5. Create session_id and prepare user message, but do not save it yet.
         # This prevents orphaned user messages if the stream fails.
-        
-        new_session_id = False
-        if "sessionId" in chat_request:
-            session_id = chat_request.sessionId 
-        else: 
+
+        if chat_request.sessionId is not None and chat_request.sessionId != "":
+            # If sessionId is provided, validate its format and use it
+            try:
+                uuid.UUID(chat_request.sessionId)
+                session_id = chat_request.sessionId
+                new_session_id = False
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid sessionId format. Must be a valid UUID.",
+                )
+        else:
             session_id = create_session_id(user_id, chatflow_id)
             new_session_id = True
 
@@ -521,8 +529,7 @@ async def chat_predict_stream_store(
 
                 override_config = chat_request.overrideConfig or {}
                 override_config["sessionId"] = session_id
-
-                
+                print(f"Using session_id in override_config: {session_id}")
 
                 uploads = None
                 if chat_request.uploads:
@@ -540,13 +547,15 @@ async def chat_predict_stream_store(
                 completion = flowise_client.create_prediction(prediction_data)
 
                 # 🔥 STREAM SESSION_ID AS FIRST CHUNK
-                session_chunk_first = json.dumps({
-                    "event": "session_id",
-                    "data": session_id,
-                    "chatflow_id": chatflow_id,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "status": "streaming_started"
-                })
+                session_chunk_first = json.dumps(
+                    {
+                        "event": "session_id",
+                        "data": session_id,
+                        "chatflow_id": chatflow_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "status": "streaming_started",
+                    }
+                )
                 yield session_chunk_first
 
                 response_streamed = False
@@ -563,8 +572,6 @@ async def chat_predict_stream_store(
                     print("--")
                     yield good_json_string
                     response_streamed = True
-
-                
 
                 if response_streamed:
 
@@ -603,7 +610,7 @@ async def chat_predict_stream_store(
                             result.append({"event": "token", "data": token_data})
 
                         # Convert the list of objects to a JSON array string
-                        
+
                         return json.dumps(result)
 
                     await accounting_service.log_transaction(
@@ -620,16 +627,20 @@ async def chat_predict_stream_store(
                     )
                     await assistant_message.insert()
                     print(f"Storing assistant message: {assistant_message}")
-                    if(new_session_id):
-                        topic = chat_request.question[:50] + "..." if len(chat_request.question) > 50 else chat_request.question
+                    if new_session_id:
+                        topic = (
+                            chat_request.question[:50] + "..."
+                            if len(chat_request.question) > 50
+                            else chat_request.question
+                        )
                         new_chat_session = ChatSession(
                             session_id=session_id,
                             user_id=user_id,
                             chatflow_id=chatflow_id,
-                            topic=topic  #or auto-generated
+                            topic=topic,  # or auto-generated
                         )
                         await new_chat_session.insert()
-                    
+
                 else:
                     # If no data was streamed or the response is empty, log as a failed transaction
                     await accounting_service.log_transaction(
@@ -712,6 +723,7 @@ async def get_my_assigned_chatflows(current_user: Dict = Depends(authenticate_us
             status_code=500, detail=f"Failed to retrieve assigned chatflows: {str(e)}"
         )
 
+
 # Create session_id should be done when users post their first message
 # @router.post("/sessions", response_model=SessionResponse, status_code=201)
 # async def create_chat_session(
@@ -753,6 +765,7 @@ async def get_my_assigned_chatflows(current_user: Dict = Depends(authenticate_us
 #         raise HTTPException(
 #             status_code=500, detail=f"Failed to create session: {str(e)}"
 #         )
+
 
 # for indivduals to get their own history
 @router.get("/sessions/{session_id}/history", response_model=ChatHistoryResponse)
@@ -799,7 +812,11 @@ async def get_all_user_sessions(current_user: Dict = Depends(authenticate_user))
     user_id = current_user.get("user_id")
 
     # Find all sessions for the current user, sorted by creation date.
-    sessions = await ChatSession.find(ChatSession.user_id == user_id).sort(-ChatSession.created_at).to_list()
+    sessions = (
+        await ChatSession.find(ChatSession.user_id == user_id)
+        .sort(-ChatSession.created_at)
+        .to_list()
+    )
 
     # The response model `SessionListResponse` expects a list of `SessionSummary` objects.
     # We need to map the fields from the `ChatSession` documents to `SessionSummary` objects.
@@ -809,10 +826,9 @@ async def get_all_user_sessions(current_user: Dict = Depends(authenticate_user))
             chatflow_id=session.chatflow_id,
             topic=session.topic,
             created_at=session.created_at,
-            first_message=None  # Explicitly set to None as it's no longer fetched
+            first_message=None,  # Explicitly set to None as it's no longer fetched
         )
         for session in sessions
     ]
 
     return {"sessions": session_summaries, "count": len(session_summaries)}
-

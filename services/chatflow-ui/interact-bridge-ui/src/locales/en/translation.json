@@ -1,4 +1,3 @@
-// public/locales/en/translation.json
 {
   "appTitle": "Advanced Chatbot",
   "auth": {
@@ -27,6 +26,7 @@
     "typeMessage": "Type a message...",
     "send": "Send",
     "newSession": "New Session",
+    "newChat": "New Chat",
     "selectChatflow": "Select a chatflow",
     "createSession": "Create Session",
     "sessionTopic": "Session topic",

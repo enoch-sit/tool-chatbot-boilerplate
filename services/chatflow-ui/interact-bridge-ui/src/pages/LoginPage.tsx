@@ -1,6 +1,7 @@
 // src/pages/LoginPage.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useDebugStore } from '../store/debugStore';
 import {
   CssVarsProvider,
   Sheet,
@@ -17,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 
 const LoginPage: React.FC = () => {
   const { login, isLoading, error, clearError, isAuthenticated } = useAuth();
+  const addLog = useDebugStore((state) => state.addLog);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
@@ -32,6 +34,7 @@ const LoginPage: React.FC = () => {
     if (error) {
       clearError(); // Clear previous errors
     }
+    addLog(`Login attempt with username: ${username}`);
     await login(username, password);
   };
 

@@ -2,8 +2,8 @@
 import React from 'react';
 import { Box, Typography, Chip, CircularProgress } from '@mui/joy';
 import type { Message, StreamEvent } from '../../types/chat';
-import CodeBlock from '../renderers/CodeBlock';
-import MermaidDiagram from '../renderers/MermaidDiagram';
+// import CodeBlock from '../renderers/CodeBlock';
+// import MermaidDiagram from '../renderers/MermaidDiagram';
 import AgentFlowEventUI from './AgentFlowEventUI';
 import NextAgentFlowUI from './NextAgentFlowUI';
 import AgentFlowExecutedDataUI from './AgentFlowExecutedDataUI';
@@ -41,12 +41,45 @@ const renderEvent = (event: StreamEvent) => {
 };
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+  const { content, sender, isStreaming = false, streamEvents, timeMetadata } = message;
+
+  // Determine if there is any visible content from tokens or the main content string.
+  const accumulatedTokenContent = streamEvents ? getAccumulatedTokenContent(streamEvents) : '';
+  const hasVisibleContent = content || accumulatedTokenContent;
+
+  // Show a loading spinner if the bot is "thinking" but hasn't produced output yet.
+  if (sender === 'bot' && isStreaming && !hasVisibleContent) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'flex-start',
+          mb: 2,
+        }}
+      >
+        <Box
+          sx={{
+            maxWidth: '85%',
+            p: 2,
+            borderRadius: 'lg',
+            bgcolor: 'background.level1',
+            border: '1px solid',
+            borderColor: 'divider',
+            boxShadow: 'sm',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <CircularProgress size="sm" />
+        </Box>
+      </Box>
+    );
+  }
+  
   // If message has streamEvents, handle token accumulation and event rendering
-  if (message.streamEvents) {
-    // Accumulate all token data into a single string
-    const tokenContent = getAccumulatedTokenContent(message.streamEvents);
+  if (streamEvents) {
     // Render all non-token events
-    const nonTokenEvents = message.streamEvents.filter(e => e.event !== 'token');
+    const nonTokenEvents = streamEvents.filter(e => e.event !== 'token');
     return (
       <Box>
         
@@ -55,12 +88,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           <div key={idx}>{renderEvent(event)}</div>
         ))}
         {/* Render accumulated mixed content from tokens */}
-        {tokenContent && <MixedContentRenderer content={tokenContent} />}
+        {accumulatedTokenContent && <MixedContentRenderer content={accumulatedTokenContent} />}
       </Box>
     );
   }
-
-  const { content, sender, isStreaming = false, timeMetadata } = message;
 
   // Process content to handle special AI elements
   const processContent = (rawContent: string) => {
@@ -146,7 +177,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           maxWidth: '85%',
           p: 2,
           borderRadius: 'lg',
-          bgcolor: sender === 'user' ? 'primary.500' : 'background.level1',
+          bgcolor: sender === 'user' 
+            ? (theme) => theme.palette.mode === 'light' ? '#fff6ed' : 'primary.500'
+            : 'background.level1',
           color: sender === 'user' ? 'white' : 'text.primary',
           border: sender === 'bot' ? '1px solid' : 'none',
           borderColor: 'divider',

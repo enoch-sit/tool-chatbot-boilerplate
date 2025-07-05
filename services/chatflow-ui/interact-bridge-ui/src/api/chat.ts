@@ -16,7 +16,7 @@ import { useAuthStore } from '../store/authStore';
  * while ensuring the interaction is stored in the session history.
  *
  * @param chatflow_id The ID of the chatflow being interacted with.
- * @param session_id The ID of the current chat session.
+ * @param session_id The ID of the current chat session. Can be empty string for new sessions.
  * @param question The user's message/prompt.
  * @param onStreamEvent A callback function invoked for each `StreamEvent`.
  * @param onError A callback for handling parsing or stream errors.
