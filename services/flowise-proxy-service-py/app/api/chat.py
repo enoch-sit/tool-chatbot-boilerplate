@@ -601,7 +601,9 @@ async def chat_predict_stream_store(
                                             {"event": "token", "data": token_data}
                                         )
                                         token_data = ""  # Reset token data
-                                    result.append(obj)  # Add the non-token event
+                                    # Add the non-token event # we are not storing non-token events
+                                    # result.append(obj)
+                                    # We may sure the token events in the remarks of ChatMessage
                             except json.JSONDecodeError:
                                 continue  # Skip invalid JSON strings
 

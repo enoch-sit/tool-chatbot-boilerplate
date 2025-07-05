@@ -202,7 +202,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content: '',
       timestamp: new Date().toISOString(),
       isStreaming: true,
-      streamEvents: [],
+      streamEvents: [], // For history storage (token events only)
+      liveEvents: [], // For real-time display (all events)
     };
     addMessage(assistantMessage);
 
@@ -285,14 +286,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         updateMessage(assistantMessageId, {
           content: accumulatedContent,
           timeMetadata: event.data.timeMetadata,
-          streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event]
+          // Store content events in history (they contain the actual response)
+          streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event],
+          liveEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.liveEvents || []), event]
         });
       } else if (event.event === 'token' && typeof event.data === 'string') {
         accumulatedContent += event.data;
         accumulatedTokenEvents.push(event);
         updateMessage(assistantMessageId, {
           content: accumulatedContent,
-          streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event]
+          // Store token events in history (they contain the actual response)
+          streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event],
+          liveEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.liveEvents || []), event]
         });
       } else if (
         event.event === 'agentFlowEvent' ||
@@ -300,9 +305,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         event.event === 'agentFlowExecutedData' ||
         event.event === 'calledTools'
       ) {
-        // Add these events to streamEvents for special UI rendering
+        // Show these events in real-time UI but don't store in history
         updateMessage(assistantMessageId, {
-          streamEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.streamEvents || []), event]
+          // Don't add to streamEvents (history) - only to liveEvents (real-time display)
+          liveEvents: [...(get().messages.find(m => m.id === assistantMessageId)?.liveEvents || []), event]
         });
       } else if (event.event === 'end') {
         updateMessage(assistantMessageId, {

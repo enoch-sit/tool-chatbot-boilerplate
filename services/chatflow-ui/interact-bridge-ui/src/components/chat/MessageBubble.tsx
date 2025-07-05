@@ -1,13 +1,7 @@
-// src/components/chat/MessageBubble.tsx
 import React from 'react';
 import { Box, Typography, Chip, CircularProgress } from '@mui/joy';
 import type { Message, StreamEvent } from '../../types/chat';
-// import CodeBlock from '../renderers/CodeBlock';
-// import MermaidDiagram from '../renderers/MermaidDiagram';
-import AgentFlowEventUI from './AgentFlowEventUI';
-import NextAgentFlowUI from './NextAgentFlowUI';
-import AgentFlowExecutedDataUI from './AgentFlowExecutedDataUI';
-import CalledToolsUI from './CalledToolsUI';
+import AgentFlowTimeline from './AgentFlowTimeline';
 import { MixedContentRenderer } from '../renderers/MixedContent';
 import 'highlight.js/styles/github-dark.css';
 
@@ -23,29 +17,14 @@ const getAccumulatedTokenContent = (events: StreamEvent[]) => {
     .join('');
 };
 
-const renderEvent = (event: StreamEvent) => {
-  if (!('data' in event)) return null;
-  switch (event.event) {
-    case 'agentFlowEvent':
-      return <AgentFlowEventUI data={event.data} />;
-    case 'nextAgentFlow':
-      return <NextAgentFlowUI data={event.data} />;
-    case 'agentFlowExecutedData':
-      return <AgentFlowExecutedDataUI data={event.data} />;
-    case 'calledTools':
-      return <CalledToolsUI data={event.data} />;
-    // token events are handled in accumulation below
-    default:
-      return null;
-  }
-};
-
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
-  const { content, sender, isStreaming = false, streamEvents, timeMetadata } = message;
+  const { content, sender, isStreaming = false, streamEvents, liveEvents, timeMetadata } = message;
+
+  // Use liveEvents for real-time display during streaming, streamEvents for history
+  const eventsToDisplay = isStreaming ? (liveEvents || []) : (streamEvents || []);
 
   // Determine if there is any visible content from tokens or the main content string.
-  const accumulatedTokenContent = streamEvents ? getAccumulatedTokenContent(streamEvents) : '';
-  const hasVisibleContent = content || accumulatedTokenContent;
+  const hasVisibleContent = content || (eventsToDisplay.length > 0 && getAccumulatedTokenContent(eventsToDisplay));
 
   // Show a loading spinner if the bot is "thinking" but hasn't produced output yet.
   if (sender === 'bot' && isStreaming && !hasVisibleContent) {
@@ -76,19 +55,29 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     );
   }
   
-  // If message has streamEvents, handle token accumulation and event rendering
-  if (streamEvents) {
-    // Render all non-token events
-    const nonTokenEvents = streamEvents.filter(e => e.event !== 'token');
+  // If message has events to display, handle token accumulation and event rendering
+  if (eventsToDisplay.length > 0) {
+    const tokenContent = getAccumulatedTokenContent(eventsToDisplay);
+    const hasAgentFlowEvents = eventsToDisplay.some(e => 
+      e.event === 'agentFlowEvent' || 
+      e.event === 'nextAgentFlow' || 
+      e.event === 'agentFlowExecutedData' || 
+      e.event === 'calledTools'
+    );
+
     return (
       <Box>
+        {/* Show agent flow timeline */}
+        {hasAgentFlowEvents && (
+          <AgentFlowTimeline 
+            events={eventsToDisplay} 
+            isStreaming={isStreaming}
+            isCompact={isStreaming} // Compact view during streaming, full view after
+          />
+        )}
         
-        {/* Render special UI for other events */}
-        {nonTokenEvents.map((event, idx) => (
-          <div key={idx}>{renderEvent(event)}</div>
-        ))}
         {/* Render accumulated mixed content from tokens */}
-        {accumulatedTokenContent && <MixedContentRenderer content={accumulatedTokenContent} />}
+        {tokenContent && <MixedContentRenderer content={tokenContent} />}
       </Box>
     );
   }

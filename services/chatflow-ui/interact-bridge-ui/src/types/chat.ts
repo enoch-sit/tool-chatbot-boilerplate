@@ -16,7 +16,8 @@ export interface Message {
   content: string;
   timestamp?: string;
   metadata?: Record<string, any>;
-  streamEvents?: StreamEvent[];
+  streamEvents?: StreamEvent[]; // Events stored in history (only token events)
+  liveEvents?: StreamEvent[]; // Events shown during real-time streaming (all events)
   isStreaming?: boolean; // Add this to track if message is still streaming
   timeMetadata?: {
     start: number;
