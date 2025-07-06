@@ -1,1 +1,125 @@
- 
+{
+  "appTitle": "桥",
+  "auth": {
+    "login": "登录",
+    "logout": "登出",
+    "username": "用户名",
+    "password": "密码",
+    "loginButton": "登录",
+    "loginError": "登录失败。请检查您的凭据。",
+    "logoutConfirm": "您确定要登出吗？",
+    "welcome": "欢迎回来",
+    "unauthorized": "您无权访问此页面",
+    "welcomeTitle": "欢迎！",
+    "signInPrompt": "请登录以继续。",
+    "usernamePlaceholder": "johndoe",
+    "passwordPlaceholder": "密码"
+  },
+  "dashboard": {
+    "title": "仪表板",
+    "credits": "您的积分",
+    "noCredits": "无"
+  },
+  "navigation": {
+    "dashboard": "仪表板",
+    "chat": "聊天",
+    "admin": "管理",
+    "profile": "个人资料"
+  },
+  "chat": {
+    "typeMessage": "输入消息...",
+    "send": "发送",
+    "newSession": "新会话",
+    "newChat": "新聊天",
+    "selectChatflow": "选择一个聊天流",
+    "createSession": "创建会话",
+    "sessionTopic": "会话主题",
+    "noSessions": "暂无聊天会话",
+    "loadingSessions": "正在加载会话...",
+    "loadingHistory": "正在加载聊天记录...",
+    "selectSession": "选择一个会话",
+    "selectChatflowPrompt": "请选择一个聊天流以开始聊天。"
+  },
+  "admin": {
+    "pageTitle": "管理仪表板",
+    "chatflowManagement": "聊天流管理",
+    "userManagement": "用户管理",
+    "assignUser": "分配用户",
+    "bulkAssign": "批量分配",
+    "bulkAssignTooltip": "每行输入一个电子邮件以分配多个用户。",
+    "removeUser": "移除用户",
+    "userEmail": "用户电子邮件",
+    "assignButton": "分配",
+    "removeButton": "移除",
+    "noUsers": "此聊天流没有分配用户",
+    "assignSuccess": "用户分配成功",
+    "removeSuccess": "用户移除成功",
+    "syncChatflows": "同步聊天流",
+    "syncing": "正在同步...",
+    "statsTitle": "聊天流统计",
+    "unauthorizedDetails": "您需要管理员或主管权限才能访问此页面。",
+    "chatflowName": "聊天流名称",
+    "chatflowId": "聊天流ID",
+    "chatflowStatus": "状态",
+    "chatflowActions": "操作",
+    "manageUsersFor": "管理 {{chatflowName}} 的用户",
+    "userEmailPlaceholder": "输入用户电子邮件",
+    "bulkAssignPlaceholder": "每行输入一个电子邮件"
+  },
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "create": "创建",
+    "refresh": "刷新",
+    "processing": "处理中...",
+    "active": "活跃",
+    "inactive": "不活跃",
+    "welcomeUser": "欢迎，{{username}}"
+  },
+  "agentFlow": {
+    "event": "代理流事件",
+    "nextFlow": "下一个代理流",
+    "executed": "代理流已执行",
+    "toolsCalled": "已调用工具",
+    "agentFlowLabel": "代理流：",
+    "executedLabel": "代理流已执行：",
+    "nextFlowLabel": "下一个代理流：",
+    "calledToolsLabel": "已调用工具：",
+    "progress": "代理流进度",
+    "timeline": "代理流时间线（{{count}}个步骤）",
+    "processing": "处理中...",
+    "eventDetails": "事件详情",
+    "eventType": "事件类型：",
+    "data": "数据：",
+    "pending": "待定",
+    "active": "活跃",
+    "completed": "已完成",
+    "error": "错误"
+  },
+  "theme": {
+    "switchToDark": "切换到深色模式",
+    "switchToSystem": "切换到系统模式",
+    "switchToLight": "切换到浅色模式"
+  },
+  "diagram": {
+    "updateDiagram": "更新图表",
+    "edit": "编辑",
+    "view": "查看",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "resetZoom": "重置缩放",
+    "renderError": "图表渲染失败"
+  },
+  "debug": {
+    "title": "调试日志",
+    "clear": "清除",
+    "close": "关闭"
+  }
+}
+

@@ -1,4 +1,4 @@
- // src/hooks/useAuth.ts
+// src/hooks/useAuth.ts
 import { useAuthStore } from '../store/authStore';
 import { useCallback } from 'react';
 
@@ -7,7 +7,7 @@ export const useAuth = () => {
 
   const loginWithCredentials = useCallback(async (username: string, password: string) => {
     return store.login({ username, password });
-  }, [store.login]);
+  }, [store]);
 
   return {
     // State
@@ -21,6 +21,7 @@ export const useAuth = () => {
     login: loginWithCredentials,
     logout: store.logout,
     refreshToken: store.refreshToken,
+    setUser: store.setUser,
     clearError: store.clearError,
 
     // Utilities

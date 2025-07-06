@@ -109,7 +109,7 @@ const ChatPage: React.FC = () => {
       <Sheet variant="outlined" sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Stack direction="row" spacing={2} alignItems="center">
           <Typography level="h4" sx={{ flexGrow: 1 }}>{t('navigation.chat')}</Typography>
-          <Typography level="body-sm" color="neutral">{t('auth.welcome')}, {user?.username}</Typography>
+          <Typography level="body-sm" color="neutral">{t('common.welcomeUser', { username: user?.username })}</Typography>
         </Stack>
         <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
           <Select 
@@ -122,7 +122,7 @@ const ChatPage: React.FC = () => {
           </Select>
           <NoSsr>
           <Select 
-            placeholder={t('chat.selectSession', 'Select session')} 
+            placeholder={t('chat.selectSession')} 
             value={currentSession?.session_id || ''} 
             onChange={handleSessionChange} 
             sx={{ minWidth: 200 }} 
@@ -146,7 +146,7 @@ const ChatPage: React.FC = () => {
             disabled={!currentChatflow || isLoading}
             sx={{ minWidth: 120 }}
           >
-            {t('chat.newChat', 'New Chat')}
+            {t('chat.newChat')}
           </Button>
         </Stack>
       </Sheet>
@@ -166,7 +166,7 @@ const ChatPage: React.FC = () => {
           <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
             <Stack spacing={2}>
               <Typography level="h4" color="neutral">
-                {t('chat.selectChatflowPrompt', 'Select a chatflow to start chatting')}
+                {t('chat.selectChatflowPrompt')}
               </Typography>
             </Stack>
           </Box>

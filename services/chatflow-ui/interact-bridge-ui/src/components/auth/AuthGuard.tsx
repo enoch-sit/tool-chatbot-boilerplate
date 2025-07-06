@@ -1,7 +1,7 @@
 // src/components/auth/AuthGuard.tsx
 import React, { useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { getCurrentUser } from '../../api/auth';
+import { getCurrentUser } from '../../api/user';
 
 interface AuthGuardProps {
   children: React.ReactNode;

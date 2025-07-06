@@ -1,5 +1,5 @@
 {
-  "appTitle": "Advanced Chatbot",
+  "appTitle": "Bridge",
   "auth": {
     "login": "Login",
     "logout": "Logout",
@@ -9,7 +9,11 @@
     "loginError": "Login failed. Please check your credentials.",
     "logoutConfirm": "Are you sure you want to logout?",
     "welcome": "Welcome back",
-    "unauthorized": "You don't have permission to access this page"
+    "unauthorized": "You don't have permission to access this page",
+    "welcomeTitle": "Welcome!",
+    "signInPrompt": "Sign in to continue.",
+    "usernamePlaceholder": "johndoe",
+    "passwordPlaceholder": "password"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -32,7 +36,9 @@
     "sessionTopic": "Session topic",
     "noSessions": "No chat sessions yet",
     "loadingSessions": "Loading sessions...",
-    "loadingHistory": "Loading chat history..."
+    "loadingHistory": "Loading chat history...",
+    "selectSession": "Select a session",
+    "selectChatflowPrompt": "Please select a chatflow to start chatting."
   },
   "admin": {
     "pageTitle": "Admin Dashboard",
@@ -50,7 +56,15 @@
     "removeSuccess": "User removed successfully",
     "syncChatflows": "Sync Chatflows",
     "syncing": "Syncing...",
-    "statsTitle": "Chatflow Statistics"
+    "statsTitle": "Chatflow Statistics",
+    "unauthorizedDetails": "You need admin or supervisor privileges to access this page.",
+    "chatflowName": "Chatflow Name",
+    "chatflowId": "Chatflow ID",
+    "chatflowStatus": "Status",
+    "chatflowActions": "Actions",
+    "manageUsersFor": "Manage users for {{chatflowName}}",
+    "userEmailPlaceholder": "Enter user email",
+    "bulkAssignPlaceholder": "Enter one email per line"
   },
   "common": {
     "loading": "Loading...",
@@ -62,6 +76,49 @@
     "edit": "Edit",
     "close": "Close",
     "create": "Create",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "processing": "Processing...",
+    "active": "Active",
+    "inactive": "Inactive",
+    "welcomeUser": "Welcome, {{username}}"
+  },
+  "agentFlow": {
+    "event": "Agent Flow Event",
+    "nextFlow": "Next Agent Flow",
+    "executed": "Agent Flow Executed",
+    "toolsCalled": "Tools Called",
+    "agentFlowLabel": "Agent Flow:",
+    "executedLabel": "Agent Flow Executed:",
+    "nextFlowLabel": "Next Agent Flow:",
+    "calledToolsLabel": "Called Tools:",
+    "progress": "Agent Flow Progress",
+    "timeline": "Agent Flow Timeline ({{count}} steps)",
+    "processing": "Processing...",
+    "eventDetails": "Event Details",
+    "eventType": "Event Type:",
+    "data": "Data:",
+    "pending": "pending",
+    "active": "active",
+    "completed": "completed",
+    "error": "error"
+  },
+  "theme": {
+    "switchToDark": "Switch to dark mode",
+    "switchToSystem": "Switch to system mode",
+    "switchToLight": "Switch to light mode"
+  },
+  "diagram": {
+    "updateDiagram": "Update Diagram",
+    "edit": "Edit",
+    "view": "View",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "resetZoom": "Reset Zoom",
+    "renderError": "Diagram rendering failed"
+  },
+  "debug": {
+    "title": "Debug Log",
+    "clear": "Clear",
+    "close": "Close"
   }
 }

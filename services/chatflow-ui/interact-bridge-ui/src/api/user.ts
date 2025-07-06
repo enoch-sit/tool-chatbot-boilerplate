@@ -6,6 +6,7 @@
  */
 
 import apiClient from './client';
+import type { User } from '../types/auth';
 
 /**
  * Fetches the credit balance for the currently authenticated user.
@@ -14,5 +15,13 @@ import apiClient from './client';
  */
 export const getUserCredits = async (): Promise<{ totalCredits: number }> => {
   const response = await apiClient.get<{ totalCredits: number }>('/api/v1/chat/credits');
+  return response.data;
+};
+
+/**
+ * Fetches the current user's profile information.
+ */
+export const getCurrentUser = async (): Promise<User> => {
+  const response = await apiClient.get<User>('/api/v1/chat/get_current_user');
   return response.data;
 };

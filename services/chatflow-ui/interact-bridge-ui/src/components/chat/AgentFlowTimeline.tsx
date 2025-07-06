@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Typography,
@@ -34,6 +35,7 @@ const AgentFlowTimeline: React.FC<AgentFlowTimelineProps> = ({
   isStreaming = false,
   isCompact = false,
 }) => {
+  const { t } = useTranslation();
   const [selectedEvent, setSelectedEvent] = useState<StreamEvent | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -81,13 +83,13 @@ const AgentFlowTimeline: React.FC<AgentFlowTimelineProps> = ({
   const getEventTitle = (event: StreamEvent) => {
     switch (event.event) {
       case 'agentFlowEvent':
-        return typeof event.data === 'string' ? event.data : event.data?.status || 'Agent Flow Event';
+        return typeof event.data === 'string' ? event.data : event.data?.status || t('agentFlow.event');
       case 'nextAgentFlow':
-        return 'Next Agent Flow';
+        return t('agentFlow.nextFlow');
       case 'agentFlowExecutedData':
-        return 'Agent Flow Executed';
+        return t('agentFlow.executed');
       case 'calledTools':
-        return 'Tools Called';
+        return t('agentFlow.toolsCalled');
       default:
         return event.event;
     }
@@ -97,7 +99,7 @@ const AgentFlowTimeline: React.FC<AgentFlowTimelineProps> = ({
     if (typeof event.data === 'string') return event.data;
     if (event.data?.description) return event.data.description;
     if (event.data?.status) return event.data.status;
-    return 'Processing...';
+    return t('agentFlow.processing');
   };
 
   const handleEventClick = (event: StreamEvent) => {
@@ -114,7 +116,7 @@ const AgentFlowTimeline: React.FC<AgentFlowTimelineProps> = ({
     return (
       <Box sx={{ mb: 2 }}>
         <Typography level="body-sm" sx={{ mb: 1, opacity: 0.7 }}>
-          Agent Flow Progress
+          {t('agentFlow.progress')}
         </Typography>
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
           {steps.map((step, index) => (
@@ -131,7 +133,7 @@ const AgentFlowTimeline: React.FC<AgentFlowTimelineProps> = ({
           ))}
           {isStreaming && (
             <Typography level="body-xs" sx={{ alignSelf: 'center', opacity: 0.5 }}>
-              Processing...
+              {t('agentFlow.processing')}
             </Typography>
           )}
         </Stack>
@@ -144,7 +146,7 @@ const AgentFlowTimeline: React.FC<AgentFlowTimelineProps> = ({
     <Box sx={{ mb: 2 }}>
       <Typography level="title-sm" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
         <Info sx={{ mr: 1, fontSize: 'md' }} />
-        Agent Flow Timeline ({steps.length} steps)
+        {t('agentFlow.timeline', { count: steps.length })}
       </Typography>
       
       <Stack spacing={2}>
@@ -202,7 +204,7 @@ const AgentFlowTimeline: React.FC<AgentFlowTimelineProps> = ({
         <ModalDialog sx={{ maxWidth: 600, width: '90%' }}>
           <ModalClose />
           <Typography level="title-lg" sx={{ mb: 2 }}>
-            {selectedEvent ? getEventTitle(selectedEvent) : 'Event Details'}
+            {selectedEvent ? getEventTitle(selectedEvent) : t('agentFlow.eventDetails')}
           </Typography>
           <Divider sx={{ mb: 2 }} />
           

@@ -17,6 +17,7 @@ interface DecodedToken {
 }
 
 interface AuthActions {
+  setUser: (user: User) => void;
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => void;
   refreshToken: () => Promise<void>;
@@ -92,6 +93,12 @@ export const useAuthStore = create<AuthState & AuthActions>()(
   persist(
     (set, get) => ({
       ...initialState,
+      setUser: (user) => {
+        // Re-derive permissions from role in case they changed
+        const permissions = ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.user;
+        const enrichedUser = { ...user, permissions };
+        set({ user: enrichedUser, isAuthenticated: true });
+      },
       login: async (credentials) => {
         set({ isLoading: true, error: null });
         try {
@@ -147,7 +154,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
                 });
               }
             }
-          } catch (error) {
+          } catch {
             get().logout();
           }
         }

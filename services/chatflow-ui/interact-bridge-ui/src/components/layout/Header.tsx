@@ -27,10 +27,10 @@ const Header: React.FC = () => {
     >
       <Typography level="h4">{t('appTitle')}</Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        {user && <Typography>Welcome, {user.username}</Typography>}
+        {user && <Typography>{t('common.welcomeUser', { username: user.username })}</Typography>}
         <LanguageSelector />
         <ThemeToggleButton />
-        {user && <Button onClick={logout}>{t('logout')}</Button>}
+        {user && <Button onClick={logout}>{t('auth.logout')}</Button>}
       </Box>
     </Box>
   );

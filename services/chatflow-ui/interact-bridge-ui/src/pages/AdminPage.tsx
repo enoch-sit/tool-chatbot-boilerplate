@@ -70,7 +70,7 @@ const AdminPage: React.FC = () => {
   useEffect(() => {
     console.log('AdminPage useEffect triggered, canAccessAdmin:', canAccessAdmin);
     loadAdminData();
-  }, [loadAdminData]);
+  }, [loadAdminData, canAccessAdmin]);
 
   // Handle sync (placeholder - you might want to add this to the store)
   const handleSync = async () => {
@@ -154,9 +154,9 @@ const AdminPage: React.FC = () => {
   // Format status display
   const getStatusDisplay = (status: string) => {
     switch (status) {
-      case 'active': return 'Active';
-      case 'inactive': return 'Inactive';
-      case 'error': return 'Error';
+      case 'active': return t('common.active');
+      case 'inactive': return t('common.inactive');
+      case 'error': return t('common.error');
       default: return status;
     }
   };
@@ -190,7 +190,7 @@ const AdminPage: React.FC = () => {
           {t('auth.unauthorized')}
         </Typography>
         <Typography level="body-md">
-          You need admin or supervisor privileges to access this page.
+          {t('admin.unauthorizedDetails')}
         </Typography>
       </Box>
     );
@@ -198,9 +198,14 @@ const AdminPage: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography level="h2" component="h1" gutterBottom>
-        {t('admin.pageTitle')}
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography level="h2">{t('admin.pageTitle')}</Typography>
+        {canSyncChatflows && (
+          <Button onClick={handleSync} disabled={isLoading}>
+            {isLoading ? t('admin.syncing') : t('admin.syncChatflows')}
+          </Button>
+        )}
+      </Box>
 
       {/* Error Alert */}
       {error && (
@@ -232,149 +237,117 @@ const AdminPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* Header with Sync Button */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography level="h4">{t('admin.chatflowManagement')}</Typography>
-        {canSyncChatflows && (
-          <Button onClick={handleSync} disabled={isLoading}>
-            {isLoading ? t('admin.syncing') : t('admin.syncChatflows')}
-          </Button>
-        )}
-      </Box>
-
-      {/* Stats Display */}
-      {canViewAnalytics && stats && (
-        <Sheet variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 'sm' }}>
-          <Typography level="title-md" sx={{ mb: 1 }}>{t('admin.statsTitle')}</Typography>
-          <Typography>
-            Total: {stats.total} | Active: {stats.active} | 
-            Deleted: {stats.deleted} | Error: {stats.error}
-            {stats.last_sync && ` | Last Sync: ${new Date(stats.last_sync).toLocaleString()}`}
-          </Typography>
+      {canManageChatflows && (
+        <Sheet variant="outlined" sx={{ borderRadius: 'sm', overflow: 'auto' }}>
+          <Table aria-label="Chatflow management table">
+            <thead>
+              <tr>
+                <th>{t('admin.chatflowName')}</th>
+                <th>{t('admin.chatflowId')}</th>
+                <th>{t('admin.chatflowStatus')}</th>
+                <th>{t('admin.chatflowActions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chatflows.length === 0 ? (
+                <tr key="ChatflowInfo">
+                  <td 
+                    colSpan={canManageUsers ? 7 : 6} 
+                    style={{ textAlign: 'center', padding: '20px' }}
+                  >
+                    {isLoading ? 'Loading...' : 'No chatflows found'}
+                  </td>
+                </tr>
+              ) : (
+                chatflows.map((flow, idx) => (
+                  <tr key={`${flow.flowise_id}-${idx}`}>
+                    <td>{flow.name}</td>
+                    <td>{getStatusDisplay(flow.sync_status)}</td>
+                    <td>{flow.deployed ? t('common.yes') : t('common.no')}</td>
+                    <td>{flow.is_public ? t('common.yes') : t('common.no')}</td>
+                    <td>{flow.category || 'N/A'}</td>
+                    <td>{flow.type}</td>
+                    {canManageUsers && (
+                      <td>
+                        <Button size="sm" onClick={() => handleManageUsers(flow)}>
+                          {t('admin.userManagement')}
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </Table>
         </Sheet>
       )}
 
-      {/* Loading Indicator */}
-      {isLoading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
-          <CircularProgress />
-        </Box>
-      )}
-
-      {/* Chatflows Table */}
-      <Sheet variant="outlined" sx={{ borderRadius: 'sm' }}>
-        <Table aria-label="Chatflows table">
-          <thead>
-            <tr key="ChatflowTitle">
-              <th>Name</th>
-              <th>Status</th>
-              <th>Deployed</th>
-              <th>Public</th>
-              <th>Category</th>
-              <th>Type</th>
-              {canManageUsers && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {chatflows.length === 0 ? (
-              <tr key="ChatflowInfo">
-                <td 
-                  colSpan={canManageUsers ? 7 : 6} 
-                  style={{ textAlign: 'center', padding: '20px' }}
-                >
-                  {isLoading ? 'Loading...' : 'No chatflows found'}
-                </td>
-              </tr>
-            ) : (
-              chatflows.map((flow, idx) => (
-                <tr key={`${flow.flowise_id}-${idx}`}>
-                  <td>{flow.name}</td>
-                  <td>{getStatusDisplay(flow.sync_status)}</td>
-                  <td>{flow.deployed ? t('common.yes') : t('common.no')}</td>
-                  <td>{flow.is_public ? t('common.yes') : t('common.no')}</td>
-                  <td>{flow.category || 'N/A'}</td>
-                  <td>{flow.type}</td>
-                  {canManageUsers && (
-                    <td>
-                      <Button size="sm" onClick={() => handleManageUsers(flow)}>
-                        {t('admin.userManagement')}
-                      </Button>
-                    </td>
-                  )}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </Table>
-      </Sheet>
-
       {/* User Management Modal */}
       <Modal open={showUserModal} onClose={handleCloseUserModal}>
-        <ModalDialog layout="fullscreen">
+        <ModalDialog sx={{ minWidth: '400px' }}>
           <ModalClose />
-          <Typography level="h4">
-            {t('admin.userManagement')} - {selectedChatflow?.name}
+          <Typography level="h4">{t('admin.userManagement')}</Typography>
+          <Typography textColor="neutral.500" sx={{ mb: 2 }}>
+            {t('admin.manageUsersFor', { chatflowName: selectedChatflow?.name })}
           </Typography>
-          
-          {/* Add User Section */}
-          <Box sx={{ display: 'flex', gap: 1, my: 2 }}>
-            <Input
-              placeholder={t('admin.userEmail')}
-              value={userEmail}
-              onChange={(e) => setUserEmail(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && userEmail.trim()) {
-                  handleAddUser();
-                }
-              }}
-              sx={{ flex: 1 }}
-            />
-            <Button onClick={handleAddUser} disabled={!userEmail.trim() || isLoading}>
-              {t('admin.assignButton')}
-            </Button>
-            <Button color="success" onClick={() => setShowBulkAssignModal(true)}>
-              {t('admin.bulkAssign')}
-            </Button>
-          </Box>
-          
-          {/* Users Table */}
-          <Sheet variant="outlined" sx={{ borderRadius: 'sm', maxHeight: '400px', overflow: 'auto' }}>
-            <Table>
+
+          {canManageUsers && (
+            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+              <Input
+                sx={{ flexGrow: 1 }}
+                placeholder={t('admin.userEmailPlaceholder')}
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+              />
+              <Button onClick={handleAddUser} disabled={isLoading || !userEmail.trim()}>
+                {t('admin.assignButton')}
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => setShowBulkAssignModal(true)}
+              >
+                {t('admin.bulkAssign')}
+              </Button>
+            </Box>
+          )}
+
+          <Sheet sx={{ maxHeight: '300px', overflow: 'auto' }}>
+            <Table aria-label="User list for chatflow">
               <thead>
                 <tr>
-                  <th>Username</th>
-                  <th>Email</th>
-                  <th>External ID</th>
-                  <th>Assigned At</th>
-                  <th>Actions</th>
+                  <th>{t('admin.userEmail')}</th>
+                  {canManageUsers && <th>{t('admin.chatflowActions')}</th>}
                 </tr>
               </thead>
               <tbody>
-                {chatflowUsers.length === 0 ? (
+                {isLoading ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', padding: '20px' }}>
-                      {isLoading ? 'Loading users...' : t('admin.noUsers')}
+                    <td colSpan={canManageUsers ? 2 : 1} style={{ textAlign: 'center' }}>
+                      <CircularProgress size="sm" />
                     </td>
                   </tr>
-                ) : (
-                  chatflowUsers.map((user, idx) => (
-                    <tr key={`${user.email}-${idx}`}>
-                      <td>{user.username}</td>
+                ) : chatflowUsers.length > 0 ? (
+                  chatflowUsers.map((user) => (
+                    <tr key={user.email}>
                       <td>{user.email}</td>
-                      <td>{user.external_user_id}</td>
-                      <td>{new Date(user.assigned_at).toLocaleDateString()}</td>
-                      <td>
-                        <Button 
-                          size="sm" 
-                          color="danger" 
-                          onClick={() => handleRemoveUser(user.email)}
-                          disabled={isLoading}
-                        >
-                          {t('admin.removeButton')}
-                        </Button>
-                      </td>
+                      {canManageUsers && (
+                        <td>
+                          <Button
+                            size="sm"
+                            variant="outlined"
+                            color="danger"
+                            onClick={() => handleRemoveUser(user.email)}
+                          >
+                            {t('admin.removeButton')}
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   ))
+                ) : (
+                  <tr>
+                    <td colSpan={canManageUsers ? 2 : 1}>{t('admin.noUsers')}</td>
+                  </tr>
                 )}
               </tbody>
             </Table>
@@ -387,24 +360,27 @@ const AdminPage: React.FC = () => {
         <ModalDialog>
           <ModalClose />
           <Typography level="h4">{t('admin.bulkAssign')}</Typography>
-          <Typography level="body-sm" sx={{ mb: 2 }}>
-            {t('admin.bulkAssignTooltip')}
-          </Typography>
           <Textarea
-            placeholder="user1@example.com&#10;user2@example.com&#10;user3@example.com"
-            minRows={5}
+            minRows={4}
+            placeholder={t('admin.bulkAssignPlaceholder')}
             value={bulkUserEmails}
             onChange={(e) => setBulkUserEmails(e.target.value)}
+            sx={{ mt: 2, mb: 2 }}
           />
-          <Button 
-            onClick={handleBulkAssign} 
-            sx={{ mt: 2 }}
-            disabled={!bulkUserEmails.trim() || isLoading}
-          >
-            {isLoading ? 'Assigning...' : t('admin.assignButton')}
+          <Button onClick={handleBulkAssign} disabled={isLoading || !bulkUserEmails.trim()}>
+            {t('admin.assignButton')}
           </Button>
         </ModalDialog>
       </Modal>
+
+      {canViewAnalytics && stats && (
+        <Box sx={{ mt: 3 }}>
+          <Typography level="h3" sx={{ mb: 2 }}>{t('admin.statsTitle')}</Typography>
+          <Sheet variant="outlined" sx={{ p: 2, borderRadius: 'sm' }}>
+            <pre>{JSON.stringify(stats, null, 2)}</pre>
+          </Sheet>
+        </Box>
+      )}
     </Box>
   );
 };

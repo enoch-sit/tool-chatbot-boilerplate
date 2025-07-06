@@ -15,8 +15,10 @@ import {
 } from '@mui/joy';
 import CssBaseline from '@mui/joy/CssBaseline';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const LoginPage: React.FC = () => {
+  const { t } = useTranslation();
   const { login, isLoading, error, clearError, isAuthenticated } = useAuth();
   const addLog = useDebugStore((state) => state.addLog);
   const [username, setUsername] = useState('');
@@ -41,7 +43,14 @@ const LoginPage: React.FC = () => {
   return (
     <CssVarsProvider>
       <CssBaseline />
-      <main>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '100vh',
+        }}
+      >
         <Sheet
           sx={{
             width: 300,
@@ -59,35 +68,35 @@ const LoginPage: React.FC = () => {
         >
           <div>
             <Typography level="h4" component="h1">
-              <b>Welcome!</b>
+              <b>{t('auth.welcomeTitle')}</b>
             </Typography>
-            <Typography level="body-sm">Sign in to continue.</Typography>
+            <Typography level="body-sm">{t('auth.signInPrompt')}</Typography>
           </div>
           <form onSubmit={handleSubmit}>
             <FormControl>
-              <FormLabel>Username</FormLabel>
+              <FormLabel>{t('auth.username')}</FormLabel>
               <Input
                 name="username"
                 type="text"
-                placeholder="johndoe"
+                placeholder={t('auth.usernamePlaceholder')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </FormControl>
             <FormControl>
-              <FormLabel>Password</FormLabel>
+              <FormLabel>{t('auth.password')}</FormLabel>
               <Input
                 name="password"
                 type="password"
-                placeholder="password"
+                placeholder={t('auth.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </FormControl>
             <Button sx={{ mt: 1 }} type="submit" loading={isLoading}>
-              Log in
+              {t('auth.loginButton')}
             </Button>
           </form>
           {error && (
@@ -96,7 +105,7 @@ const LoginPage: React.FC = () => {
             </Box>
           )}
         </Sheet>
-      </main>
+      </Box>
     </CssVarsProvider>
   );
 };

@@ -12,9 +12,11 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/layout/Layout';
 import './i18n';
 import DebugLog from './components/debug/DebugLog';
+import { useDebugStore } from './store/debugStore';
 
 function App() {
   const { checkAuthStatus, user } = useAuth();
+  const { toggleDebugMode } = useDebugStore();
 
   useEffect(() => {
     // Check authentication status on app start and set up an interval
@@ -26,6 +28,20 @@ function App() {
     // Clean up the interval on component unmount
     return () => clearInterval(interval);
   }, [checkAuthStatus]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key === 'D') {
+        toggleDebugMode();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [toggleDebugMode]);
 
   return (
     <Router>

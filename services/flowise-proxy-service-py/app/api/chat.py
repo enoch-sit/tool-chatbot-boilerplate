@@ -568,8 +568,8 @@ async def chat_predict_stream_store(
                         chunk_str = str(chunk)
                     good_json_string = repair_json(chunk_str)
                     full_assistant_response_ls.append(good_json_string)
-                    print(good_json_string)
-                    print("--")
+                    # print(good_json_string)
+                    # print("--")
                     yield good_json_string
                     response_streamed = True
 
