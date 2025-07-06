@@ -1,0 +1,125 @@
+{
+  "appTitle": "進階聊天機器人",
+  "auth": {
+    "login": "登入",
+    "logout": "登出",
+    "username": "使用者名稱",
+    "password": "密碼",
+    "loginButton": "登入",
+    "loginError": "登入失敗。請檢查您的憑證。",
+    "logoutConfirm": "您確定要登出嗎？",
+    "welcome": "歡迎回來",
+    "unauthorized": "您無權存取此頁面",
+    "welcomeTitle": "歡迎！",
+    "signInPrompt": "請登入以繼續。",
+    "usernamePlaceholder": "johndoe",
+    "passwordPlaceholder": "密碼"
+  },
+  "dashboard": {
+    "title": "儀表板",
+    "credits": "您的點數",
+    "noCredits": "無"
+  },
+  "navigation": {
+    "dashboard": "儀表板",
+    "chat": "聊天",
+    "admin": "管理",
+    "profile": "個人資料"
+  },
+  "chat": {
+    "typeMessage": "輸入訊息...",
+    "send": "傳送",
+    "newSession": "新會話",
+    "newChat": "新聊天",
+    "selectChatflow": "選擇一個聊天流程",
+    "createSession": "建立會話",
+    "sessionTopic": "會話主題",
+    "noSessions": "尚無聊天會話",
+    "loadingSessions": "正在載入會話...",
+    "loadingHistory": "正在載入聊天記錄...",
+    "selectSession": "選擇一個會話",
+    "selectChatflowPrompt": "請選擇一個聊天流程以開始聊天。"
+  },
+  "admin": {
+    "pageTitle": "管理儀表板",
+    "chatflowManagement": "聊天流程管理",
+    "userManagement": "使用者管理",
+    "assignUser": "指派使用者",
+    "bulkAssign": "批次指派",
+    "bulkAssignTooltip": "每行輸入一個電子郵件以指派多個使用者。",
+    "removeUser": "移除使用者",
+    "userEmail": "使用者電子郵件",
+    "assignButton": "指派",
+    "removeButton": "移除",
+    "noUsers": "此聊天流程沒有指派使用者",
+    "assignSuccess": "使用者指派成功",
+    "removeSuccess": "使用者移除成功",
+    "syncChatflows": "同步聊天流程",
+    "syncing": "正在同步...",
+    "statsTitle": "聊天流程統計",
+    "unauthorizedDetails": "您需要管理員或主管權限才能存取此頁面。",
+    "chatflowName": "聊天流程名稱",
+    "chatflowId": "聊天流程ID",
+    "chatflowStatus": "狀態",
+    "chatflowActions": "操作",
+    "manageUsersFor": "管理 {{chatflowName}} 的使用者",
+    "userEmailPlaceholder": "輸入使用者電子郵件",
+    "bulkAssignPlaceholder": "每行輸入一個電子郵件"
+  },
+  "common": {
+    "loading": "載入中...",
+    "error": "錯誤",
+    "success": "成功",
+    "cancel": "取消",
+    "save": "儲存",
+    "delete": "刪除",
+    "edit": "編輯",
+    "close": "關閉",
+    "create": "建立",
+    "refresh": "重新整理",
+    "processing": "處理中...",
+    "active": "啟用",
+    "inactive": "停用",
+    "welcomeUser": "歡迎，{{username}}"
+  },
+  "agentFlow": {
+    "event": "代理流程事件",
+    "nextFlow": "下一個代理流程",
+    "executed": "代理流程已執行",
+    "toolsCalled": "已呼叫工具",
+    "agentFlowLabel": "代理流程：",
+    "executedLabel": "代理流程已執行：",
+    "nextFlowLabel": "下一個代理流程：",
+    "calledToolsLabel": "已呼叫工具：",
+    "progress": "代理流程進度",
+    "timeline": "代理流程時間軸（{{count}}個步驟）",
+    "processing": "處理中...",
+    "eventDetails": "事件詳情",
+    "eventType": "事件類型：",
+    "data": "資料：",
+    "pending": "待處理",
+    "active": "啟用",
+    "completed": "已完成",
+    "error": "錯誤"
+  },
+  "theme": {
+    "switchToDark": "切換至深色模式",
+    "switchToSystem": "切換至系統模式",
+    "switchToLight": "切換至淺色模式"
+  },
+  "diagram": {
+    "updateDiagram": "更新圖表",
+    "edit": "編輯",
+    "view": "檢視",
+    "zoomIn": "放大",
+    "zoomOut": "縮小",
+    "resetZoom": "重設縮放",
+    "renderError": "圖表渲染失敗"
+  },
+  "debug": {
+    "title": "偵錯記錄",
+    "clear": "清除",
+    "close": "關閉"
+  }
+}
+
