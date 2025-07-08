@@ -1,4 +1,10 @@
 #!/bin/bash
+# Usage:
+#   ./rebuild-docker-rebuild-volume.sh
+# Stops, rebuilds, and resets the accounting service database for Ubuntu/Linux.
+# WARNING: This will DELETE the accounting service database!
+# To use: chmod +x ./rebuild-docker-rebuild-volume.sh && ./rebuild-docker-rebuild-volume.sh
+
 echo "======================================================"
 echo "WARNING: This will DELETE the accounting service database!"
 echo "This action cannot be undone."
@@ -11,15 +17,15 @@ fi
 
 echo
 echo "Stopping containers and removing the postgres-data volume..."
-docker compose down --volumes
+docker compose -f docker-compose.linux.yml down --volumes
 
 echo
 echo "Rebuilding Docker images without cache..."
-docker compose build --no-cache
+docker compose -f docker-compose.linux.yml build --no-cache
 
 echo
 echo "Starting services in detached mode..."
-docker compose up -d
+docker compose -f docker-compose.linux.yml up -d
 
 echo
 echo "======================================================"
