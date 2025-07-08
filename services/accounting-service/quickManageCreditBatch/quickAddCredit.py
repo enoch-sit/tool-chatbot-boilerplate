@@ -25,7 +25,7 @@ MONGODB_CONTAINER = "auth-mongodb"
 ADMIN_USER = {
     "username": "admin",
     "email": "admin@example.com",
-    "password": "admin@admin@aidcec", # Please change this
+    "password": "admin@admin@aidcec",  # Please change this
     "role": "admin",
 }
 SUPERVISOR_USERS = [
@@ -48,7 +48,8 @@ REGULAR_USERS = [
         "email": f"user{i:02d}@aidcec.com",
         "password": f"User{i:02d}@aidcec",
         "role": "enduser",
-    } for i in range(1,101)
+    }
+    for i in range(1, 101)
 ]
 
 
@@ -106,60 +107,63 @@ def get_admin_token():
 
     return None
 
+
 from typing import Dict, Optional, Any
+
+
 def get_user_by_email(email: str, admin_token: str) -> Optional[Dict[str, Any]]:
     """
     Test the GET /api/admin/users/by-email/:email endpoint
-    
+
     Args:
         email: User's email address
         admin_token: Admin JWT token for authentication
-        
+
     Returns:
         Dict containing user info, or None if not found/error
     """
     print(f"\nTesting GET /api/admin/users/by-email/{email}")
-    
+
     # URL encode the email
-    encoded_email = urllib.parse.quote(email, safe='')
+    encoded_email = urllib.parse.quote(email, safe="")
     url = f"{API_BASE_URL}/api/admin/users/by-email/{encoded_email}"
-    
+
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "Authorization": f"Bearer {admin_token}"
+        "Authorization": f"Bearer {admin_token}",
     }
-    
+
     try:
         print(f"Making request to: {url}")
         print(f"Headers: Authorization: Bearer {admin_token[:20]}...")
-        
+
         response = requests.get(url, headers=headers, timeout=10)
-        
+
         print(f"Response Status: {response.status_code}")
         print(f"Response Headers: {dict(response.headers)}")
-        
+
         if response.status_code == 200:
             data = response.json()
             print("✅ Request successful!")
             print(f"Response: {json.dumps(data, indent=2)}")
-            
+
             # Extract user data
-            user_data = data.get('user')
+            user_data = data.get("user")
             if user_data:
                 return {
-                    'user_id': user_data.get('_id'),
-                    'username': user_data.get('username'),
-                    'email': user_data.get('email'),
-                    'role': user_data.get('role'),
-                    'is_verified': user_data.get('isVerified', False),
-                    'created_at': user_data.get('createdAt'),
-                    'updated_at': user_data.get('updatedAt')
+                    "user_id": user_data.get("_id"),
+                    "username": user_data.get("username"),
+                    "email": user_data.get("email"),
+                    "role": user_data.get("role"),
+                    "is_verified": user_data.get("isVerified", False),
+                    "created_at": user_data.get("createdAt"),
+                    "updated_at": user_data.get("updatedAt"),
                 }
             else:
                 print("⚠️ No user data in response")
                 return None
-                
+
         elif response.status_code == 404:
             print(f"❌ User not found: {email}")
             try:
@@ -168,23 +172,24 @@ def get_user_by_email(email: str, admin_token: str) -> Optional[Dict[str, Any]]:
             except:
                 print(f"Error response: {response.text}")
             return None
-            
+
         elif response.status_code == 401:
             print("❌ Unauthorized - check admin token")
             return None
-            
+
         elif response.status_code == 403:
             print("❌ Forbidden - admin access required")
             return None
-            
+
         else:
             print(f"❌ Unexpected status code: {response.status_code}")
             print(f"Response: {response.text}")
             return None
-            
+
     except requests.exceptions.RequestException as e:
         print(f"❌ Request failed: {e}")
         return None
+
 
 def create_user_account(admin_token, sub, email, role, username=None):
     """
@@ -207,14 +212,10 @@ def create_user_account(admin_token, sub, email, role, username=None):
 
     headers = {
         "Authorization": f"Bearer {admin_token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
-    payload = {
-        "sub": sub,
-        "email": email,
-        "role": role
-    }
+    payload = {"sub": sub, "email": email, "role": role}
 
     if username:
         payload["username"] = username
@@ -224,13 +225,13 @@ def create_user_account(admin_token, sub, email, role, username=None):
 
     try:
         response = requests.post(create_user_url, headers=headers, json=payload)
-        
+
         response_data = None
         try:
             response_data = response.json()
         except json.JSONDecodeError:
             response_data = response.text
-            
+
         return response.status_code, response_data
 
     except requests.exceptions.RequestException as e:
@@ -238,15 +239,18 @@ def create_user_account(admin_token, sub, email, role, username=None):
         print(error_message)
         return None, error_message
 
+
 def allocate_credit_to_user(user, token):
     """Allocate credit to a user using the admin token by their email"""
-    print(f"\n--- Allocating credits to {user['username']} (email: {user['email']}) ---")
+    print(
+        f"\n--- Allocating credits to {user['username']} (email: {user['email']}) ---"
+    )
 
     # Default credit allocation amounts
     credit_amounts = {
-        "admin": 2000,  # Admin gets 2000 credits
+        "admin": 2000,
         "supervisor": 1000,  # Supervisors get 1000 credits
-        "enduser": 30,  # Regular users get 30 credits
+        "enduser": 500,  # Regular users get 500 credits
     }
 
     credit_amount = credit_amounts.get(
@@ -268,7 +272,9 @@ def allocate_credit_to_user(user, token):
             },
         )
 
-        if response.status_code == 201:  # Assuming 201 for successful creation/allocation
+        if (
+            response.status_code == 201
+        ):  # Assuming 201 for successful creation/allocation
             data = response.json()
             print(
                 f"✅ Successfully allocated {credit_amount} credits to {user['username']} (email: {user['email']})"
@@ -289,7 +295,9 @@ def allocate_credit_to_user(user, token):
             return False
 
     except requests.RequestException as e:
-        print(f"❌ Request error while allocating credits to {user['username']} (email: {user['email']}): {e}")
+        print(
+            f"❌ Request error while allocating credits to {user['username']} (email: {user['email']}): {e}"
+        )
         return False
     except Exception as e:
         print(
@@ -313,36 +321,51 @@ def main():
     if not admin_token:
         sys.exit(1)
 
-    # Allocate credits to admin user first
-    print("\n--- Allocating credits to admin ---")
-    allocate_credit_to_user(ADMIN_USER, admin_token)
-
     print("\n=== Starting Credit Allocation Process ===")
 
     # Combine all users that need credit allocation
-    all_users = SUPERVISOR_USERS + REGULAR_USERS
+    all_users = [ADMIN_USER] + SUPERVISOR_USERS + REGULAR_USERS
 
     successful_allocations = 0
     failed_allocations = 0
 
     # Allocate credits to each user
     for user in all_users:
-        user_data = get_user_by_email(email=user['email'], admin_token=admin_token)
-        response = create_user_account(
-            admin_token, 
-            user_data["user_id"], # This is actually the sub
-            user_data["email"], 
-            user_data["role"], 
-            user_data["username"]
-        )
-        success = allocate_credit_to_user(user, admin_token)
-        if success:
-            successful_allocations += 1
+        user_data = get_user_by_email(email=user["email"], admin_token=admin_token)
+
+        # If user is found in the auth service, proceed to create account and allocate credit
+        if user_data:
+            # Create the user account in the accounting service
+            status_code, response_data = create_user_account(
+                admin_token,
+                user_data["user_id"],  # This is the sub from the auth service
+                user_data["email"],
+                user_data["role"],
+                user_data["username"],
+            )
+
+            # Check if the user was created or already exists (409 Conflict)
+            if status_code == 201 or status_code == 409:
+                # Now, allocate the credit
+                success = allocate_credit_to_user(user, admin_token)
+                if success:
+                    successful_allocations += 1
+                else:
+                    failed_allocations += 1
+            else:
+                print(
+                    f"❌ Failed to create user account for {user['email']}: {status_code} - {response_data}"
+                )
+                failed_allocations += 1
         else:
+            # If user is not found in the auth service, log it and mark as failed
+            print(
+                f"⚠️ User with email {user['email']} not found in auth-service. Skipping credit allocation."
+            )
             failed_allocations += 1
 
         # Small delay between requests to avoid overwhelming the server
-        time.sleep(1)
+        time.sleep(0.5)
 
     # Summary
     print(f"\n=== Credit Allocation Summary ===")

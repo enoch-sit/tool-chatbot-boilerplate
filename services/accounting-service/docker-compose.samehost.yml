@@ -1,0 +1,40 @@
+services:
+  accounting-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: accounting-service-samehost
+    ports:
+      - "3001:3001"
+      - "9229:9229"
+    env_file:
+      - .env.localhost
+    command: node --inspect=0.0.0.0:9229 dist/src/server.js
+    depends_on:
+      - postgres
+    volumes:
+      - ./src:/usr/src/app/src
+      - ./node_modules:/usr/src/app/node_modules
+    networks:
+      - auth-network
+    restart: always
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: accounting-postgres-samehost
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env.localhost
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - auth-network
+    restart: always
+
+networks:
+  auth-network:
+    external: true
+
+volumes:
+  postgres-data:
