@@ -52,15 +52,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Apply rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  // Increased for development to allow for batch scripts and testing with many concurrent users.
-  max: 1000000, // limit each IP to 1000000 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use(limiter);
+// // Apply rate limiting
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   // Increased for development to allow for batch scripts and testing with many concurrent users.
+//   max: 1000000, // limit each IP to 1000000 requests per windowMs
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+// app.use(limiter);
 
 // POTENTIAL ISSUE AREA: If there is any validation middleware applied within apiRoutes
 // or specifically for the /credits/check route before it reaches CreditController.checkCredits,
