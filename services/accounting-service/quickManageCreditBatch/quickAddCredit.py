@@ -26,7 +26,7 @@ ADMIN_USER = {
     "username": "admin",
     "email": "admin@example.com",
     "password": "admin@admin@aidcec",  # Please change this
-    "role": "admin",
+    "role": "admin",  # update
 }
 SUPERVISOR_USERS = [
     {
@@ -248,9 +248,9 @@ def allocate_credit_to_user(user, token):
 
     # Default credit allocation amounts
     credit_amounts = {
-        "admin": 2000,
-        "supervisor": 1000,  # Supervisors get 1000 credits
-        "enduser": 500,  # Regular users get 500 credits
+        "admin": 5000,
+        "supervisor": 6000,  # Supervisors get 6000 credits
+        "enduser": 30,  # Regular users get 30 credits
     }
 
     credit_amount = credit_amounts.get(

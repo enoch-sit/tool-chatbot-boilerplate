@@ -1,0 +1,66 @@
+# This docker-compose file is optimized for Ubuntu/Linux servers.
+# To use:
+# 1. Save this file as docker-compose.linux.yml in your accounting-service directory.
+# 2. Build and start the services with:
+#    docker compose -f docker-compose.linux.yml up --build -d
+# 3. To stop the services:
+#    docker compose -f docker-compose.linux.yml down
+
+version: "3.8"
+
+services:
+  accounting-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: accounting-service
+    ports:
+      - "3001:3001"
+      - "9229:9229" # Debug port, optional
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-accounting_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-dev_access_secret_key_change_this_in_production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev_refresh_secret_key_change_this_in_production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CORS_ORIGIN=*
+    command: node dist/src/server.js
+    depends_on:
+      - postgres
+    volumes:
+      # Mount logs directory if you want to persist logs
+      - ./logs:/usr/src/app/logs
+    networks:
+      - accounting-network
+    restart: always
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: accounting-postgres
+    ports:
+      - "5432:5432"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DB=${DB_NAME:-accounting_db}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - accounting-network
+    restart: always
+
+networks:
+  accounting-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
