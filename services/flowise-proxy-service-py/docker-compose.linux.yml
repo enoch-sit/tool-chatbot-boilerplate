@@ -9,7 +9,7 @@ services:
     environment:
       - MONGODB_URL=mongodb://admin:password@mongodb-test:27017/flowise_proxy_test?authSource=admin
       - EXTERNAL_AUTH_URL=http://auth-service-dev:3000
-      - ACCOUNTING_SERVICE_URL=http://accounting-service-samehost:3001
+      - ACCOUNTING_SERVICE_URL=http://accounting-service:3001
     volumes:
       - .:/project_root
     command: hypercorn app.main:app --bind 0.0.0.0:8000 --reload
@@ -17,7 +17,8 @@ services:
       - mongodb-test
     networks:
       - test-network
-      - auth-network  # Add auth-network to connect to auth-service-dev and accounting-service
+      - auth-network
+      - accounting-network
 
   mongodb-test:
     image: mongo:latest
@@ -42,4 +43,8 @@ networks:
   test-network:
     driver: bridge
   auth-network:
-    external: true  # Reference the existing auth-network
+    external:
+      name: boilerplate-accounting-nodejs-typescript_auth-network
+  accounting-network:
+    external:
+      name: accounting-service_accounting-network
