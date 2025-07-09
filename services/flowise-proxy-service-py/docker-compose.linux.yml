@@ -1,0 +1,45 @@
+services:
+  flowise-proxy-test:
+    build: .
+    container_name: flowise-proxy-test
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env.test
+    environment:
+      - MONGODB_URL=mongodb://admin:password@mongodb-test:27017/flowise_proxy_test?authSource=admin
+      - EXTERNAL_AUTH_URL=http://auth-service-dev:3000
+      - ACCOUNTING_SERVICE_URL=http://accounting-service-samehost:3001
+    volumes:
+      - .:/project_root
+    command: hypercorn app.main:app --bind 0.0.0.0:8000 --reload
+    depends_on:
+      - mongodb-test
+    networks:
+      - test-network
+      - auth-network  # Add auth-network to connect to auth-service-dev and accounting-service
+
+  mongodb-test:
+    image: mongo:latest
+    container_name: mongodb-test
+    restart: unless-stopped
+    ports:
+      - "27020:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: flowise_proxy_test
+    volumes:
+      - mongodb_test_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - test-network
+
+volumes:
+  mongodb_test_data:
+
+networks:
+  test-network:
+    driver: bridge
+  auth-network:
+    external: true  # Reference the existing auth-network
