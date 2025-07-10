@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  langflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: langflow
+    ports:
+      - "7860:7860"
+    environment:
+      - LANGFLOW_DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - LANGFLOW_CONFIG_DIR=/app/langflow
+    volumes:
+      - langflow-data:/app/langflow
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - test-network
+      - auth-network
+      - accounting-network
+
+  postgres:
+    image: postgres:16
+    container_name: langflow-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - langflow-postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - test-network
+
+volumes:
+  langflow-data:
+  langflow-postgres:
+
+networks:
+  test-network:
+    driver: bridge
+  auth-network:
+    external:
+      name: boilerplate-accounting-nodejs-typescript_auth-network
+  accounting-network:
+    external:
+      name: accounting-service_accounting-network
