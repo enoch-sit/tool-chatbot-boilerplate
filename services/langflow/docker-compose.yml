@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: langflow
     ports:
-      - "7860:7860"
+      - "47860:7860" # Changed to a special port
     environment:
       - LANGFLOW_DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - LANGFLOW_CONFIG_DIR=/app/langflow
