@@ -401,9 +401,17 @@ async def chat_predict_stream(
                 override_config = chat_request.overrideConfig or {}
                 override_config["sessionId"] = session_id
 
+                # Prepare uploads with normalization for Flowise API (prefix base64 if type="file")
                 uploads = None
                 if chat_request.uploads:
-                    uploads = [upload.model_dump() for upload in chat_request.uploads]
+                    uploads = []
+                    for upload in chat_request.uploads:
+                        upload_dict = upload.model_dump()
+                        if upload_dict["type"] == "file":
+                            # Prefix base64 data for Flowise compatibility
+                            upload_dict["data"] = f"data:{upload_dict['mime']};base64,{upload_dict['data']}"
+                        # For "url", keep as-is (type="url", data=URL)
+                        uploads.append(upload_dict)
 
                 prediction_data = PredictionData(
                     chatflowId=chatflow_id,
@@ -531,9 +539,17 @@ async def chat_predict_stream_store(
                 override_config["sessionId"] = session_id
                 print(f"Using session_id in override_config: {session_id}")
 
+                # Prepare uploads with normalization for Flowise API (prefix base64 if type="file")
                 uploads = None
                 if chat_request.uploads:
-                    uploads = [upload.model_dump() for upload in chat_request.uploads]
+                    uploads = []
+                    for upload in chat_request.uploads:
+                        upload_dict = upload.model_dump()
+                        if upload_dict["type"] == "file":
+                            # Prefix base64 data for Flowise compatibility
+                            upload_dict["data"] = f"data:{upload_dict['mime']};base64,{upload_dict['data']}"
+                        # For "url", keep as-is (type="url", data=URL)
+                        uploads.append(upload_dict)
 
                 prediction_data = PredictionData(
                     chatflowId=chatflow_id,
