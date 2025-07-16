@@ -172,7 +172,7 @@ check_mongodb() {
     log "🔍 Checking MongoDB connection..."
     
     # Try to connect to MongoDB
-    if python -c "
+    if python3 -c "
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -220,7 +220,7 @@ backup_database() {
 check_migration_status() {
     log "📊 Checking current migration status..."
     
-    python -c "
+    python3 -c "
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -252,7 +252,7 @@ exit(0 if needs_migration else 1)
 run_migration() {
     log "🔄 Running database migration..."
     
-    if python migrations/run_migrations.py --all 2>&1 | tee -a "$MIGRATION_LOG"; then
+    if python3 migrations/run_migrations.py --all 2>&1 | tee -a "$MIGRATION_LOG"; then
         log "✅ Migration completed successfully"
         return 0
     else
@@ -265,7 +265,7 @@ run_migration() {
 verify_migration() {
     log "🔍 Verifying migration results..."
     
-    python -c "
+    python3 -c "
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
