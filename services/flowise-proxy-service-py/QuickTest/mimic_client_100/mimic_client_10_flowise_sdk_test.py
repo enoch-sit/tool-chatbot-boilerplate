@@ -8,10 +8,6 @@ This script tests the Flowise Python SDK directly using the provided configurati
 It bypasses the proxy service and connects directly to the Flowise API to test
 image upload functionality and chat streaming.
 
-Configuration:
-- FLOWISE_API_URL: https://aai03.eduhk.hk
-- FLOWISE_API_KEY: 975KgJwzYdUO1Tphgy_onKRPMLQ8G66U-4p44AiIE_s
-- TARGET_CHATFLOW_ID: 2042ba88-d822-4503-a4b4-8fddd3cea18c
 """
 
 import os
