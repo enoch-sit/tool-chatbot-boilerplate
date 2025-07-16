@@ -1,6 +1,6 @@
 from beanie import Document, Indexed
 from pydantic import Field
-from typing import Literal
+from typing import Literal, Optional, List, Dict, Any
 from datetime import datetime
 import pymongo
 
@@ -12,6 +12,7 @@ class ChatMessage(Document):
     user_id: str = Field(..., index=True)
     role: str = Field(...)
     content: str = Field(...)
+    metadata: Optional[List[Dict[str, Any]]] = Field(default=None, description="Non-token events and metadata")
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     class Settings:

@@ -577,14 +577,15 @@ async def chat_predict_stream_store(
 
                     def process_json(full_assistant_response_ls):
                         """
-                        Process a list of JSON strings, combine consecutive token events, and return as a JSON array string.
+                        Process a list of JSON strings, combine consecutive token events, and return both token data and metadata.
 
                         Args:
                             full_assistant_response_ls (list): List of JSON strings representing events.
                         Returns:
-                            str: A single JSON array string with events in the correct order.
+                            tuple: (token_data_json_string, non_token_events_list)
                         """
                         result = []  # List to store the final sequence of event objects
+                        non_Token_event_result = []
                         token_data = ""  # String to accumulate data from "token" events
 
                         for good_json_string in full_assistant_response_ls:
@@ -601,9 +602,8 @@ async def chat_predict_stream_store(
                                             {"event": "token", "data": token_data}
                                         )
                                         token_data = ""  # Reset token data
-                                    # Add the non-token event # we are not storing non-token events
-                                    # result.append(obj)
-                                    # We may sure the token events in the remarks of ChatMessage
+                                    # Save the non-token event for metadata storage
+                                    non_Token_event_result.append(obj)
                             except json.JSONDecodeError:
                                 continue  # Skip invalid JSON strings
 
@@ -611,24 +611,28 @@ async def chat_predict_stream_store(
                         if token_data:
                             result.append({"event": "token", "data": token_data})
 
-                        # Convert the list of objects to a JSON array string
-
-                        return json.dumps(result)
+                        # Return both token data and metadata
+                        return json.dumps(result), non_Token_event_result
 
                     await accounting_service.log_transaction(
                         user_token, user_id, "chat", chatflow_id, cost, True
                     )
                     # Save user message first, then assistant message
                     await user_message.insert()
+                    
+                    # Get both token data and metadata from the response
+                    token_content, metadata_events = process_json(full_assistant_response_ls)
+                    
                     assistant_message = ChatMessage(
                         chatflow_id=chatflow_id,
                         session_id=session_id,
                         user_id=user_id,
                         role="assistant",
-                        content=process_json(full_assistant_response_ls),
+                        content=token_content,
+                        metadata=metadata_events,  # Save non-token events here
                     )
                     await assistant_message.insert()
-                    print(f"Storing assistant message: {assistant_message}")
+                    print(f"Storing assistant message with {len(metadata_events)} metadata events: {assistant_message}")
                     if new_session_id:
                         topic = (
                             chat_request.question[:50] + "..."

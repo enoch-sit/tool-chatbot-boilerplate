@@ -42,6 +42,10 @@ for i in {1..30}; do
 done
 
 echo
+echo "Running database migrations..."
+sudo docker exec flowise-proxy-test python migrations/run_migrations.py --all || { echo "Migration failed"; exit 1; }
+
+echo
 echo "Checking test container status..."
 sudo docker compose -f docker-compose.linux.yml ps
 

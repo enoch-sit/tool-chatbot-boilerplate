@@ -44,4 +44,18 @@ echo Database: flowise_proxy_test
 echo.
 echo You can now run the VS Code debugger with "Python Debugger: FastAPI (Test DB)"
 echo ======================================================
+
+echo.
+set /p run_migration="Do you want to run database migrations now? (yes/no): "
+if "%run_migration%"=="yes" (
+    echo.
+    echo Running database migrations...
+    python migrations\run_migrations.py --all
+    if errorlevel 1 (
+        echo ERROR: Migration failed
+        pause
+        exit /b 1
+    )
+    echo Migration completed successfully!
+)
 pause
