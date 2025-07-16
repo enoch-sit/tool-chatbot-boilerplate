@@ -282,7 +282,7 @@ async def verify():
     print(f'Documents with metadata: {with_metadata}')
     
     success = total == with_metadata
-    print(f'Migration verification: {'SUCCESS' if success else 'FAILED'}')
+    print('Migration verification: ' + ('SUCCESS' if success else 'FAILED'))
     
     client.close()
     return success
