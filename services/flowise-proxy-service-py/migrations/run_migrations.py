@@ -50,7 +50,8 @@ class MigrationRunner:
         
         # List of migrations to run (in order)
         migrations = [
-            "add_metadata_to_chat_messages"
+            "add_metadata_to_chat_messages",
+            "add_file_upload_support"
         ]
         
         for migration in migrations:

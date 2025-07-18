@@ -2,15 +2,31 @@
 # -*- coding: utf-8 -*-
 
 """
-Image Upload Testing Script (10)
+Image Upload & Session History Investigation Script (11)
 
-This script tests image upload functionality with file uploads. It:
+This script tests image upload functionality and investigates session retrieval issues. It:
 1.  Authenticates as an admin to set up the environment (sync chatflows, assign user).
 2.  Authenticates as a regular user.
-3.  Creates a test image and encodes it as base64.
-4.  Sends a message with an image upload to the chatflow.
-5.  Verifies the image upload was processed correctly.
-6.  Retrieves and displays the chat history for the session.
+3.  Checks database connectivity.
+4.  Creates a test image and encodes it as base64.
+5.  Sends a message with an image upload to the chatflow.
+6.  Verifies the image upload was processed correctly.
+7.  Sends a follow-up message to test context retention.
+8.  Performs comprehensive session debugging:
+    - Checks if session exists in database
+    - Lists all sessions for comparison
+    - Analyzes session creation timing
+    - Investigates database synchronization issues
+9.  Attempts to retrieve chat history with detailed error analysis.
+10. Provides troubleshooting suggestions for any failures.
+
+Enhanced Features:
+- Database connectivity verification
+- Session existence validation
+- Comprehensive error logging
+- Retry mechanisms for history retrieval
+- Detailed debugging output
+- Investigation summary with troubleshooting tips
 """
 
 import os
@@ -30,7 +46,7 @@ init(autoreset=True)
 
 # Configuration
 API_BASE_URL = "http://localhost:8000"
-LOG_FILE = "image_upload_test_10.log"
+LOG_FILE = "image_session_history_investigation_11.log"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(SCRIPT_DIR, LOG_FILE)
 
@@ -340,22 +356,138 @@ def send_chat_message_with_image(
         return None, extracted_session_id
 
 
-def get_chat_history(token, session_id):
-    """Retrieve the chat history for a given session."""
-    log_message(f"\n--- Retrieving chat history for session: {session_id} ---")
+def check_database_connectivity(token):
+    """Check basic database connectivity through API."""
+    log_message(f"\n--- Checking database connectivity ---")
+    url = f"{API_BASE_URL}/api/v1/chat/sessions"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            log_message(f"{Fore.GREEN}✅ Database connection successful")
+            return True
+        else:
+            log_message(f"{Fore.RED}❌ Database connection issue: {response.status_code}")
+            return False
+    except requests.RequestException as e:
+        log_message(f"{Fore.RED}❌ Database connectivity error: {e}")
+        return False
+
+
+def check_session_exists(token, session_id):
+    """Check if a session exists by attempting to retrieve its history."""
+    log_message(f"\n--- Checking if session exists: {session_id} ---")
+    log_message(f"   > Note: Session existence will be validated through history retrieval")
+    
+    # Since the dedicated session check endpoint doesn't exist,
+    # we'll use the history endpoint to validate session existence
     url = f"{API_BASE_URL}/api/v1/chat/sessions/{session_id}/history"
     headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(url, headers=headers)
+        log_message(f"   > Session check status: {response.status_code}")
+        
+        if response.status_code == 200:
+            log_message(f"{Fore.GREEN}✅ Session exists in database (validated through history endpoint)")
+            return True
+        elif response.status_code == 404:
+            log_message(f"{Fore.YELLOW}⚠️ Session not found in database (404)")
+            log_message(f"   > Response: {response.text}")
+            return False
+        else:
+            log_message(f"{Fore.RED}❌ Unexpected status code: {response.status_code}")
+            log_message(f"   > Response: {response.text}")
+            return False
+            
+    except requests.RequestException as e:
+        log_message(f"{Fore.RED}❌ Failed to check session existence: {e}")
+        return False
+
+
+def list_all_sessions(token):
+    """List all sessions to help debug session issues."""
+    log_message(f"\n--- Listing all sessions for debugging ---")
+    url = f"{API_BASE_URL}/api/v1/chat/sessions"
+    headers = {"Authorization": f"Bearer {token}"}
+    
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
-        history = response.json().get("history", [])
-        log_message(f"{Fore.GREEN}✅ Retrieved {len(history)} messages from session.")
-        log_message(f"   Raw history string: {json.dumps(history)}")
+        
+        sessions_data = response.json()
+        sessions = sessions_data.get("sessions", [])
+        log_message(f"{Fore.GREEN}✅ Found {len(sessions)} total sessions")
+        
+        if sessions:
+            log_message(f"   Recent sessions (last 5):")
+            for i, session in enumerate(sessions[-5:]):  # Show last 5 sessions
+                session_id = session.get("id", "unknown")
+                chatflow_id = session.get("chatflow_id", "unknown")
+                created_at = session.get("created_at", "unknown")
+                updated_at = session.get("updated_at", "unknown")
+                log_message(f"     {i+1}. ID: {session_id}")
+                log_message(f"        Chatflow: {chatflow_id}")
+                log_message(f"        Created: {created_at}")
+                log_message(f"        Updated: {updated_at}")
+        else:
+            log_message(f"{Fore.YELLOW}⚠️ No sessions found in database")
+            
+        return sessions
+        
+    except requests.RequestException as e:
+        log_message(f"{Fore.RED}❌ Failed to list sessions: {e}")
+        return []
 
-        for msg in history:
+
+def get_chat_history(token, session_id):
+    """Retrieve the chat history for a given session with enhanced debugging."""
+    log_message(f"\n--- Retrieving chat history for session: {session_id} ---")
+    url = f"{API_BASE_URL}/api/v1/chat/sessions/{session_id}/history"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # Debug: Log the full request details
+    log_message(f"   > Request URL: {url}")
+    log_message(f"   > Session ID format: {type(session_id)} - Length: {len(str(session_id))}")
+    log_message(f"   > Authorization header present: {'Authorization' in headers}")
+    
+    try:
+        response = requests.get(url, headers=headers)
+        log_message(f"   > HTTP Status: {response.status_code}")
+        log_message(f"   > Response headers: {dict(response.headers)}")
+        
+        if response.status_code == 404:
+            log_message(f"{Fore.YELLOW}⚠️ Session not found (404). Possible causes:")
+            log_message(f"   - Session ID may not exist in database yet")
+            log_message(f"   - Database synchronization delay")
+            log_message(f"   - Session ID format mismatch")
+            log_message(f"   - Session expired or cleaned up")
+            log_message(f"   > Raw response: {response.text}")
+            return []
+        
+        response.raise_for_status()
+        
+        # Parse the full response
+        response_data = response.json()
+        log_message(f"   > Full response keys: {list(response_data.keys())}")
+        
+        history = response_data.get("history", [])
+        log_message(f"{Fore.GREEN}✅ Retrieved {len(history)} messages from session.")
+        
+        if not history:
+            log_message(f"{Fore.YELLOW}⚠️ No history found. Response content: {json.dumps(response_data, indent=2)}")
+            return []
+        
+        log_message(f"   Raw history (first 500 chars): {json.dumps(history)[:500]}...")
+
+        for i, msg in enumerate(history):
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
             created_at = msg.get("created_at", "No timestamp")
+            message_id = msg.get("id", "no-id")
+            
+            log_message(f"   Message {i+1}: ID={message_id}, Role={role}, Created={created_at}")
 
             # Assistant content might be a JSON string of events, try to parse for display
             if role == "assistant":
@@ -367,12 +499,49 @@ def get_chat_history(token, session_id):
                         [e.get("data", "") for e in events if e.get("event") == "token"]
                     )
                     content = assistant_text if assistant_text else content
-                except (json.JSONDecodeError, TypeError):
+                    log_message(f"   Parsed assistant content: {content[:100]}...")
+                except (json.JSONDecodeError, TypeError) as parse_error:
+                    log_message(f"   Failed to parse assistant content: {parse_error}")
+                    log_message(f"   Raw content: {content[:200]}...")
                     pass  # Keep original content if not a parsable JSON
+            
+            # Check for file uploads in user messages
+            if role == "user" and ("uploads" in msg or msg.get("has_files", False)):
+                # Check for uploads field (legacy) or has_files field (new format)
+                if "uploads" in msg and msg["uploads"]:
+                    uploads = msg.get("uploads", [])
+                    log_message(f"   📎 User message contains {len(uploads)} file uploads (enhanced format)")
+                    for upload in uploads:
+                        file_id = upload.get("file_id", "unknown")
+                        name = upload.get("name", "unknown")
+                        mime = upload.get("mime", "unknown")
+                        size = upload.get("size", 0)
+                        is_image = upload.get("is_image", False)
+                        url = upload.get("url", "")
+                        thumbnail_url = upload.get("thumbnail_url", "")
+                        log_message(f"     - File: {name} ({mime}) - {size} bytes")
+                        log_message(f"       ID: {file_id}")
+                        log_message(f"       Image: {is_image}")
+                        log_message(f"       URL: {url}")
+                        if thumbnail_url:
+                            log_message(f"       Thumbnail: {thumbnail_url}")
+                            log_message(f"       Thumbnail Small: {upload.get('thumbnail_small', '')}")
+                            log_message(f"       Thumbnail Medium: {upload.get('thumbnail_medium', '')}")
+                elif msg.get("has_files", False):
+                    file_ids = msg.get("file_ids", [])
+                    log_message(f"   📎 User message contains {len(file_ids)} file uploads (basic format)")
+                    for file_id in file_ids:
+                        log_message(f"     - File ID: {file_id}")
+            
             log_message(f"      [{created_at}] [{role.capitalize()}]: {content}")
+        
         return history
+        
     except requests.RequestException as e:
         log_message(f"{Fore.RED}❌ Failed to get chat history: {e}")
+        if hasattr(e, 'response') and e.response:
+            log_message(f"   > Error response status: {e.response.status_code}")
+            log_message(f"   > Error response text: {e.response.text}")
         return []
 
 
@@ -399,6 +568,10 @@ def main():
     user_token = get_token(REGULAR_USER)
     if not user_token:
         sys.exit(1)
+    
+    # 2.1 Check database connectivity
+    if not check_database_connectivity(user_token):
+        log_message(f"{Fore.RED}❌ Database connectivity issues detected. Continuing with caution...")
 
     # 3. Create test image
     image_data = create_test_image()
@@ -434,9 +607,32 @@ def main():
     )
 
     # Wait for database to fully commit the session
+    log_message(f"\n--- Waiting for database synchronization ---")
     time.sleep(3)
 
-    # 6. Verification
+    # 6. Session Debugging - Check if session exists
+    log_message(f"\n--- SESSION DEBUGGING ---")
+    log_message(f"   > Target session ID: {session_id}")
+    log_message(f"   > Session ID type: {type(session_id)}")
+    log_message(f"   > Session ID length: {len(str(session_id))}")
+    
+    # Check if session exists
+    session_exists = check_session_exists(user_token, session_id)
+    
+    if not session_exists:
+        log_message(f"{Fore.YELLOW}⚠️ Session doesn't exist, listing all sessions for debugging...")
+        all_sessions = list_all_sessions(user_token)
+        
+        # Try to find a session with matching chatflow_id
+        matching_sessions = [s for s in all_sessions if s.get("chatflow_id") == target_chatflow_id]
+        if matching_sessions:
+            log_message(f"{Fore.BLUE}🔍 Found {len(matching_sessions)} sessions with matching chatflow_id:")
+            for session in matching_sessions:
+                log_message(f"   - Session ID: {session.get('id')}")
+                log_message(f"     Created: {session.get('created_at')}")
+                log_message(f"     Updated: {session.get('updated_at')}")
+    
+    # 7. Verification
     if assistant_reply and (len(assistant_reply) > 10):  # Basic response check
         log_message(
             f"\n{Fore.GREEN}✅ IMAGE UPLOAD SUCCESS: Assistant responded to image upload."
@@ -457,13 +653,82 @@ def main():
             f"\n{Fore.YELLOW}⚠️ FOLLOW-UP UNCLEAR: Assistant response: '{assistant_reply_2}'"
         )
 
-    # 7. Get and display history
-    get_chat_history(user_token, session_id)
+    # 8. Get and display history (main investigation target)
+    log_message(f"\n--- ATTEMPTING TO RETRIEVE CHAT HISTORY ---")
+    history = get_chat_history(user_token, session_id)
+    
+    if history:
+        log_message(f"{Fore.GREEN}✅ Chat history retrieval successful!")
+        log_message(f"   > Total messages in history: {len(history)}")
+        
+        # Analyze the history for image uploads
+        user_messages = [msg for msg in history if msg.get("role") == "user"]
+        assistant_messages = [msg for msg in history if msg.get("role") == "assistant"]
+        
+        log_message(f"   > User messages: {len(user_messages)}")
+        log_message(f"   > Assistant messages: {len(assistant_messages)}")
+        
+        # Check if image uploads are preserved in history
+        messages_with_uploads = [msg for msg in user_messages if ("uploads" in msg and msg["uploads"]) or msg.get("has_files", False)]
+        if messages_with_uploads:
+            log_message(f"{Fore.BLUE}📎 Found {len(messages_with_uploads)} messages with file uploads in history")
+            for msg in messages_with_uploads:
+                if "uploads" in msg and msg["uploads"]:
+                    uploads = msg.get("uploads", [])
+                    log_message(f"   - Enhanced format: {len(uploads)} uploads with full metadata")
+                    for upload in uploads:
+                        log_message(f"     * {upload.get('name', 'unknown')} ({upload.get('mime', 'unknown')})")
+                        log_message(f"       Image: {upload.get('is_image', False)}")
+                        log_message(f"       Display URL: {upload.get('url', 'none')}")
+                        log_message(f"       Download URL: {upload.get('download_url', 'none')}")
+                        if upload.get('thumbnail_url'):
+                            log_message(f"       Thumbnail URL: {upload.get('thumbnail_url')}")
+                            log_message(f"       Thumbnail Sizes: Small={upload.get('thumbnail_small', 'none')}, Medium={upload.get('thumbnail_medium', 'none')}")
+                elif msg.get("has_files", False):
+                    file_ids = msg.get("file_ids", [])
+                    log_message(f"   - Basic format: {len(file_ids)} file IDs: {file_ids}")
+        else:
+            log_message(f"{Fore.YELLOW}⚠️ No file uploads found in chat history")
+            
+    else:
+        log_message(f"{Fore.RED}❌ Chat history retrieval failed or returned empty")
+        
+        # Additional debugging - wait longer and try again
+        log_message(f"{Fore.YELLOW}🔄 Attempting one more time with longer wait...")
+        time.sleep(5)
+        
+        # Try to retrieve history again
+        history_retry = get_chat_history(user_token, session_id)
+        if history_retry:
+            log_message(f"{Fore.GREEN}✅ Chat history retrieval successful on retry!")
+            history = history_retry
+        else:
+            log_message(f"{Fore.RED}❌ Chat history retrieval failed on retry as well")
 
-    log_message(f"\n{Style.BRIGHT}✨ Image Upload Test Complete ✨")
+    log_message(f"\n{Style.BRIGHT}✨ Image Upload & Session History Investigation Complete ✨")
     log_message(f"📝 Full logs at: {LOG_PATH}")
     log_message(f"🎯 Target chatflow: {target_chatflow_id}")
     log_message(f"📎 Test image: {image_data[2]} ({image_data[1]})")
+    log_message(f"🔑 Session ID: {session_id}")
+    
+    # Investigation Summary
+    log_message(f"\n{Style.BRIGHT}🔍 INVESTIGATION SUMMARY:")
+    log_message(f"   > Image upload functionality: {'✅ Working' if assistant_reply else '❌ Failed'}")
+    log_message(f"   > Session ID extraction: {'✅ Working' if session_id else '❌ Failed'}")
+    log_message(f"   > Context retention: {'✅ Working' if assistant_reply_2 and ('red' in assistant_reply_2.lower() or 'color' in assistant_reply_2.lower()) else '❌ Failed'}")
+    log_message(f"   > Session existence: {'✅ Found' if session_exists else '❌ Not found'}")
+    log_message(f"   > History retrieval: {'✅ Working' if history else '❌ Failed'}")
+    
+    if not history:
+        log_message(f"\n{Fore.YELLOW}🔧 TROUBLESHOOTING SUGGESTIONS:")
+        log_message(f"   1. Check database synchronization timing")
+        log_message(f"   2. Verify session storage implementation")
+        log_message(f"   3. Check for race conditions in session creation")
+        log_message(f"   4. Validate session ID format and constraints")
+        log_message(f"   5. Review database indexes and performance")
+        log_message(f"   6. Check for session cleanup/expiration policies")
+    
+    return history  # Return history for further analysis if needed
 
 
 if __name__ == "__main__":

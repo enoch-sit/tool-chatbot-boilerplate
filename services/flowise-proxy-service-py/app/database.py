@@ -6,6 +6,7 @@ from app.models.chatflow import Chatflow, UserChatflow
 from app.models.refresh_token import RefreshToken
 from app.models.chat_session import ChatSession  # Added import
 from app.models.chat_message import ChatMessage
+from app.models.file_upload import FileUpload
 import logging
 import uuid  # Added import
 
@@ -69,6 +70,7 @@ async def connect_to_mongo():
                 RefreshToken,
                 ChatSession,
                 ChatMessage,
+                FileUpload,
             ],
         )
 

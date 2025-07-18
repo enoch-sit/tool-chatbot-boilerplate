@@ -16,6 +16,7 @@ import json
 import time
 import base64
 import uuid
+import requests
 from datetime import datetime
 from colorama import init, Fore, Style
 from PIL import Image
@@ -36,7 +37,21 @@ except ImportError:
 # Import Flowise SDK
 try:
     from flowise import Flowise, PredictionData
-
+    
+    # Try to import Upload class for proper file uploads
+    try:
+        from flowise import Upload
+        print(f"{Fore.GREEN}✅ Flowise SDK with Upload class imported successfully")
+        USE_UPLOAD_CLASS = True
+    except ImportError:
+        try:
+            from flowise import FileUpload as Upload
+            print(f"{Fore.GREEN}✅ Flowise SDK with FileUpload class imported successfully")
+            USE_UPLOAD_CLASS = True
+        except ImportError:
+            print(f"{Fore.YELLOW}⚠️ Upload class not found, will use requests fallback for file uploads")
+            USE_UPLOAD_CLASS = False
+    
     print(f"{Fore.GREEN}✅ Flowise SDK imported successfully")
 except ImportError as e:
     print(
@@ -219,56 +234,119 @@ def test_image_upload_chat(flowise_client, chatflow_id, session_id=None):
         question = "Can you describe what you see in this image?"
         log_message(f"Question: {question}")
 
-        # Prepare uploads for Flowise
-        uploads = [
-            {
-                "data": f"data:{mime_type};base64,{img_b64}",
-                "type": "file",
-                "name": filename,
-                "mime": mime_type,
+        if USE_UPLOAD_CLASS:
+            # Use Upload class if available
+            log_message(f"{Fore.CYAN}Using Upload class for file upload...")
+            uploads = [
+                Upload(
+                    data=f"data:{mime_type};base64,{img_b64}",
+                    type="file",
+                    name=filename,
+                    mime=mime_type,
+                )
+            ]
+
+            # Create prediction data with image upload
+            prediction_data = PredictionData(
+                chatflowId=chatflow_id,
+                question=question,
+                streaming=True,
+                overrideConfig={"sessionId": session_id},
+                uploads=uploads,
+            )
+
+            # Make prediction
+            log_message(f"{Fore.CYAN}🚀 Starting prediction with image upload...")
+            completion = flowise_client.create_prediction(prediction_data)
+
+            # Collect response
+            full_response = ""
+            chunk_count = 0
+
+            for chunk in completion:
+                chunk_count += 1
+                chunk_str = ""
+                if isinstance(chunk, bytes):
+                    chunk_str = chunk.decode("utf-8", errors="ignore")
+                else:
+                    chunk_str = str(chunk)
+
+                # Try to parse as JSON to extract token data
+                try:
+                    chunk_data = json.loads(chunk_str)
+                    if chunk_data.get("event") == "token":
+                        full_response += chunk_data.get("data", "")
+                    elif chunk_data.get("event") == "end":
+                        log_message(f"{Fore.CYAN}🏁 Stream ended")
+                    elif chunk_data.get("event") == "error":
+                        log_message(f"{Fore.RED}⚠️ Stream error: {chunk_data.get('data')}")
+                    elif chunk_data.get("event") == "file_upload":
+                        file_info = chunk_data.get("data", {})
+                        log_message(f"{Fore.BLUE}📎 File upload event: {file_info}")
+                except json.JSONDecodeError:
+                    # If not JSON, treat as raw text
+                    full_response += chunk_str
+
+        else:
+            # Fallback to direct API calls using requests
+            log_message(f"{Fore.CYAN}Using requests fallback for file upload...")
+            
+            payload = {
+                "question": question,
+                "overrideConfig": {"sessionId": session_id},
+                "streaming": True,
+                "uploads": [
+                    {
+                        "data": f"data:{mime_type};base64,{img_b64}",
+                        "type": "file",
+                        "name": filename,
+                        "mime": mime_type,
+                    }
+                ]
             }
-        ]
 
-        # Create prediction data with image upload
-        prediction_data = PredictionData(
-            chatflowId=chatflow_id,
-            question=question,
-            streaming=True,
-            overrideConfig={"sessionId": session_id},
-            uploads=uploads,
-        )
+            headers = {
+                "Authorization": f"Bearer {FLOWISE_API_KEY}",
+                "Content-Type": "application/json"
+            }
 
-        # Make prediction
-        log_message(f"{Fore.CYAN}🚀 Starting prediction with image upload...")
-        completion = flowise_client.create_prediction(prediction_data)
+            log_message(f"{Fore.CYAN}🚀 Starting prediction with image upload via requests...")
+            response = requests.post(
+                f"{FLOWISE_API_URL}/api/v1/prediction/{chatflow_id}",
+                json=payload,
+                headers=headers,
+                stream=True,
+                timeout=120
+            )
 
-        # Collect response
-        full_response = ""
-        chunk_count = 0
+            if response.status_code != 200:
+                log_message(f"{Fore.RED}❌ Request failed with status {response.status_code}: {response.text}")
+                return False, None, None
 
-        for chunk in completion:
-            chunk_count += 1
-            chunk_str = ""
-            if isinstance(chunk, bytes):
-                chunk_str = chunk.decode("utf-8", errors="ignore")
-            else:
-                chunk_str = str(chunk)
+            # Collect response
+            full_response = ""
+            chunk_count = 0
 
-            # Try to parse as JSON to extract token data
-            try:
-                chunk_data = json.loads(chunk_str)
-                if chunk_data.get("event") == "token":
-                    full_response += chunk_data.get("data", "")
-                elif chunk_data.get("event") == "end":
-                    log_message(f"{Fore.CYAN}🏁 Stream ended")
-                elif chunk_data.get("event") == "error":
-                    log_message(f"{Fore.RED}⚠️ Stream error: {chunk_data.get('data')}")
-                elif chunk_data.get("event") == "file_upload":
-                    file_info = chunk_data.get("data", {})
-                    log_message(f"{Fore.BLUE}📎 File upload event: {file_info}")
-            except json.JSONDecodeError:
-                # If not JSON, treat as raw text
-                full_response += chunk_str
+            for chunk in response.iter_content(chunk_size=None):
+                if chunk:
+                    chunk_count += 1
+                    chunk_str = chunk.decode("utf-8", errors="ignore")
+
+                    # Try to parse as JSON to extract token data
+                    try:
+                        chunk_data = json.loads(chunk_str)
+                        if chunk_data.get("event") == "token":
+                            full_response += chunk_data.get("data", "")
+                        elif chunk_data.get("event") == "end":
+                            log_message(f"{Fore.CYAN}🏁 Stream ended")
+                        elif chunk_data.get("event") == "error":
+                            log_message(f"{Fore.RED}⚠️ Stream error: {chunk_data.get('data')}")
+                        elif chunk_data.get("event") == "file_upload":
+                            file_info = chunk_data.get("data", {})
+                            log_message(f"{Fore.BLUE}📎 File upload event: {file_info}")
+                    except json.JSONDecodeError:
+                        # If not JSON, treat as raw text
+                        full_response += chunk_str
 
         log_message(f"{Fore.GREEN}✅ Image upload chat completed")
         log_message(f"Chunks received: {chunk_count}")

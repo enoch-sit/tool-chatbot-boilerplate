@@ -13,6 +13,8 @@ class ChatMessage(Document):
     role: str = Field(...)
     content: str = Field(...)
     metadata: Optional[List[Dict[str, Any]]] = Field(default=None, description="Non-token events and metadata")
+    file_ids: Optional[List[str]] = Field(default=None, description="List of associated file IDs")
+    has_files: bool = Field(default=False, index=True, description="Whether message has attached files")
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     class Settings:
