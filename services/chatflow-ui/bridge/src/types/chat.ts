@@ -8,6 +8,7 @@
  * type safety and preventing data-related bugs.
  */
 
+import type { FileUpload } from './api';
 
 export interface Message {
   id?: string;
@@ -19,6 +20,7 @@ export interface Message {
   streamEvents?: StreamEvent[]; // Events stored in history (only token events)
   liveEvents?: StreamEvent[]; // Events shown during real-time streaming (all events)
   isStreaming?: boolean; // Add this to track if message is still streaming
+  uploads?: FileUpload[]; // File uploads attached to the message
   timeMetadata?: {
     start: number;
     end: number;

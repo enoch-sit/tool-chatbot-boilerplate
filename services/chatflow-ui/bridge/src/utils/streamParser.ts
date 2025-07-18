@@ -50,8 +50,11 @@ export class StreamParser {
   }
 
   private handleParsedEvent(event: any): void {
+    // console.log('🎯 Parsed event:', event);
+    
     // Handle the streaming structure shown in context [[4]][doc_4][[5]][doc_5]
     if (event.output?.content) {
+      // console.log('📝 Content event:', event.output.content);
       this.onData({
         event: 'content',
         data: {
@@ -62,6 +65,7 @@ export class StreamParser {
         }
       });
     } else if (event.event) {
+      // console.log('⚡ Stream event:', event.event, event.data);
       this.onData(event as StreamEvent);
     }
   }

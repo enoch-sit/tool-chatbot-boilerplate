@@ -1,4 +1,4 @@
-// src/store/chatStore.ts
+// src/store/chatStoimport type { FileUploadData } from '@/services/fileService';e.ts
 
 /**
  * This file defines the central state management for the chat application using Zustand.
@@ -18,6 +18,7 @@ import type { Message, ChatSession, StreamEvent } from '../types/chat';
 import type {Chatflow} from '../types/chatflow';
 import { mapHistoryToMessages } from '../utils/chatParser';
 import { useDebugStore } from './debugStore';
+import type { FileUploadData } from '../services/fileService';
 
 /**
  * Defines the shape of the chat state, including all data and status flags
@@ -45,7 +46,7 @@ interface ChatState {
   setCurrentChatflow: (chatflow: Chatflow | null) => void; // Selects a chatflow to interact with.
   loadChatflows: () => Promise<void>; // Fetches the list of available chatflows.
   loadSessions: () => Promise<void>; // Fetches the user's chat sessions.
-  streamAssistantResponse: (prompt: string) => Promise<void>; // The core action to send a prompt and handle the streamed response.
+  streamAssistantResponse: (prompt: string, file_ids?: FileUploadData[]) => Promise<void>; // The core action to send a prompt and handle the streamed response.
   setError: (error: string | null) => void; // Sets or clears the error state.
 }
 
@@ -122,7 +123,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       addLog(`Setting current session. ID: ${session.session_id}`);
       try {
         const history = await getSessionHistory(session.session_id);
-        set({ messages: mapHistoryToMessages(history), isLoading: false });
+        const messages = mapHistoryToMessages(history);
+        set({ messages: messages, isLoading: false });
         // Always set currentSession to ensure session_id is up to date
         set({ currentSession: { ...session, session_id: session.session_id } });
       } catch (error) {
@@ -168,7 +170,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * Core chat function using session ID.
    * Evidence from mimic_client_05/06: sessionId is passed in predict payload
    */
-  streamAssistantResponse: async (prompt: string) => {
+  streamAssistantResponse: async (prompt: string, file_data?: FileUploadData[]) => {
     const { addLog } = useDebugStore.getState();
     console.log("1. start handle sending");
     const { currentSession, currentChatflow, addMessage, updateMessage } = get();
@@ -190,6 +192,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sender: 'user',
       content: prompt,
       timestamp: new Date().toISOString(),
+      uploads: file_data ? file_data.map(file => ({
+        file_id: file.id,
+        name: file.name,
+        mime: file.type,
+        size: file.size,
+        is_image: file.type.startsWith('image/'),
+        url: file.data, // Use base64 data as URL
+        download_url: file.data,
+        thumbnail_url: file.data,
+        thumbnail_small: file.data,
+        thumbnail_medium: file.data,
+      })) : undefined,
     };
     addMessage(userMessage);
 
@@ -215,6 +229,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const onStreamEvent = (event: StreamEvent) => {
       const { addLog } = useDebugStore.getState();
+      // console.log("🎬 Stream event received:", event.event, event.data);
       //console.log("2. get first stream", event);
       // Handle session_id event for new session
       if (isNewSession && event.event === 'session_id' && event.data && typeof event.data === 'string') {
@@ -319,7 +334,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
 
     const onError = (error: Error) => {
-      console.error('Stream error:', error);
+      // console.error('🚨 Stream error:', error);
+      // console.error('🚨 Error stack:', error.stack);
       updateMessage(assistantMessageId, {
         content: accumulatedContent || `Error: ${error.message}`,
         isStreaming: false
@@ -333,7 +349,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         sessionId,
         prompt,
         onStreamEvent,
-        onError
+        onError,
+        file_data
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';

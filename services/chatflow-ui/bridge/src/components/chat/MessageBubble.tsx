@@ -1,8 +1,14 @@
 import React from 'react';
-import { Box, Typography, Chip, CircularProgress } from '@mui/joy';
+import { Box, Typography, Chip, CircularProgress, Card, CardContent, Stack } from '@mui/joy';
 import type { Message, StreamEvent } from '../../types/chat';
+import type { FileUpload } from '../../types/api';
 import AgentFlowTimeline from './AgentFlowTimeline';
 import { MixedContentRenderer } from '../renderers/MixedContent';
+import { FileService } from '../../services/fileService';
+import { isImageUpload } from '../../utils/typeGuards';
+import { AuthenticatedImage } from '../common/AuthenticatedImage';
+import { AuthenticatedLink } from '../common/AuthenticatedLink';
+import { useAuthStore } from '../../store/authStore';
 import 'highlight.js/styles/github-dark.css';
 
 interface MessageBubbleProps {
@@ -17,8 +23,124 @@ const getAccumulatedTokenContent = (events: StreamEvent[]) => {
     .join('');
 };
 
+// Helper to format file size
+const formatFileSize = (bytes: number): string => {
+  return FileService.formatFileSize(bytes);
+};
+
+// Component to render file attachments with proper error handling
+const FileAttachments: React.FC<{ uploads?: FileUpload[] }> = ({ uploads }) => {
+  const tokens = useAuthStore(state => state.tokens);
+  
+  if (!uploads || uploads.length === 0) return null;
+
+  // Debug logging
+  console.log('🖼️ Rendering file attachments:', uploads);
+  uploads.forEach((upload, index) => {
+    console.log(`🔍 Upload ${index}:`, upload);
+    console.log(`🔍 Upload ${index} keys:`, Object.keys(upload));
+    if (isImageUpload(upload)) {
+      console.log(`🖼️ Image upload URLs - main: ${upload.url}, thumbnail_url: ${upload.thumbnail_url}, thumbnail_medium: ${upload.thumbnail_medium}`);
+      console.log(`🖼️ Image upload full URL structure:`, {
+        url: upload.url,
+        download_url: upload.download_url,
+        thumbnail_url: upload.thumbnail_url,
+        thumbnail_medium: upload.thumbnail_medium,
+        thumbnail_small: upload.thumbnail_small,
+        file_id: upload.file_id,
+        name: upload.name,
+        mime: upload.mime,
+        is_image: upload.is_image
+      });
+    }
+  });
+
+  const handleImageClick = async (upload: FileUpload) => {
+    try {
+      const token = tokens?.accessToken;
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
+
+      const response = await fetch(upload.url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      
+      // Clean up after a delay to allow the window to load
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error('Failed to open image:', error);
+    }
+  };
+
+  return (
+    <Stack spacing={1} sx={{ mt: 1 }}>
+      {uploads.map((upload) => (
+        <Card key={upload.file_id} size="sm" variant="outlined">
+          <CardContent>
+            {isImageUpload(upload) ? (
+              <Box>
+                <AuthenticatedImage
+                  src={upload.url}
+                  alt={upload.name}
+                  size="medium"
+                  style={{
+                    maxWidth: '200px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => handleImageClick(upload)}
+                  onError={(error) => {
+                    console.log('🖼️ AuthenticatedImage error for:', upload.file_id, error.message);
+                    console.log('🖼️ Upload object that failed:', upload);
+                  }}
+                />
+                <Typography level="body-xs" sx={{ mt: 0.5, textAlign: 'center' }}>
+                  {upload.name}
+                </Typography>
+              </Box>
+            ) : (
+              <AuthenticatedLink
+                href={upload.download_url || upload.url}
+                download={upload.name}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                📄 {upload.name}
+              </AuthenticatedLink>
+            )}
+            <Typography level="body-xs" sx={{ mt: 0.5 }}>
+              {formatFileSize(upload.size)}
+            </Typography>
+          </CardContent>
+        </Card>
+      ))}
+    </Stack>
+  );
+};
+
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
-  const { content, sender, isStreaming = false, streamEvents, liveEvents, timeMetadata } = message;
+  const { content, sender, isStreaming = false, streamEvents, liveEvents, timeMetadata, uploads } = message;
+
+  // Debug logging
+  console.log('💬 MessageBubble received message:', message);
+  console.log('💬 Message uploads:', uploads);
 
   // Use liveEvents for real-time display during streaming, streamEvents for history
   const eventsToDisplay = isStreaming ? (liveEvents || []) : (streamEvents || []);
@@ -101,7 +223,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   const renderContent = () => {
     if (sender === 'user') {
-      return <Typography>{content}</Typography>;
+      return (
+        <Box>
+          <Typography>{content}</Typography>
+          <FileAttachments uploads={uploads} />
+        </Box>
+      );
     }
 
     // Process AI response content
@@ -134,6 +261,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
         {/* Render main content as mixed content (markdown/code/mermaid) */}
         <MixedContentRenderer content={mainContent} />
+
+        {/* Show file attachments for AI responses if any */}
+        <FileAttachments uploads={uploads} />
 
         {/* Show streaming indicator */}
         {isStreaming && (
