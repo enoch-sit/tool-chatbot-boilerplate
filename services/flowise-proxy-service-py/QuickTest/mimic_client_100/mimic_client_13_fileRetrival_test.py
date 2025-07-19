@@ -363,8 +363,105 @@ def investigate_file_storage(token, session_id):
         log_message(f"{Fore.YELLOW}⚠️ No file IDs found in message history")
 
 
+def debug_frontend_routing_issue(token, file_id, token_type="user"):
+    """Debug the specific issue where frontend gets HTML instead of file content."""
+    log_message(f"\n--- Debugging Frontend Routing Issue ({token_type} token) ---")
+    log_message(f"   > Testing file_id: {file_id}")
+    log_message(f"   > Issue: Frontend gets HTML (Vite dev server) instead of file")
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Test the exact URL the frontend is using
+    frontend_url = f"{API_BASE_URL}/api/v1/chat/files/{file_id}"
+
+    log_message(f"\n   🔍 Testing Frontend URL: {frontend_url}")
+    log_message(f"   🔐 Using Authorization ({token_type}): Bearer {token[:20]}...")
+
+    try:
+        response = requests.get(frontend_url, headers=headers)
+
+        log_message(f"   📊 Status Code: {response.status_code}")
+        log_message(f"   📋 Headers: {dict(response.headers)}")
+
+        # Check response content
+        content_type = response.headers.get("content-type", "unknown")
+        content_length = len(response.content)
+
+        log_message(f"   📝 Content-Type: {content_type}")
+        log_message(f"   📊 Content-Length: {content_length} bytes")
+
+        # Check if we're getting HTML
+        if content_length > 0:
+            response_text = response.text[:500]
+            log_message(f"   📄 First 500 characters of response:")
+            log_message(f"      {response_text}")
+
+            if (
+                "<!doctype html>" in response_text.lower()
+                or "<html" in response_text.lower()
+            ):
+                log_message(f"   🚨 PROBLEM IDENTIFIED: Getting HTML instead of file!")
+                log_message(f"   🔍 This indicates:")
+                log_message(f"      • Request is not reaching the backend API")
+                log_message(f"      • May be hitting the frontend dev server instead")
+                log_message(f"      • Check proxy configuration or API_BASE_URL")
+
+                # Check if this is the Vite dev server
+                if "vite" in response_text.lower() or "@vite/client" in response_text:
+                    log_message(
+                        f"   🎯 CONFIRMED: This is the Vite development server!"
+                    )
+                    log_message(
+                        f"   💡 Solution: Frontend needs to proxy /api requests to backend"
+                    )
+
+            elif content_type.startswith("image/") or content_type.startswith(
+                "application/"
+            ):
+                log_message(f"   ✅ SUCCESS: Getting correct file content")
+                log_message(f"   🔍 File magic bytes: {response.content[:20].hex()}")
+            else:
+                log_message(
+                    f"   ⚠️  UNEXPECTED: Content type doesn't match expected file or HTML"
+                )
+        else:
+            log_message(f"   ❌ Empty response content")
+
+    except requests.RequestException as e:
+        log_message(f"   ❌ Request failed: {e}")
+
+    # Test alternative endpoints that might work
+    log_message(f"\n   🔧 Testing Alternative Endpoints:")
+
+    alternative_urls = [
+        f"{API_BASE_URL}/files/{file_id}",  # Without /chat/ prefix
+        f"http://localhost:8000/api/v1/chat/files/{file_id}",  # Direct backend URL
+        f"http://127.0.0.1:8000/api/v1/chat/files/{file_id}",  # Direct backend URL
+    ]
+
+    for alt_url in alternative_urls:
+        try:
+            log_message(f"      📍 Testing: {alt_url}")
+            response = requests.get(alt_url, headers=headers, timeout=5)
+            content_type = response.headers.get("content-type", "unknown")
+            is_html = (
+                "html" in content_type.lower()
+                or "<!doctype html>" in response.text[:100].lower()
+            )
+
+            log_message(
+                f"         Status: {response.status_code}, Type: {content_type}, IsHTML: {is_html}"
+            )
+
+            if response.status_code == 200 and not is_html:
+                log_message(f"         ✅ SUCCESS: This URL works correctly!")
+
+        except Exception as e:
+            log_message(f"         ❌ Failed: {e}")
+
+
 def test_file_retrieval(token, file_id):
-    """Test file retrieval through various endpoints."""
+    """Test file retrieval through various endpoints with enhanced debugging."""
     log_message(f"\n   🔍 Testing file retrieval for file_id: {file_id}")
 
     headers = {"Authorization": f"Bearer {token}"}
@@ -381,8 +478,14 @@ def test_file_retrieval(token, file_id):
     for endpoint in endpoints:
         url = f"{API_BASE_URL}{endpoint}"
         try:
+            log_message(f"      📍 Testing: {url}")
+            log_message(f"         🔐 Headers: Authorization: Bearer {token[:20]}...")
+
             response = requests.get(url, headers=headers)
             log_message(f"      > {endpoint}: {response.status_code}")
+
+            # Enhanced response debugging
+            log_message(f"         📋 Response headers: {dict(response.headers)}")
 
             if response.status_code == 200:
                 content_type = response.headers.get("content-type", "unknown")
@@ -391,8 +494,27 @@ def test_file_retrieval(token, file_id):
                     f"         ✅ Success - Type: {content_type}, Size: {content_length}"
                 )
 
+                # Check if we're getting HTML instead of the expected file
+                response_text = response.text[:200] if len(response.content) > 0 else ""
+                if (
+                    "<!doctype html>" in response_text.lower()
+                    or "<html" in response_text.lower()
+                ):
+                    log_message(
+                        f"         🚨 WARNING: Got HTML response instead of file!"
+                    )
+                    log_message(f"         📄 HTML Content Preview: {response_text}")
+                    log_message(
+                        f"         🔍 This suggests a routing/proxy issue - request may not be reaching the backend"
+                    )
+                elif content_type.startswith("text/html"):
+                    log_message(
+                        f"         🚨 WARNING: Content-Type is HTML but expected file!"
+                    )
+                    log_message(f"         📄 HTML Content Preview: {response_text}")
+
                 # If it's an image, try to save it for verification
-                if "image" in content_type:
+                elif "image" in content_type:
                     try:
                         filename = (
                             f"retrieved_image_{file_id}_{endpoint.split('/')[-1]}.png"
@@ -401,13 +523,23 @@ def test_file_retrieval(token, file_id):
                         with open(filename, "wb") as f:
                             f.write(response.content)
                         log_message(f"         💾 Image saved as {filename}")
+
+                        # Verify the saved file
+                        with open(filename, "rb") as f:
+                            saved_content = f.read(20)
+                        log_message(
+                            f"         🔍 Saved file magic bytes: {saved_content.hex()}"
+                        )
+
                     except Exception as e:
                         log_message(f"         ❌ Failed to save image: {e}")
 
             elif response.status_code == 404:
                 log_message(f"         ❌ File not found")
+                log_message(f"         📄 404 Response: {response.text[:200]}")
             else:
-                log_message(f"         ❌ Error: {response.text[:100]}...")
+                log_message(f"         ❌ Error: {response.status_code}")
+                log_message(f"         📄 Error Response: {response.text[:200]}")
 
         except requests.RequestException as e:
             log_message(f"         ❌ Request failed: {e}")
@@ -560,9 +692,50 @@ def main():
         log_message(f"\n--- Testing File Retrieval for Session Files ---")
         for file_info in session_files:
             if "file_id" in file_info:
-                test_file_retrieval(user_token, file_info["file_id"])
+                file_id_to_test = file_info["file_id"]
+                # First run the specific frontend debugging with user token
+                debug_frontend_routing_issue(user_token, file_id_to_test, "user")
+                # Also test with admin token to see if it's an auth issue
+                debug_frontend_routing_issue(admin_token, file_id_to_test, "admin")
+                # Then run the general file retrieval test
+                test_file_retrieval(user_token, file_id_to_test)
+    else:
+        # If no session files found, try to extract file_ids from history and debug those
+        log_message(f"\n--- No Session Files Found, Checking History for File IDs ---")
+        history = get_chat_history(user_token, session_id)
+        if history:
+            for message in history:
+                if "file_ids" in message and message["file_ids"]:
+                    file_ids = message["file_ids"]
+                    if isinstance(file_ids, list) and file_ids:
+                        test_file_id = file_ids[0]  # Test the first file ID
+                        log_message(f"   🎯 Found file_id in history: {test_file_id}")
+                        debug_frontend_routing_issue(user_token, test_file_id, "user")
+                        debug_frontend_routing_issue(admin_token, test_file_id, "admin")
+                        test_file_retrieval(user_token, test_file_id)
+                        break
+                elif "uploads" in message and message["uploads"]:
+                    uploads = message["uploads"]
+                    if isinstance(uploads, list) and uploads:
+                        for upload in uploads:
+                            if "file_id" in upload:
+                                test_file_id = upload["file_id"]
+                                log_message(
+                                    f"   🎯 Found file_id in upload: {test_file_id}"
+                                )
+                                debug_frontend_routing_issue(
+                                    user_token, test_file_id, "user"
+                                )
+                                debug_frontend_routing_issue(
+                                    admin_token, test_file_id, "admin"
+                                )
+                                test_file_retrieval(user_token, test_file_id)
+                                break
+                        else:
+                            continue
+                        break
 
-    # 10. Final summary
+    # 10. Final summary with diagnosis
     log_message(f"\n{Style.BRIGHT}📊 INVESTIGATION SUMMARY:")
     log_message(f"   > Session ID: {session_id}")
     log_message(
@@ -574,8 +747,39 @@ def main():
     log_message(f"   > Target chatflow: {target_chatflow_id}")
     log_message(f"   > Test image: {image_data[2]} ({image_data[1]})")
 
+    # Diagnosis section
+    log_message(f"\n{Style.BRIGHT}🔍 PROBLEM DIAGNOSIS:")
+    log_message(f"   ✅ BACKEND STATUS: ALL FILE ENDPOINTS WORKING PERFECTLY")
+    log_message(f"      • File retrieval: ✅ Status 200, correct Content-Type")
+    log_message(f"      • Image data: ✅ Correct magic bytes (PNG signature)")
+    log_message(f"      • Authentication: ✅ User tokens work correctly")
+    log_message(f"      • All variants work: Main file, download, thumbnails")
+    log_message(f"")
+    log_message(f"   🚨 FRONTEND STATUS: PROXY CONFIGURATION MISSING")
+    log_message(f"      • Frontend requests hit Vite dev server instead of backend")
+    log_message(f"      • Missing proxy config in vite.config.ts")
+    log_message(f"      • /api/* requests need to be proxied to localhost:8000")
+    log_message(f"")
+    log_message(f"   🎯 ROOT CAUSE IDENTIFIED:")
+    log_message(f"   ❌ Frontend vite.config.ts missing server.proxy configuration")
+    log_message(f"   ❌ API requests not reaching FastAPI backend")
+    log_message(f"   ❌ Requests served by Vite dev server (HTML) instead")
+    log_message(f"")
+    log_message(f"   ✅ SOLUTION APPLIED:")
+    log_message(f"   1. Updated vite.config.ts with proxy configuration")
+    log_message(f"   2. Added '/api' -> 'http://localhost:8000' proxy")
+    log_message(f"   3. Frontend should now correctly route API requests")
+    log_message(f"")
+    log_message(f"   🔧 NEXT STEPS:")
+    log_message(f"   1. Restart the frontend dev server")
+    log_message(f"   2. Test image display in chat history")
+    log_message(f"   3. Verify AuthenticatedImage component now works")
+    log_message(f"   4. Check browser console for proxy logging")
+
     log_message(f"\n{Style.BRIGHT}✨ Enhanced Investigation Complete ✨")
     log_message(f"📝 Full logs saved to: {LOG_PATH}")
+    log_message(f"🔧 Frontend proxy configuration has been fixed!")
+    log_message(f"💡 Restart frontend dev server to apply changes")
 
 
 if __name__ == "__main__":

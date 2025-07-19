@@ -41,7 +41,7 @@ REGULAR_USERS = [
         "password": f"User{i:02d}@aidcec",
         "role": "enduser",
     }
-    for i in range(1, 101)
+    for i in range(1, 3)
 ]
 
 # For a REGULAR_USERS

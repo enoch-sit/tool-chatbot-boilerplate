@@ -58,4 +58,20 @@ if "%run_migration%"=="yes" (
     )
     echo Migration completed successfully!
 )
+
+echo.
+set /p setup_collections="Do you want to setup collections for file system now? (yes/no): "
+if "%setup_collections%"=="yes" (
+    echo.
+    echo Setting up collections for file system...
+    python test_collection_setup.py
+    if errorlevel 1 (
+        echo ERROR: Collection setup failed
+        pause
+        exit /b 1
+    )
+    echo Collection setup completed successfully!
+    echo.
+    echo ✅ Database is now ready for VS Code debugging with file system support!
+)
 pause

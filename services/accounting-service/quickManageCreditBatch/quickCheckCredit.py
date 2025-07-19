@@ -25,7 +25,7 @@ MONGODB_CONTAINER = "auth-mongodb"
 ADMIN_USER = {
     "username": "admin",
     "email": "admin@example.com",
-    "password": "admin@admin@aidcec", # Please change this
+    "password": "admin@admin@aidcec",  # Please change this
 }
 SUPERVISOR_USERS = [
     {
@@ -47,7 +47,8 @@ REGULAR_USERS = [
         "email": f"user{i:02d}@aidcec.com",
         "password": f"User{i:02d}@aidcec",
         "role": "enduser",
-    } for i in range(1,101)
+    }
+    for i in range(1, 3)
 ]
 
 
@@ -111,7 +112,7 @@ def check_user_credits(admin_token, user_id, username, user_type):
     print(f"\n--- Checking credits for {user_type}: {username} ---")
     try:
         # URL encode the user_id in case it's an email
-        encoded_user_id = quote(user_id, safe='')
+        encoded_user_id = quote(user_id, safe="")
         response = requests.get(
             f"{ACCOUNT_BASE_URL}/api/credits/balance/{encoded_user_id}",
             headers={"Authorization": f"Bearer {admin_token}"},
@@ -172,7 +173,9 @@ def check_all_users_credits(admin_token):
     for user in all_users:
         # For this example, we'll use username as user_id
         # In a real system, you'd need to get the actual user ID from the auth service
-        user_id = user["email"]  # This should be replaced with actual user ID lookup or email
+        user_id = user[
+            "email"
+        ]  # This should be replaced with actual user ID lookup or email
         result = check_user_credits(
             admin_token, user_id, user["username"], user["role"]
         )

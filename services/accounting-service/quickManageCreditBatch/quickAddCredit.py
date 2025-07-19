@@ -49,7 +49,7 @@ REGULAR_USERS = [
         "password": f"User{i:02d}@aidcec",
         "role": "enduser",
     }
-    for i in range(1, 101)
+    for i in range(1, 3)
 ]
 
 
@@ -250,7 +250,7 @@ def allocate_credit_to_user(user, token):
     credit_amounts = {
         "admin": 5000,
         "supervisor": 6000,  # Supervisors get 6000 credits
-        "enduser": 30,  # Regular users get 30 credits
+        "enduser": 200,  # Regular users get 30 credits
     }
 
     credit_amount = credit_amounts.get(

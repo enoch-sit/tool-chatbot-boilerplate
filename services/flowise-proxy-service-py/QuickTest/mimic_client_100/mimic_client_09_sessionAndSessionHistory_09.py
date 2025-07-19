@@ -59,7 +59,7 @@ REGULAR_USERS_LIST = [
         "password": f"User{i:02d}@aidcec",
         "role": "enduser",
     }
-    for i in range(1, 101)
+    for i in range(1, 3)
 ]
 
 REGULAR_USER = REGULAR_USERS_LIST[0]  # Use the first user for testing

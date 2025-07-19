@@ -1,0 +1,50 @@
+{
+  "started_at": "2025-07-19T04:01:34.325217",
+  "collections": {
+    "users": "exists",
+    "chatflows": "exists",
+    "user_chatflows": "exists",
+    "refresh_tokens": "exists",
+    "chat_sessions": "exists",
+    "chat_messages": "exists",
+    "file_uploads": "exists"
+  },
+  "indexes": {
+    "gridfs": "created",
+    "User": "error: create_indexes",
+    "Chatflow": "error: create_indexes",
+    "UserChatflow": "error: create_indexes",
+    "RefreshToken": "error: create_indexes",
+    "ChatSession": "error: create_indexes",
+    "ChatMessage": "error: create_indexes",
+    "FileUpload": "error: create_indexes"
+  },
+  "gridfs": {
+    "fs.files": "exists",
+    "fs.chunks": "exists"
+  },
+  "errors": [],
+  "success": true,
+  "validation": {
+    "collections_count": 12,
+    "required_collections": [
+      "users",
+      "chatflows",
+      "user_chatflows",
+      "refresh_tokens",
+      "chat_sessions",
+      "chat_messages",
+      "file_uploads",
+      "fs.files",
+      "fs.chunks"
+    ],
+    "missing_collections": [],
+    "indexes_validated": {},
+    "gridfs_status": {
+      "collections": "present",
+      "functionality": "working"
+    },
+    "validation_passed": true
+  },
+  "completed_at": "2025-07-19T04:01:34.356064"
+}

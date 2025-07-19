@@ -8,7 +8,7 @@ services:
     environment:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev_access_secret_key_change_this_in_production}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-${JWT_SECRET_KEY:-dev_access_secret_key_change_this_in_production}}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-${JWT_SECRET_KEY:-dev_refresh_secret_key_change_this_in_production}}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-${JWT_SECRET_KEY:-dev_access_secret_key_change_this_in_production}}
       - JWT_ALGORITHM=HS256
       - JWT_EXPIRATION_HOURS=24
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
@@ -23,6 +23,9 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - HOST=0.0.0.0
       - PORT=8000
+      # Collection setup configuration
+      - FORCE_COLLECTION_SETUP=${FORCE_COLLECTION_SETUP:-false}
+      - FAIL_ON_COLLECTION_SETUP_ERROR=${FAIL_ON_COLLECTION_SETUP_ERROR:-false}
     depends_on:
       - mongodb
     networks:
