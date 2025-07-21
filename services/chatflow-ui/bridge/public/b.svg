@@ -1,0 +1,45 @@
+ <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+            <defs>
+                <!-- A collection of vibrant gradients for the crystal facets -->
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#ff00cc;" />
+                    <stop offset="100%" style="stop-color:#333399;" />
+                </linearGradient>
+                <linearGradient id="grad2" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#00dbde;" />
+                    <stop offset="100%" style="stop-color:#fc00ff;" />
+                </linearGradient>
+                <linearGradient id="grad3" x1="100%" y1="100%" x2="0%" y2="0%">
+                    <stop offset="0%" style="stop-color:#F8E71C;" />
+                    <stop offset="100%" style="stop-color:#F5A623;" />
+                </linearGradient>
+                 <linearGradient id="grad4" x1="0%" y1="100%" x2="0%" y2="0%">
+                    <stop offset="0%" style="stop-color:#7ED321;" />
+                    <stop offset="100%" style="stop-color:#007ADF;" />
+                </linearGradient>
+
+                <!-- A subtle drop shadow filter for depth -->
+                <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+                    <feOffset dx="2" dy="2" result="offsetblur"/>
+                    <feComponentTransfer>
+                        <feFuncA type="linear" slope="0.5"/>
+                    </feComponentTransfer>
+                    <feMerge>
+                        <feMergeNode/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+
+            <!-- Group the polygons to apply the filter to the whole object -->
+            <g filter="url(#dropShadow)">
+                <!-- The individual facets of the crystal, each with a different gradient -->
+                <polygon points="50,10 70,40 50,50" fill="url(#grad1)" />
+                <polygon points="50,10 30,40 50,50" fill="url(#grad2)" />
+                <polygon points="30,40 50,50 30,70" fill="url(#grad4)" />
+                <polygon points="30,70 50,90 50,50" fill="url(#grad1)" opacity="0.8" />
+                <polygon points="50,90 70,70 50,50" fill="url(#grad3)" />
+                <polygon points="70,70 50,50 70,40" fill="url(#grad2)" opacity="0.8" />
+            </g>
+        </svg>
