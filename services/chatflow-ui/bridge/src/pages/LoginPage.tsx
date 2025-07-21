@@ -77,7 +77,7 @@ const LoginPage: React.FC = () => {
           <LanguageSelector />
         </Box>
 
-        {/* Animated wave background */}
+        {/* Static gradient background */}
         <Box
           sx={{
             position: 'absolute',
@@ -91,22 +91,10 @@ const LoginPage: React.FC = () => {
               radial-gradient(circle at 60% 40%, rgba(180, 50, 120, 0.3) 0%, transparent 50%),
               radial-gradient(circle at 40% 60%, rgba(150, 40, 200, 0.2) 0%, transparent 50%)
             `,
-            animation: 'waveMoveLR 25s ease-in-out infinite',
-            '@keyframes waveMoveLR': {
-              '0%': {
-                transform: 'translateX(-50px) translateY(0px) scale(1)',
-              },
-              '50%': {
-                transform: 'translateX(50px) translateY(-20px) scale(1.1)',
-              },
-              '100%': {
-                transform: 'translateX(-50px) translateY(0px) scale(1)',
-              },
-            },
           }}
         />
         
-        {/* Secondary wave layer */}
+        {/* Secondary static gradient layer */}
         <Box
           sx={{
             position: 'absolute',
@@ -119,21 +107,6 @@ const LoginPage: React.FC = () => {
               radial-gradient(circle at 30% 70%, rgba(200, 60, 100, 0.2) 0%, transparent 60%),
               radial-gradient(circle at 70% 50%, rgba(100, 60, 200, 0.2) 0%, transparent 60%)
             `,
-            animation: 'waveMoveLR2 35s ease-in-out infinite',
-            '@keyframes waveMoveLR2': {
-              '0%': {
-                transform: 'translateX(-30px) translateY(10px) scale(1)',
-              },
-              '33%': {
-                transform: 'translateX(40px) translateY(-15px) scale(1.2)',
-              },
-              '66%': {
-                transform: 'translateX(20px) translateY(25px) scale(0.9)',
-              },
-              '100%': {
-                transform: 'translateX(-30px) translateY(10px) scale(1)',
-              },
-            },
           }}
         />
         
