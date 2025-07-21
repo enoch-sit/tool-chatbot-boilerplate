@@ -8,6 +8,8 @@ WORKDIR /project_root
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
+    libmagic1 \
+    libmagic-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies

@@ -1,0 +1,6 @@
+requests==2.31.0
+colorama==0.4.6
+aiohttp==3.9.1
+sseclient-py==1.7.2
+pytest==7.4.0
+pyjwt
