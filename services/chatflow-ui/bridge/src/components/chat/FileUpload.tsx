@@ -6,7 +6,6 @@ import type { FileUploadData } from '../../services/fileService';
 
 interface FileUploadProps {
   onFilesSelected: (files: FileUploadData[]) => void;
-  maxFiles?: number;
 }
 
 export interface FileUploadRef {
@@ -14,8 +13,7 @@ export interface FileUploadRef {
 }
 
 const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({ 
-  onFilesSelected, 
-  maxFiles = 10  // Increased from 5 to 10 for better multi-file support
+  onFilesSelected
 }, ref) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<FileUploadData[]>([]);
@@ -44,13 +42,6 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     setError(null);
-    
-    // Check if adding these files would exceed the limit
-    const totalFiles = attachedFiles.length + files.length;
-    if (totalFiles > maxFiles) {
-      setError(`Maximum ${maxFiles} files allowed. You currently have ${attachedFiles.length} files and are trying to add ${files.length} more.`);
-      return;
-    }
 
     const validFiles: File[] = [];
     for (const file of files) {
@@ -156,13 +147,6 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
       event.preventDefault();
       setError(null);
       
-      // Check if adding these images would exceed the limit
-      const totalFiles = attachedFiles.length + imageItems.length;
-      if (totalFiles > maxFiles) {
-        setError(`Maximum ${maxFiles} files allowed. You currently have ${attachedFiles.length} files and are trying to paste ${imageItems.length} more images.`);
-        return;
-      }
-      
       const files: File[] = [];
       
       for (const item of imageItems) {
@@ -214,13 +198,6 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
     
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
-      // Check if adding these files would exceed the limit
-      const totalFiles = attachedFiles.length + files.length;
-      if (totalFiles > maxFiles) {
-        setError(`Maximum ${maxFiles} files allowed. You currently have ${attachedFiles.length} files and are trying to add ${files.length} more.`);
-        return;
-      }
-      
       await processFiles(files);
     }
   };
@@ -243,7 +220,7 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,.pdf,.txt,.doc,.docx"
+        accept="image/*"
         onChange={handleFileSelect}
         disabled={isProcessing}
         style={{ display: 'none' }}
@@ -257,24 +234,24 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
           onClick={() => fileInputRef.current?.click()}
           disabled={isProcessing}
         >
-          {isProcessing ? 'Processing...' : 'Attach Files'}
+          {isProcessing ? 'Processing...' : 'Attach Images'}
         </Button>
         
         {attachedFiles.length === 0 && !isDragOver && (
           <Typography level="body-xs" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-            Click to attach, drag & drop files, or paste images (Ctrl+V) - Max {maxFiles} files
+            Click to attach, drag & drop images, or paste images (Ctrl+V)
           </Typography>
         )}
         
         {attachedFiles.length > 0 && (
           <Typography level="body-xs" sx={{ color: 'text.secondary' }}>
-            {attachedFiles.length}/{maxFiles} files attached
+            {attachedFiles.length} images attached
           </Typography>
         )}
         
         {isDragOver && (
           <Typography level="body-sm" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-            Drop files here to upload
+            Drop images here to upload
           </Typography>
         )}
 

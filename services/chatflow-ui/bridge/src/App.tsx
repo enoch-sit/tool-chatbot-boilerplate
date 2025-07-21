@@ -52,11 +52,11 @@ function App() {
           <Route 
             path="/login" 
             element={
-              user ? <Navigate to="/dashboard" replace /> : <LoginPage />
+              user ? <Navigate to="/chat" replace /> : <LoginPage />
             } 
           />
           
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to="/chat" replace />} />
           
           <Route
             path="/dashboard"

@@ -1,5 +1,5 @@
 {
-  "appTitle": "桥",
+  "appTitle": "AIDCEC AI AGENT",
   "auth": {
     "login": "登录",
     "logout": "登出",
@@ -13,7 +13,11 @@
     "welcomeTitle": "欢迎！",
     "signInPrompt": "请登录以继续。",
     "usernamePlaceholder": "johndoe",
-    "passwordPlaceholder": "密码"
+    "passwordPlaceholder": "密码",
+    "enterpriseSubtitle": "通过智能自动化和先进的对话式人工智能为教育赋能",
+    "aiWorkflowsTitle": "高级AI工作流",
+    "aiWorkflowsDesc": "部署具有高级安全性的复杂教育聊天机器人",
+    "copyrightFooter": "© 2025 AIDCEC 教育AI平台。保留所有权利。"
   },
   "dashboard": {
     "title": "仪表板",

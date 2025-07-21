@@ -1,5 +1,5 @@
 {
-  "appTitle": "Bridge",
+  "appTitle": "AIDCEC AI AGENT",
   "auth": {
     "login": "Login",
     "logout": "Logout",
@@ -13,7 +13,11 @@
     "welcomeTitle": "Welcome!",
     "signInPrompt": "Sign in to continue.",
     "usernamePlaceholder": "johndoe",
-    "passwordPlaceholder": "password"
+    "passwordPlaceholder": "password",
+    "enterpriseSubtitle": "Empowering education with joy and technology",
+    "aiWorkflowsTitle": "Advanced AI Workflows",
+    "aiWorkflowsDesc": "Deploy sophisticated educational chatbots with advanced security",
+    "copyrightFooter": "© 2025 AIDCEC Educational AI Platform. All rights reserved."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -37,7 +41,7 @@
     "noSessions": "No chat sessions yet",
     "loadingSessions": "Loading sessions...",
     "loadingHistory": "Loading chat history...",
-    "selectSession": "Select a session",
+    "selectSession": "View conversations",
     "selectChatflowPrompt": "Please select a chatflow to start chatting."
   },
   "admin": {

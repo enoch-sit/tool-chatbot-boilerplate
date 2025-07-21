@@ -2,12 +2,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Button, Typography, Sheet, Table, Modal, ModalDialog,
-  ModalClose, Input, Textarea, CircularProgress, Alert
+  ModalClose, Input, Textarea, CircularProgress, Alert, Chip
 } from '@mui/joy';
 import { useAdminStore } from '../store/adminStore';
 import type { Chatflow } from '../types/chatflow';
 import { useTranslation } from 'react-i18next';
 import { usePermissions } from '../hooks/usePermissions';
+import AdminDebugPanel from '../components/debug/AdminDebugPanel';
 
 const AdminPage: React.FC = () => {
   const { t } = useTranslation();
@@ -238,14 +239,17 @@ const AdminPage: React.FC = () => {
       )}
 
       {canManageChatflows && (
-        <Sheet variant="outlined" sx={{ borderRadius: 'sm', overflow: 'auto' }}>
-          <Table aria-label="Chatflow management table">
+        <Sheet variant="outlined" sx={{ borderRadius: 'sm', overflow: 'auto', maxWidth: '100%' }}>
+          <Table aria-label="Chatflow management table" sx={{ minWidth: '800px' }}>
             <thead>
               <tr>
-                <th>{t('admin.chatflowName')}</th>
-                <th>{t('admin.chatflowId')}</th>
-                <th>{t('admin.chatflowStatus')}</th>
-                <th>{t('admin.chatflowActions')}</th>
+                <th style={{ minWidth: '120px' }}>{t('admin.chatflowName')}</th>
+                <th style={{ minWidth: '280px' }}>{t('admin.chatflowId')}</th>
+                <th style={{ minWidth: '80px' }}>Status</th>
+                <th style={{ minWidth: '80px' }}>Deployed</th>
+                <th style={{ minWidth: '70px' }}>Public</th>
+                <th style={{ minWidth: '80px' }}>Type</th>
+                {canManageUsers && <th style={{ minWidth: '120px' }}>{t('admin.chatflowActions')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -261,12 +265,52 @@ const AdminPage: React.FC = () => {
               ) : (
                 chatflows.map((flow, idx) => (
                   <tr key={`${flow.flowise_id}-${idx}`}>
-                    <td>{flow.name}</td>
-                    <td>{getStatusDisplay(flow.sync_status)}</td>
-                    <td>{flow.deployed ? t('common.yes') : t('common.no')}</td>
-                    <td>{flow.is_public ? t('common.yes') : t('common.no')}</td>
-                    <td>{flow.category || 'N/A'}</td>
-                    <td>{flow.type}</td>
+                    <td style={{ maxWidth: '150px' }}>
+                      <Typography 
+                        level="body-sm" 
+                        sx={{ 
+                          fontWeight: 'bold',
+                          wordBreak: 'break-word',
+                          whiteSpace: 'normal'
+                        }}
+                      >
+                        {flow.name}
+                      </Typography>
+                    </td>
+                    <td style={{ maxWidth: '300px' }}>
+                      <Typography 
+                        level="body-xs" 
+                        sx={{ 
+                          fontFamily: 'monospace', 
+                          fontSize: '11px',
+                          wordBreak: 'break-all',
+                          whiteSpace: 'normal',
+                          lineHeight: 1.2
+                        }}
+                      >
+                        {flow.flowise_id}
+                      </Typography>
+                    </td>
+                    <td>
+                      <Chip size="sm" color={flow.sync_status === 'active' ? 'success' : 'danger'}>
+                        {getStatusDisplay(flow.sync_status)}
+                      </Chip>
+                    </td>
+                    <td>
+                      <Chip size="sm" color={flow.deployed ? 'success' : 'neutral'}>
+                        {flow.deployed ? t('common.active') : t('common.inactive')}
+                      </Chip>
+                    </td>
+                    <td>
+                      <Chip size="sm" color={flow.is_public ? 'warning' : 'neutral'}>
+                        {flow.is_public ? 'Public' : 'Private'}
+                      </Chip>
+                    </td>
+                    <td>
+                      <Typography level="body-sm">
+                        {flow.type}
+                      </Typography>
+                    </td>
                     {canManageUsers && (
                       <td>
                         <Button size="sm" onClick={() => handleManageUsers(flow)}>
@@ -381,6 +425,9 @@ const AdminPage: React.FC = () => {
           </Sheet>
         </Box>
       )}
+      
+      {/* Debug Panel - only shows in development */}
+      {process.env.NODE_ENV === 'development' && <AdminDebugPanel />}
     </Box>
   );
 };

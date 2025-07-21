@@ -33,7 +33,7 @@ import { useChatStore } from '../store/chatStore';
 import { useAuth } from '../hooks/useAuth';
 import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
-import FolderIcon from '@mui/icons-material/Folder';
+import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer';
 import AddIcon from '@mui/icons-material/Add';
 
 const ChatPage: React.FC = () => {
@@ -115,7 +115,7 @@ const ChatPage: React.FC = () => {
           <Select 
             placeholder={t('chat.selectChatflow')} value={currentChatflow?.id || ''} 
             onChange={handleChatflowChange} 
-            startDecorator={<FolderIcon />} 
+            startDecorator={<QuestionAnswerIcon />} 
             sx={{ minWidth: 200 }} 
             disabled={isLoading}>
             {chatflows.map((chatflow) => (<Option key={chatflow.id} value={chatflow.id}>{chatflow.name}</Option>))}

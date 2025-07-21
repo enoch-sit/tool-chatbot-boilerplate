@@ -1,5 +1,5 @@
 {
-  "appTitle": "進階聊天機器人",
+  "appTitle": "AIDCEC - 進階聊天機器人",
   "auth": {
     "login": "登入",
     "logout": "登出",
@@ -13,7 +13,11 @@
     "welcomeTitle": "歡迎！",
     "signInPrompt": "請登入以繼續。",
     "usernamePlaceholder": "johndoe",
-    "passwordPlaceholder": "密碼"
+    "passwordPlaceholder": "密碼",
+    "enterpriseSubtitle": "透過智慧自動化和先進的對話式人工智慧為教育賦能",
+    "aiWorkflowsTitle": "進階AI工作流程",
+    "aiWorkflowsDesc": "部署具有高級安全性的複雜教育聊天機器人",
+    "copyrightFooter": "© 2025 AIDCEC 教育AI平台。保留所有權利。"
   },
   "dashboard": {
     "title": "儀表板",
