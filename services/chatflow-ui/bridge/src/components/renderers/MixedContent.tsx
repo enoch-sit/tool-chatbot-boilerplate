@@ -8,24 +8,45 @@ import rehypeHighlight from 'rehype-highlight';
 
 interface MixedContentRendererProps {
   content: string;
+  messageId?: string; // Add optional message ID for better keying
+  isHistorical?: boolean; // Flag to indicate this is from chat history
 }
 
-export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({ content }) => {
+export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({ content, messageId, isHistorical = false }) => {
   const blocks = parseMixedContent(content);
+  
+  // Create a unique identifier for this content rendering instance
+  const contentHash = React.useMemo(() => {
+    const baseHash = messageId || `content-${Date.now()}`;
+    const histFlag = isHistorical ? 'hist' : 'live';
+    return `${baseHash}-${histFlag}-${content.length}-${content.substring(0, 20).replace(/\s/g, '')}`;
+  }, [content, messageId, isHistorical]);
+  
   return (
     <>
       {blocks.map((block, idx) => {
+        // Create more unique keys that include content hash and block type
+        const baseKey = `${contentHash}-${block.type}-${idx}`;
+        
         if (block.type === 'mermaid') {
-          return <MermaidDiagram key={idx} chart={block.content} />;
+          // Use both content hash and chart content for uniqueness
+          const mermaidKey = `mermaid-${contentHash}-${block.content.substring(0, 20).replace(/\s/g, '')}-${idx}`;
+          console.log('🎨 Creating mermaid with key:', mermaidKey, isHistorical ? '(historical)' : '(live)');
+          return (
+            <MermaidDiagram 
+              key={mermaidKey} 
+              chart={block.content}
+            />
+          );
         }
         if (block.type === 'code') {
-          return <CodeBlock key={idx} code={block.content} language={block.language} />;
+          return <CodeBlock key={`code-${baseKey}`} code={block.content} language={block.language} />;
         }
         // Render markdown for text blocks
         if (block.type === 'text') {
           return (
             <ReactMarkdown
-              key={idx}
+              key={`text-${baseKey}`}
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight]}
               components={{
@@ -37,7 +58,7 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({ cont
           );
         }
         // fallback
-        return <span key={idx}>{block.content}</span>;
+        return <span key={`fallback-${baseKey}`}>{block.content}</span>;
       })}
     </>
   );

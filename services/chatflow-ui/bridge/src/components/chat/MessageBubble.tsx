@@ -142,6 +142,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   console.log('💬 MessageBubble received message:', message);
   console.log('💬 Message uploads:', uploads);
 
+  // Detect if this is a historical message (not streaming and has streamEvents)
+  const isHistorical = !isStreaming && ((streamEvents?.length ?? 0) > 0 || (!liveEvents || liveEvents.length === 0));
+
   // Use liveEvents for real-time display during streaming, streamEvents for history
   const eventsToDisplay = isStreaming ? (liveEvents || []) : (streamEvents || []);
 
@@ -199,7 +202,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         )}
         
         {/* Render accumulated mixed content from tokens */}
-        {tokenContent && <MixedContentRenderer content={tokenContent} />}
+        {tokenContent && <MixedContentRenderer content={tokenContent} messageId={message.id} isHistorical={isHistorical} />}
       </Box>
     );
   }
@@ -260,7 +263,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         )}
 
         {/* Render main content as mixed content (markdown/code/mermaid) */}
-        <MixedContentRenderer content={mainContent} />
+        <MixedContentRenderer content={mainContent} messageId={message.id} isHistorical={isHistorical} />
 
         {/* Show file attachments for AI responses if any */}
         <FileAttachments uploads={uploads} />

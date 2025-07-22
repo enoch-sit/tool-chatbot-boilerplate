@@ -17,41 +17,133 @@ interface MermaidDiagramProps {
 const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   const [svg, setSvg] = useState('');
   const [editableChart, setEditableChart] = useState(chart);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // Start in preview mode for automatic rendering
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+  const currentDiagramIdRef = useRef<string | null>(null);
+  const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // No aggressive cleanup - let mermaid manage its own DOM elements completely
 
   const renderDiagram = useCallback(async (diagramSource: string) => {
+    console.log('Starting renderDiagram with source length:', diagramSource.length);
+    
+    // Clear any pending render to prevent multiple simultaneous renders
+    if (renderTimeoutRef.current) {
+      clearTimeout(renderTimeoutRef.current);
+    }
+    
+    // Create a unique ID with more entropy to avoid conflicts
+    const uniqueId = `mermaid-graph-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
     try {
-      // The render function needs a unique ID to avoid conflicts
-      const uniqueId = `mermaid-graph-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const { svg: renderedSvg } = await mermaid.render(uniqueId, diagramSource);
+      
+      // No cleanup on successful render - let mermaid manage successful diagrams
+      
+      currentDiagramIdRef.current = uniqueId;
+      console.log('Successfully rendered SVG, length:', renderedSvg.length);
       setSvg(renderedSvg);
-      setError(null); // Clear previous errors on successful render
+      setError(null);
+      
     } catch (e: any) {
       console.error('Mermaid rendering failed:', e);
-      const errorMessage = e.message || 'An unknown error occurred during rendering.';
+      
+      // Clean up immediate body children only after render failure
+      setTimeout(() => {
+        console.log('Cleaning up after render failure');
+        
+        // Clean up our specific temporary element if it's an immediate child of body
+        const tempElement = document.getElementById(uniqueId);
+        if (tempElement && tempElement.parentNode === document.body) {
+          console.log('Cleaning up failed render element:', uniqueId);
+          tempElement.remove();
+        }
+        
+        // Clean up any other mermaid elements that are immediate children of body
+        const bodyChildren = Array.from(document.body.children);
+        bodyChildren.forEach(child => {
+          // Only remove if it's an immediate child of body and has mermaid-related ID
+          if (child.id && (child.id.startsWith('dmermaid-graph-') || child.id.startsWith('mermaid-graph-'))) {
+            console.log('Cleaning up orphaned mermaid element after failure:', child.id);
+            child.remove();
+          }
+        });
+      }, 100); // Shorter delay since this is error cleanup
+      
+      let errorMessage = e.message || 'An unknown error occurred during rendering.';
+      
+      // Simplified error message cleanup
+      errorMessage = errorMessage
+        .replace(/mermaid-graph-\d+-\w+/g, '') // Remove generated IDs
+        .replace(/element with id.*?does not exist/gi, 'Invalid diagram syntax')
+        .replace(/Cannot read properties of null.*?/gi, 'Diagram rendering failed - please try again')
+        .replace(/\s+/g, ' ') // Clean up extra whitespace
+        .trim();
+        
+      // Provide a user-friendly fallback message if the cleaned message is empty
+      if (!errorMessage) {
+        errorMessage = 'The diagram syntax appears to be invalid. Please check your mermaid code.';
+      }
+      
+      console.log('Setting error message:', errorMessage);
       setError(errorMessage);
       setSvg(''); // Clear the SVG to ensure the error view is shown
     }
-  }, []);
+  }, []); // No dependencies needed since we removed cleanupMermaidElements
 
+  // Simplified initialization - start rendering immediately but debounced
   useEffect(() => {
-    renderDiagram(editableChart);
-  }, [chart, renderDiagram]); // Rerender when the initial chart prop changes
+    console.log('MermaidDiagram component mounted, starting render');
+    renderTimeoutRef.current = setTimeout(() => {
+      renderDiagram(editableChart);
+    }, 50); // Small delay to prevent immediate multiple renders
+    
+    return () => {
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+    };
+  }, []); // Empty dependency - runs only once on mount
+
+  // Handle chart prop changes from parent component with debouncing
+  useEffect(() => {
+    if (chart !== editableChart) {
+      console.log('Chart prop changed, updating editableChart and re-rendering');
+      setEditableChart(chart);
+      
+      // Clear any pending render and start a new one
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+      
+      renderTimeoutRef.current = setTimeout(() => {
+        renderDiagram(chart);
+      }, 100); // Debounce chart changes
+    }
+  }, [chart, renderDiagram]); // Include renderDiagram in dependencies
+
+  // Handle successful renders - switch to preview mode when we have a valid SVG and no errors
+  useEffect(() => {
+    if (svg && !error) {
+      console.log('Valid SVG detected, ensuring preview mode');
+      setIsEditing(false);
+    } else if (error && !svg) {
+      console.log('Error detected with no SVG, ensuring edit mode');
+      setIsEditing(true);
+    }
+  }, [svg, error]);
+
+  // No cleanup on unmount - let mermaid manage its own DOM elements
+  // Aggressive cleanup was causing conflicts with other mermaid instances
 
   const handleUpdate = () => {
     renderDiagram(editableChart);
-    setIsEditing(false); // Exit editing mode after updating
+    // Note: Don't manually set editing mode here - let the useEffect handle it based on success/failure
   };
-
-  // If rendering fails, default to showing the editor with an error message.
-  if (error && !isEditing) {
-    setIsEditing(true);
-  }
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (scrollContainerRef.current) {
@@ -99,7 +191,12 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
         <Box>
           {error && (
             <Alert color="danger" sx={{ mb: 1 }}>
-              <Typography level="body-sm">{error}</Typography>
+              <Typography level="body-sm">
+                <strong>Diagram Error:</strong> {error}
+              </Typography>
+              <Typography level="body-xs" sx={{ mt: 0.5, opacity: 0.8 }}>
+                Please check your mermaid syntax and try updating the diagram.
+              </Typography>
             </Alert>
           )}
           <Textarea
