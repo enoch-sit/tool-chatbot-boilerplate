@@ -6,7 +6,7 @@ class FlowiseService:
     def __init__(self):
         self.flowise_url = settings.FLOWISE_API_URL
         self.api_key = settings.FLOWISE_API_KEY
-        self.timeout = 3000
+        self.timeout = 10000  # Increased from 3000ms to 10000ms (10 seconds)
 
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for Flowise API requests"""

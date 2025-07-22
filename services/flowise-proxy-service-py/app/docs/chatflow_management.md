@@ -15,7 +15,7 @@ Configure chatflow sync behavior with the following environment variables:
 
 ```
 ENABLE_CHATFLOW_SYNC=true           # Enable/disable automatic sync (default: true)
-CHATFLOW_SYNC_INTERVAL_HOURS=1      # Sync interval in hours (default: 1)
+CHATFLOW_SYNC_INTERVAL_HOURS=0.05      # Sync interval in hours (default: 0.05)
 ```
 
 ## API Endpoints

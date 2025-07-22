@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     
     # Chatflow sync settings
     ENABLE_CHATFLOW_SYNC: bool = os.getenv("ENABLE_CHATFLOW_SYNC", "true").lower() == "true"
-    CHATFLOW_SYNC_INTERVAL_HOURS: int = int(os.getenv("CHATFLOW_SYNC_INTERVAL_HOURS", "1"))
+    CHATFLOW_SYNC_INTERVAL_HOURS: float = float(os.getenv("CHATFLOW_SYNC_INTERVAL_HOURS", "0.05"))  # 3 minutes (0.05 hours)
 
     # External Services URLs - Updated to use new container-based URLs
     AUTH_API_URL: str = os.getenv("AUTH_API_URL", "http://localhost:3000")
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     MONGODB_DATABASE_NAME: str = os.getenv("MONGODB_DATABASE_NAME", "flowise_proxy")
 
     # Streaming Configuration
-    MAX_STREAMING_DURATION: int = int(os.getenv("MAX_STREAMING_DURATION", "120000"))    # CORS Configuration
+    MAX_STREAMING_DURATION: int = int(os.getenv("MAX_STREAMING_DURATION", "180000"))  # Increased from 120000ms to 180000ms (3 minutes)    # CORS Configuration
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", "*")
       # Server Configuration
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
