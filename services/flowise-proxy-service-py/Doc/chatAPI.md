@@ -236,3 +236,25 @@ Used for sending a prediction request to a chatflow.
   * `500 Internal Server Error`: If an unexpected error occurs.
 
 ---
+
+### Delete User Chat History
+
+* **Endpoint**: `DELETE /api/v1/chat/history`
+* **Description**: Deletes all chat history (sessions and messages) for the authenticated user. This operation is irreversible and will permanently remove all conversation data.
+* **Authentication**: JWT Bearer token required.
+* **Success Response** (`200 OK`):
+
+  ```json
+  {
+    "message": "Chat history deleted successfully",
+    "sessions_deleted": 5,
+    "messages_deleted": 42,
+    "user_id": "user123"
+  }
+  ```
+
+* **Error Responses**:
+  * `401 Unauthorized`: If the JWT is invalid or expired.
+  * `500 Internal Server Error`: If an unexpected error occurs during deletion.
+
+---
