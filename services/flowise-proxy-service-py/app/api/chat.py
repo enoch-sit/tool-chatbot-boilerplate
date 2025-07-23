@@ -150,6 +150,20 @@ class SessionListResponse(BaseModel):
     count: int
 
 
+class DeleteChatHistoryResponse(BaseModel):
+    message: str
+    sessions_deleted: int
+    messages_deleted: int
+    user_id: str
+
+
+class DeleteSessionResponse(BaseModel):
+    message: str
+    session_id: str
+    messages_deleted: int
+    user_id: str
+
+
 # Create deterministic but UUID-formatted session ID with timestamp
 def create_session_id(user_id, chatflow_id):
     # Create a namespace UUID (version 5)
@@ -1182,6 +1196,88 @@ async def get_all_user_sessions(current_user: Dict = Depends(authenticate_user))
     ]
 
     return {"sessions": session_summaries, "count": len(session_summaries)}
+
+
+@router.delete("/history", response_model=DeleteChatHistoryResponse)
+async def delete_user_chat_history(current_user: Dict = Depends(authenticate_user)):
+    """
+    Delete all chat history (sessions and messages) for the authenticated user.
+    This is irreversible and will remove all conversation data.
+    """
+    user_id = current_user.get("user_id")
+    
+    try:
+        # Count sessions and messages before deletion for the response
+        sessions_count = await ChatSession.find(ChatSession.user_id == user_id).count()
+        messages_count = await ChatMessage.find(ChatMessage.user_id == user_id).count()
+        
+        # Delete all chat messages for the user
+        delete_messages_result = await ChatMessage.find(ChatMessage.user_id == user_id).delete()
+        
+        # Delete all chat sessions for the user
+        delete_sessions_result = await ChatSession.find(ChatSession.user_id == user_id).delete()
+        
+        return {
+            "message": "Chat history deleted successfully",
+            "sessions_deleted": sessions_count,
+            "messages_deleted": messages_count,
+            "user_id": user_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to delete chat history: {str(e)}"
+        )
+
+
+@router.delete("/sessions/{session_id}", response_model=DeleteSessionResponse)
+async def delete_session(
+    session_id: str, current_user: Dict = Depends(authenticate_user)
+):
+    """
+    Delete a specific chat session and all its messages for the authenticated user.
+    This is irreversible and will remove all conversation data for this session.
+    """
+    user_id = current_user.get("user_id")
+    
+    try:
+        # 1. Verify the session exists and belongs to the user
+        session = await ChatSession.find_one(
+            ChatSession.session_id == session_id, ChatSession.user_id == user_id
+        )
+        if not session:
+            raise HTTPException(
+                status_code=404, detail="Chat session not found or access denied"
+            )
+        
+        # 2. Count messages before deletion for the response
+        messages_count = await ChatMessage.find(
+            ChatMessage.session_id == session_id, ChatMessage.user_id == user_id
+        ).count()
+        
+        # 3. Delete all messages for this session
+        await ChatMessage.find(
+            ChatMessage.session_id == session_id, ChatMessage.user_id == user_id
+        ).delete()
+        
+        # 4. Delete the session
+        await session.delete()
+        
+        return {
+            "message": "Session deleted successfully",
+            "session_id": session_id,
+            "messages_deleted": messages_count,
+            "user_id": user_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to delete session: {str(e)}"
+        )
 
 
 # Add these new endpoints for file management
