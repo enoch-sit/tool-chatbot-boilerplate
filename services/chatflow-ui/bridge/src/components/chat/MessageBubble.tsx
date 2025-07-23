@@ -34,27 +34,6 @@ const FileAttachments: React.FC<{ uploads?: FileUpload[] }> = ({ uploads }) => {
   
   if (!uploads || uploads.length === 0) return null;
 
-  // Debug logging
-  console.log('🖼️ Rendering file attachments:', uploads);
-  uploads.forEach((upload, index) => {
-    console.log(`🔍 Upload ${index}:`, upload);
-    console.log(`🔍 Upload ${index} keys:`, Object.keys(upload));
-    if (isImageUpload(upload)) {
-      console.log(`🖼️ Image upload URLs - main: ${upload.url}, thumbnail_url: ${upload.thumbnail_url}, thumbnail_medium: ${upload.thumbnail_medium}`);
-      console.log(`🖼️ Image upload full URL structure:`, {
-        url: upload.url,
-        download_url: upload.download_url,
-        thumbnail_url: upload.thumbnail_url,
-        thumbnail_medium: upload.thumbnail_medium,
-        thumbnail_small: upload.thumbnail_small,
-        file_id: upload.file_id,
-        name: upload.name,
-        mime: upload.mime,
-        is_image: upload.is_image
-      });
-    }
-  });
-
   const handleImageClick = async (upload: FileUpload) => {
     try {
       const token = tokens?.accessToken;
@@ -98,9 +77,8 @@ const FileAttachments: React.FC<{ uploads?: FileUpload[] }> = ({ uploads }) => {
                     cursor: 'pointer',
                   }}
                   onClick={() => handleImageClick(upload)}
-                  onError={(error) => {
-                    console.log('🖼️ AuthenticatedImage error for:', upload.file_id, error.message);
-                    console.log('🖼️ Upload object that failed:', upload);
+                  onError={() => {
+                    // Silent error handling
                   }}
                 />
                 <Typography level="body-xs" sx={{ mt: 0.5, textAlign: 'center' }}>
@@ -137,10 +115,6 @@ const FileAttachments: React.FC<{ uploads?: FileUpload[] }> = ({ uploads }) => {
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const { content, sender, isStreaming = false, streamEvents, liveEvents, timeMetadata, uploads } = message;
-
-  // Debug logging
-  console.log('💬 MessageBubble received message:', message);
-  console.log('💬 Message uploads:', uploads);
 
   // Detect if this is a historical message (not streaming and has streamEvents)
   const isHistorical = !isStreaming && ((streamEvents?.length ?? 0) > 0 || (!liveEvents || liveEvents.length === 0));

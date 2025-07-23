@@ -13,7 +13,12 @@ interface MixedContentRendererProps {
   isHistorical?: boolean; // Flag to indicate this is from chat history
 }
 
-export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({ content, messageId, isHistorical = false }) => {
+export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({ 
+  content, 
+  messageId, 
+  isHistorical = false
+}) => {
+  // Always parse content directly, no special streaming logic
   const blocks = parseMixedContent(content);
   
   // Create a unique identifier for this content rendering instance
@@ -32,7 +37,6 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({ cont
         if (block.type === 'mermaid') {
           // Use both content hash and chart content for uniqueness
           const mermaidKey = `mermaid-${contentHash}-${block.content.substring(0, 20).replace(/\s/g, '')}-${idx}`;
-          console.log('🎨 Creating mermaid with key:', mermaidKey, isHistorical ? '(historical)' : '(live)');
           return (
             <MermaidDiagram 
               key={mermaidKey} 

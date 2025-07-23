@@ -17,35 +17,69 @@ export class StreamParser {
   }
 
   private parseEvents(): void {
-    let braceCount = 0;
-    let startIndex = -1;
+    // Split the buffer by looking for complete JSON objects
+    // Use a more robust approach that looks for "}{"" patterns to separate objects
+    let startIndex = 0;
+
+    // First, let's find all complete JSON objects in the buffer
+    const jsonObjects: string[] = [];
+    let braceLevel = 0;
+    let currentObjectStart = -1;
+    let inString = false;
+    let escapeNext = false;
 
     for (let i = 0; i < this.buffer.length; i++) {
-      if (this.buffer[i] === '{') {
-        if (braceCount === 0) {
-          startIndex = i;
-        }
-        braceCount++;
-      } else if (this.buffer[i] === '}') {
-        braceCount--;
-        if (braceCount === 0 && startIndex !== -1) {
-          const objectStr = this.buffer.substring(startIndex, i + 1);
-          try {
-            const parsed = JSON.parse(objectStr);
-            this.handleParsedEvent(parsed);
-          } catch {
-            this.onError(new Error(`Failed to parse JSON: ${objectStr}`));
+      const char = this.buffer[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\' && inString) {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === '{') {
+          if (braceLevel === 0) {
+            currentObjectStart = i;
           }
-          startIndex = -1;
+          braceLevel++;
+        } else if (char === '}') {
+          braceLevel--;
+          if (braceLevel === 0 && currentObjectStart !== -1) {
+            // We found a complete JSON object
+            const jsonString = this.buffer.substring(currentObjectStart, i + 1);
+            jsonObjects.push(jsonString);
+            startIndex = i + 1;
+            currentObjectStart = -1;
+          }
         }
       }
     }
 
-    // Keep remaining buffer for next chunk
-    if (startIndex !== -1) {
-      this.buffer = this.buffer.substring(startIndex);
+    // Process all complete JSON objects
+    for (const jsonString of jsonObjects) {
+      try {
+        const parsed = JSON.parse(jsonString);
+        this.handleParsedEvent(parsed);
+      } catch (error) {
+        this.onError(new Error(`Failed to parse JSON: ${jsonString}`));
+      }
+    }
+
+    // Keep remaining buffer (incomplete JSON object) for next chunk
+    if (currentObjectStart !== -1) {
+      this.buffer = this.buffer.substring(currentObjectStart);
     } else {
-      this.buffer = '';
+      this.buffer = this.buffer.substring(startIndex);
     }
   }
 

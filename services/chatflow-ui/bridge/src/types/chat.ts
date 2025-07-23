@@ -128,7 +128,8 @@ export type ContentBlock =
   | { type: 'code'; content: string; language: string }
   | { type: 'mermaid'; content: string }
   | { type: 'mindmap'; content: string }
-  | { type: 'html'; content: string };
+  | { type: 'html'; content: string }
+  | { type: 'html-loading'; content: string };
 
 // Update the StreamEvent union type
 export type StreamEvent =

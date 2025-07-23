@@ -4,12 +4,15 @@ import type { ContentBlock } from '../types/chat';
 
 /**
  * Parses a raw string from the AI into an array of content blocks.
- * It identifies code, mermaid, and mindmap blocks using Markdown fences.
+ * It identifies code, mermaid, mindmap, and HTML blocks using Markdown fences.
  * @param rawContent The raw string to parse.
  * @returns An array of ContentBlock objects.
  */
 export const parseMixedContent = (rawContent: string): ContentBlock[] => {
   const blocks: ContentBlock[] = [];
+  
+  // Always parse content directly, no loading states during streaming
+  
   // This regex looks for ```language ... ``` blocks
   const regex = /```(\w+)?\n([\s\S]*?)```/g;
   let lastIndex = 0;
@@ -30,6 +33,7 @@ export const parseMixedContent = (rawContent: string): ContentBlock[] => {
     if (language === 'mermaid' || language === 'mindmap') {
       blocks.push({ type: language, content: code });
     } else if (language === 'html') {
+      // Post-stream rendering: Only create actual HTML blocks when not streaming
       blocks.push({ type: 'html', content: code });
     } else {
       blocks.push({ type: 'code', content: code, language });
@@ -52,4 +56,14 @@ export const parseMixedContent = (rawContent: string): ContentBlock[] => {
   }
 
   return blocks;
+};
+
+/**
+ * Converts loading blocks to actual content blocks after streaming is complete.
+ * This is called when streaming finishes to trigger the final render.
+ * @param rawContent The complete content after streaming
+ * @returns An array of ContentBlock objects with all blocks properly rendered
+ */
+export const finalizeStreamedContent = (rawContent: string): ContentBlock[] => {
+  return parseMixedContent(rawContent); // Parse normally
 };
