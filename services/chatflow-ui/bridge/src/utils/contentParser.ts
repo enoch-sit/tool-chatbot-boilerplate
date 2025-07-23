@@ -29,6 +29,8 @@ export const parseMixedContent = (rawContent: string): ContentBlock[] => {
 
     if (language === 'mermaid' || language === 'mindmap') {
       blocks.push({ type: language, content: code });
+    } else if (language === 'html') {
+      blocks.push({ type: 'html', content: code });
     } else {
       blocks.push({ type: 'code', content: code, language });
     }

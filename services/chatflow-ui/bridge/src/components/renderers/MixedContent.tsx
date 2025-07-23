@@ -2,6 +2,7 @@ import React from 'react';
 import { parseMixedContent } from '../../utils/contentParser';
 import MermaidDiagram from '../renderers/MermaidDiagram';
 import CodeBlock from '../renderers/CodeBlock';
+import HtmlPreview from '../renderers/HtmlPreview';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -41,6 +42,9 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({ cont
         }
         if (block.type === 'code') {
           return <CodeBlock key={`code-${baseKey}`} code={block.content} language={block.language} />;
+        }
+        if (block.type === 'html') {
+          return <HtmlPreview key={`html-${baseKey}`} htmlContent={block.content} />;
         }
         // Render markdown for text blocks
         if (block.type === 'text') {
