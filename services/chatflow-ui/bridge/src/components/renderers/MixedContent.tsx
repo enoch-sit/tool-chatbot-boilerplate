@@ -48,7 +48,7 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({
           return <CodeBlock key={`code-${baseKey}`} code={block.content} language={block.language} />;
         }
         if (block.type === 'html') {
-          return <HtmlPreview key={`html-${baseKey}`} htmlContent={block.content} />;
+          return <HtmlPreview key={`html-${baseKey}`} htmlContent={block.content} isHistorical={isHistorical} />;
         }
         // Render markdown for text blocks
         if (block.type === 'text') {
