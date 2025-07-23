@@ -3,9 +3,11 @@ import { parseMixedContent } from '../../utils/contentParser';
 import MermaidDiagram from '../renderers/MermaidDiagram';
 import CodeBlock from '../renderers/CodeBlock';
 import HtmlPreview from '../renderers/HtmlPreview';
+import MathRenderer from '../renderers/MathRenderer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+// Removed remark-math and rehype-katex - we handle math ourselves
 
 interface MixedContentRendererProps {
   content: string;
@@ -50,8 +52,20 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({
         if (block.type === 'html') {
           return <HtmlPreview key={`html-${baseKey}`} htmlContent={block.content} isHistorical={isHistorical} />;
         }
+        if (block.type === 'math') {
+          return <MathRenderer key={`math-${baseKey}`} content={block.content} display={block.display} />;
+        }
         // Render markdown for text blocks
         if (block.type === 'text') {
+          // Check for leftover math placeholders and clean them up
+          let cleanedContent = block.content;
+          
+          // Only remove exact placeholder patterns (with underscores on both sides)
+          cleanedContent = cleanedContent.replace(/__MATH_(INLINE|DISPLAY)_\d+__:?\s*/g, '');
+          
+          // Remove trailing backslashes that might be left over
+          cleanedContent = cleanedContent.replace(/\\\s*$/g, '');
+          
           return (
             <ReactMarkdown
               key={`text-${baseKey}`}
@@ -61,7 +75,7 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({
                 // Optionally override code block rendering if needed
               }}
             >
-              {block.content}
+              {cleanedContent}
             </ReactMarkdown>
           );
         }

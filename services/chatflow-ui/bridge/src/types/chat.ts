@@ -129,7 +129,8 @@ export type ContentBlock =
   | { type: 'mermaid'; content: string }
   | { type: 'mindmap'; content: string }
   | { type: 'html'; content: string }
-  | { type: 'html-loading'; content: string };
+  | { type: 'html-loading'; content: string }
+  | { type: 'math'; content: string; display: boolean };
 
 // Update the StreamEvent union type
 export type StreamEvent =
