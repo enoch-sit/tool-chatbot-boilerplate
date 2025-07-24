@@ -85,7 +85,6 @@ function parseMathFromText(text: string, blocks: ContentBlock[]): void {
     { regex: /\[\s*([^[\]]+)\s*\]/g, display: true, name: 'display-square' },
   ];
 
-  let processedText = text;
   const foundMath: Array<{
     match: string;
     content: string;
