@@ -12,9 +12,9 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content, display }) => {
   // Clean up content using robust math cleaner
   const cleanContent = React.useMemo(() => {
     return cleanMathContent(content, {
-      removeDelimiters: true,
-      trimWhitespace: true,
-      fixCommonErrors: true,
+      removeDelimiters: false,
+      trimWhitespace: false,
+      fixCommonErrors: false,
       validateSyntax: false // Skip heavy validation for performance
     });
   }, [content]);
