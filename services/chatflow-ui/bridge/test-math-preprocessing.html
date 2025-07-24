@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Math Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { 
+            border: 1px solid #ccc; 
+            margin: 10px 0; 
+            padding: 10px; 
+            background: #f9f9f9; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Math Rendering Test</h1>
+    
+    <div class="test-case">
+        <h3>Original Content (with × symbol):</h3>
+        <p>The gravitational constant is \(6.674 × 10^{-11} \, \text{Nm}^2/\text{kg}^2\)</p>
+    </div>
+    
+    <div class="test-case">
+        <h3>Preprocessed Content (× → \times):</h3>
+        <p>The gravitational constant is $6.674 \times 10^{-11} \, \mathrm{Nm}^2/\mathrm{kg}^2$</p>
+    </div>
+
+    <div class="test-case">
+        <h3>Newton's Law (Display Math):</h3>
+        $$F = G \frac{m_1 m_2}{r^2}$$
+        <p>Where G = $6.674 \times 10^{-11} \, \mathrm{Nm}^2/\mathrm{kg}^2$</p>
+    </div>
+
+    <script>
+        // Test preprocessing function
+        function preprocessMath(content) {
+            let updated = content;
+            
+            // Convert \[...\] to $$...$$, handling × symbols
+            updated = updated.replace(/\\\[([\s\S]*?)\\\]/g, (_, mathContent) => {
+                const cleanContent = mathContent.replace(/×/g, '\\times');
+                return `$$${cleanContent}$$`;
+            });
+            
+            // Convert \(...\) to $...$, handling × symbols  
+            updated = updated.replace(/\\\((.*?)\\\)/g, (_, mathContent) => {
+                const cleanContent = mathContent.replace(/×/g, '\\times');
+                return `$${cleanContent}$`;
+            });
+            
+            return updated;
+        }
+        
+        const testInput = "The constant is \\(6.674 × 10^{-11}\\) and the formula is \\[F = G \\frac{m_1 m_2}{r^2}\\]";
+        const result = preprocessMath(testInput);
+        
+        console.log('Input:', testInput);
+        console.log('Output:', result);
+        console.log('× symbols converted:', testInput.split('×').length - 1);
+    </script>
+</body>
+</html>

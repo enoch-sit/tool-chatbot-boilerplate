@@ -1,0 +1,77 @@
+// Test HTML to verify math post-rendering works
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Math Post-Rendering Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; }
+        .original { background: #f0f0f0; }
+        .processed { background: #f0f8ff; }
+    </style>
+</head>
+<body>
+    <h1>Math Post-Rendering Test Cases</h1>
+    
+    <div class="test-section original">
+        <h2>Original Newton's Law Content</h2>
+        <p>This formula describes the force of gravity between two objects: $$F = G \frac{m_1 m_2}{r^2}$$</p>
+        <p>Where:</p>
+        <ul>
+            <li>$F$ is the gravitational force between two masses (in Newtons).</li>
+            <li>$G$ is the gravitational constant ($6.674 \times 10^{-11} \, \text{N·m}^2/\text{kg}^2$).</li>
+            <li>$m_1$ and $m_2$ are the masses of the two objects (in kilograms).</li>
+            <li>$r$ is the distance between the centers (in meters).</li>
+        </ul>
+    </div>
+
+    <div class="test-section processed">
+        <h2>Expected Output After Post-Processing</h2>
+        <p>Display math blocks like: <strong>$$F = G \frac{m_1 m_2}{r^2}$$</strong> should become proper KaTeX blocks</p>
+        <p>Inline math like: <strong>$6.674 \times 10^{-11} \, \text{N·m}^2/\text{kg}^2$</strong> should render inline</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Math Patterns to Detect</h2>
+        <ul>
+            <li><strong>Display Math:</strong> $$F = G \frac{m_1 m_2}{r^2}$$</li>
+            <li><strong>Inline Math:</strong> $F$, $G$, $m_1$, $m_2$, $r$</li>
+            <li><strong>Complex Inline:</strong> $6.674 \times 10^{-11} \, \text{N·m}^2/\text{kg}^2$</li>
+            <li><strong>Scientific Notation:</strong> $3 \times 10^8 \, \text{m/s}$</li>
+            <li><strong>Fractions:</strong> $\frac{1}{2}mv^2$</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>Math in Table Test</h2>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+            <tr>
+                <th>Formula Name</th>
+                <th>Expression</th>
+                <th>Units</th>
+            </tr>
+            <tr>
+                <td>Newton's Gravity</td>
+                <td>$$F = G \frac{m_1 m_2}{r^2}$$</td>
+                <td>$\text{N}$ (Newtons)</td>
+            </tr>
+            <tr>
+                <td>Einstein's Mass-Energy</td>
+                <td>$$E = mc^2$$</td>
+                <td>$\text{J}$ (Joules)</td>
+            </tr>
+            <tr>
+                <td>Gravitational Constant</td>
+                <td>$G = 6.674 \times 10^{-11}$</td>
+                <td>$\text{N·m}^2/\text{kg}^2$</td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+        console.log('Test page loaded. Math expressions should be detected and processed by MathPostRenderer.');
+        console.log('Display math patterns:', document.body.textContent.match(/\$\$[\s\S]*?\$\$/g) || []);
+        console.log('Inline math patterns:', document.body.textContent.match(/\$[^$]+\$/g) || []);
+    </script>
+</body>
+</html>

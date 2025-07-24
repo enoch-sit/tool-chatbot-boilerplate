@@ -4,13 +4,11 @@ import { parseMixedContent } from '../../utils/contentParser';
 import MermaidDiagram from '../renderers/MermaidDiagram';
 import CodeBlock from '../renderers/CodeBlock';
 import HtmlPreview from '../renderers/HtmlPreview';
-import MathRenderer from '../renderers/MathRenderer';
+import MathJaxRenderer from '../renderers/MathJaxRenderer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css'; // Import KaTeX CSS
+import 'highlight.js/styles/github.css'; // Add highlight.js theme
 
 interface MixedContentRendererProps {
   content: string;
@@ -18,210 +16,255 @@ interface MixedContentRendererProps {
   isHistorical?: boolean; // Flag to indicate this is from chat history
 }
 
-// Enhanced renderer component that handles full parsing
+// Enhanced renderer component that uses unified ReactMarkdown approach
 const EnhancedMixedContentRenderer: React.FC<{ content: string; messageId?: string }> = ({ 
   content, 
   messageId 
 }) => {
-  // Parse content with full math and markdown support
-  const parsedContent = parseMixedContent(content);
-  const blocks = parsedContent.blocks;
-  // rawContent is preserved for potential future use (debugging, fallback, etc.)
-  
-  // Debug: Log parsed blocks
-  console.group('📝 PARSED BLOCKS DEBUG');
-  console.log('Raw content length:', parsedContent.rawContent.length);
-  console.log('Total blocks:', blocks.length);
-  blocks.forEach((block, idx) => {
-    console.log(`Block ${idx}:`, {
-      type: block.type,
-      contentLength: block.content.length,
-      contentPreview: block.content.substring(0, 100),
-      language: 'language' in block ? block.language : undefined,
-      display: 'display' in block ? block.display : undefined
+  // Global preprocessing: Convert LaTeX delimiters for MathJax compatibility  
+  const processedContent = React.useMemo(() => {
+    let updated = content;
+    
+    // Convert \[...\] to $$...$$ for display math, handling × symbols and \text
+    updated = updated.replace(/\\\[([\s\S]*?)\\\]/g, (_, mathContent) => {
+      let cleanContent = mathContent.replace(/×/g, '\\times');
+      cleanContent = cleanContent.replace(/\\text\{([^}]*)\}/g, '\\mathrm{$1}');
+      return `$$${cleanContent}$$`;
     });
-  });
-  console.groupEnd();
-  
-  // Create a unique identifier for this content rendering instance
-  const contentHash = React.useMemo(() => {
-    const baseHash = messageId || `content-${Date.now()}`;
-    return `${baseHash}-final-${content.length}-${content.substring(0, 20).replace(/\s/g, '')}`;
-  }, [content, messageId]);
+    
+    // Convert \(...\) to $...$ for inline math, handling × symbols and \text
+    updated = updated.replace(/\\\((.*?)\\\)/g, (_, mathContent) => {
+      let cleanContent = mathContent.replace(/×/g, '\\times');
+      cleanContent = cleanContent.replace(/\\text\{([^}]*)\}/g, '\\mathrm{$1}');
+      return `$${cleanContent}$`;
+    });
+    
+    // Log preprocessing results
+    console.group('🔄 MATH PREPROCESSING FOR MATHJAX');
+    console.log('Original content length:', content.length);
+    console.log('Processed content length:', updated.length);
+    console.log('LaTeX patterns converted:');
+    console.log('  - \\[...\\] to $$...$$:', (content.match(/\\\[[\s\S]*?\\\]/g) || []).length);
+    console.log('  - \\(...\\) to $...$:', (content.match(/\\\(.*?\\\)/g) || []).length);
+    console.log('Final math patterns for MathJax:');
+    console.log('  - Display $$...$$:', (updated.match(/\$\$[\s\S]*?\$\$/g) || []).length);
+    console.log('  - Inline $...$:', (updated.match(/\$[^$]+\$/g) || []).length);
+    console.log('Contains tables:', /\|.*\|/.test(updated));
+    console.groupEnd();
+    
+    return updated;
+  }, [content]);
 
+  // Check if content has special blocks that need custom handling
+  const hasSpecialBlocks = /```(mermaid|html|mindmap)/.test(content);
+  
+  if (hasSpecialBlocks) {
+    // Use the existing parser for special blocks, but let ReactMarkdown handle math in text blocks
+    const parsedContent = parseMixedContent(content);
+    const blocks = parsedContent.blocks;
+    
+    console.group('📝 SPECIAL BLOCKS DETECTED');
+    console.log('Total blocks:', blocks.length);
+    blocks.forEach((block, idx) => {
+      console.log(`Block ${idx}:`, {
+        type: block.type,
+        contentLength: block.content.length,
+        language: 'language' in block ? block.language : undefined
+      });
+    });
+    console.groupEnd();
+    
+    // Create a unique identifier for this content rendering instance
+    const contentHash = React.useMemo(() => {
+      const baseHash = messageId || `content-${Date.now()}`;
+      return `${baseHash}-blocks-${content.length}`;
+    }, [content, messageId]);
+
+    return (
+      <>
+        {blocks.map((block, idx) => {
+          const baseKey = `${contentHash}-${block.type}-${idx}`;
+          
+          if (block.type === 'mermaid') {
+            const mermaidKey = `mermaid-${contentHash}-${block.content.substring(0, 20).replace(/\s/g, '')}-${idx}`;
+            return (
+              <MermaidDiagram 
+                key={mermaidKey} 
+                chart={block.content}
+              />
+            );
+          }
+          
+          if (block.type === 'code') {
+            return <CodeBlock key={`code-${baseKey}`} code={block.content} language={block.language} />;
+          }
+          
+          if (block.type === 'html') {
+            return <HtmlPreview key={`html-${baseKey}`} htmlContent={block.content} isHistorical={true} />;
+          }
+          
+          if (block.type === 'text') {
+            // For text blocks, use ReactMarkdown with MathJax processing
+            let textContent = block.content;
+            
+            // Apply preprocessing to text blocks for MathJax compatibility
+            // Convert × symbol to \times and \text to \mathrm within math expressions
+            textContent = textContent.replace(/\\\[([\s\S]*?)\\\]/g, (_, content) => {
+              let cleanContent = content.replace(/×/g, '\\times');
+              cleanContent = cleanContent.replace(/\\text\{([^}]*)\}/g, '\\mathrm{$1}');
+              return `$$${cleanContent}$$`;
+            });
+            textContent = textContent.replace(/\\\((.*?)\\\)/g, (_, content) => {
+              let cleanContent = content.replace(/×/g, '\\times');
+              cleanContent = cleanContent.replace(/\\text\{([^}]*)\}/g, '\\mathrm{$1}');
+              return `$${cleanContent}$`;
+            });
+            
+            return (
+              <MathJaxRenderer key={`text-${baseKey}`} messageId={messageId}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={{
+                    // Custom components for enhanced table styling
+                    table: ({ children, ...props }) => (
+                      <table 
+                        {...props} 
+                        style={{ 
+                          borderCollapse: 'collapse', 
+                          width: '100%', 
+                          margin: '16px 0',
+                          border: '1px solid #ddd'
+                        }}
+                      >
+                        {children}
+                      </table>
+                    ),
+                    th: ({ children, ...props }) => (
+                      <th 
+                        {...props} 
+                        style={{ 
+                          border: '1px solid #ddd', 
+                          padding: '12px 8px', 
+                          backgroundColor: '#f5f5f5',
+                          fontWeight: 'bold',
+                          textAlign: 'left'
+                        }}
+                      >
+                        {children}
+                      </th>
+                    ),
+                    td: ({ children, ...props }) => (
+                      <td 
+                        {...props} 
+                        style={{ 
+                          border: '1px solid #ddd', 
+                          padding: '12px 8px'
+                        }}
+                      >
+                        {children}
+                      </td>
+                    )
+                  }}
+                >
+                  {textContent}
+                </ReactMarkdown>
+              </MathJaxRenderer>
+            );
+          }
+          
+          // fallback
+          return <span key={`fallback-${baseKey}`}>{block.content}</span>;
+        })}
+      </>
+    );
+  }
+
+  // For content without special blocks, use unified ReactMarkdown approach with MathJax
   return (
-    <>
-      {blocks.map((block, idx) => {
-        const baseKey = `${contentHash}-${block.type}-${idx}`;
-        
-        if (block.type === 'mermaid') {
-          const mermaidKey = `mermaid-${contentHash}-${block.content.substring(0, 20).replace(/\s/g, '')}-${idx}`;
-          return (
-            <MermaidDiagram 
-              key={mermaidKey} 
-              chart={block.content}
-            />
-          );
-        }
-        
-        if (block.type === 'code') {
-          return <CodeBlock key={`code-${baseKey}`} code={block.content} language={block.language} />;
-        }
-        
-        if (block.type === 'html') {
-          return <HtmlPreview key={`html-${baseKey}`} htmlContent={block.content} isHistorical={true} />;
-        }
-        
-        if (block.type === 'math') {
-          return <MathRenderer key={`math-${baseKey}`} content={block.content} display={block.display} />;
-        }
-        
-        if (block.type === 'text') {
-          // Clean up text content
-          let cleanedContent = block.content;
-          cleanedContent = cleanedContent.replace(/__MATH_(INLINE|DISPLAY)_\d+__:?\s*/g, '');
-          cleanedContent = cleanedContent.replace(/\\\s*$/g, '');
-          
-          // Debug: Log text block processing
-          console.group(`🔤 TEXT BLOCK ${idx} DEBUG`);
-          console.log('Original content:', block.content);
-          console.log('Cleaned content:', cleanedContent);
-          console.log('Content length:', cleanedContent.length);
-          console.log('Math patterns found:');
-          console.log('  - \\(...\\):', (cleanedContent.match(/\\\(.*?\\\)/g) || []).length);
-          console.log('  - $...$:', (cleanedContent.match(/\$[^$]+\$/g) || []).length);
-          console.log('  - \\[...\\]:', (cleanedContent.match(/\\\[[\s\S]*?\\\]/g) || []).length);
-          console.log('  - $$...$$:', (cleanedContent.match(/\$\$[\s\S]*?\$\$/g) || []).length);
-          console.groupEnd();
-          
-          // Use full ReactMarkdown with math support
-          // First, let's check for any manual inline math conversion
-          let processedContent = cleanedContent;
-          
-          // Convert \(...\) to $...$ for better ReactMarkdown compatibility
-          processedContent = processedContent.replace(
-            /\\\((.*?)\\\)/g, 
-            (match, math) => {
-              console.log('🔍 Found inline LaTeX pattern:', match, '→', math);
-              return `$${math}$`; // Convert \(...\) to $...$
+    <MathJaxRenderer messageId={messageId}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
+        components={{
+          // Handle code blocks with language detection
+          code: ({ node, className, children, ...props }) => {
+            const match = /language-(\w+)/.exec(className || '');
+            const lang = match ? match[1] : '';
+            
+            if (lang === 'mermaid') {
+              return <MermaidDiagram chart={String(children).trim()} />;
             }
-          );
-          
-          // Also handle standalone math expressions that might not be wrapped
-          // Look for LaTeX commands at the start of lines that should be display math
-          processedContent = processedContent.replace(
-            /^(\s*)(\\frac\{[^}]+\}\{[^}]+\}[^$\n]*?)$/gm,
-            (_, spaces, math) => {
-              console.log('🔍 Found standalone math expression:', math);
-              return `${spaces}$$${math}$$`; // Convert to display math
+            
+            if (lang === 'html') {
+              return <HtmlPreview htmlContent={String(children).trim()} isHistorical={true} />;
             }
-          );
-          
-          console.log('🔄 Content transformation:');
-          console.log('Before:', cleanedContent.substring(0, 300));
-          console.log('After:', processedContent.substring(0, 300));
-          console.log('Transformation count:', (cleanedContent.match(/\\\(.*?\\\)/g) || []).length, '→', (processedContent.match(/\$.*?\$/g) || []).length);
-          
-          return (
-            <ReactMarkdown
-              key={`text-${baseKey}`}
-              remarkPlugins={[
-                remarkGfm, 
-                [remarkMath, { 
-                  singleDollarTextMath: true // Enable single dollar math
-                }]
-              ]}
-              rehypePlugins={[
-                [rehypeKatex, { 
-                  strict: false, // Allow some LaTeX errors
-                  throwOnError: false, // Don't crash on errors
-                  macros: {
-                    "\\mu": "\\mu",
-                    "\\sigma": "\\sigma",
-                    "\\times": "\\times",
-                    "\\cdot": "\\cdot",
-                    "\\div": "\\div"
-                  }
-                }], 
-                rehypeHighlight
-              ]}
-              components={{
-                // Enhanced math component handling
-                span: ({ node, className, children, ...props }) => {
-                  if (className?.includes('math')) {
-                    console.log('🧮 Math span rendered:', { className, children: children?.toString() });
-                    return <span className={className} {...props}>{children}</span>;
-                  }
-                  return <span {...props}>{children}</span>;
-                },
-                // Handle display math blocks  
-                div: ({ node, className, children, ...props }) => {
-                  if (className?.includes('math')) {
-                    console.log('🧮 Math div rendered:', { className, children: children?.toString() });
-                    return <div className={className} {...props}>{children}</div>;
-                  }
-                  return <div {...props}>{children}</div>;
-                },
-                // Table styling with borders
-                table: ({ children, ...props }) => (
-                  <table 
-                    {...props} 
-                    style={{ 
-                      borderCollapse: 'collapse', 
-                      width: '100%', 
-                      margin: '16px 0',
-                      border: '1px solid #ddd'
-                    }}
-                  >
-                    {children}
-                  </table>
-                ),
-                th: ({ children, ...props }) => (
-                  <th 
-                    {...props} 
-                    style={{ 
-                      border: '1px solid #ddd', 
-                      padding: '12px 8px', 
-                      backgroundColor: '#f5f5f5',
-                      fontWeight: 'bold',
-                      textAlign: 'left'
-                    }}
-                  >
-                    {children}
-                  </th>
-                ),
-                td: ({ children, ...props }) => (
-                  <td 
-                    {...props} 
-                    style={{ 
-                      border: '1px solid #ddd', 
-                      padding: '12px 8px'
-                    }}
-                  >
-                    {children}
-                  </td>
-                ),
-                tbody: ({ children, ...props }) => (
-                  <tbody {...props}>
-                    {children}
-                  </tbody>
-                ),
-                thead: ({ children, ...props }) => (
-                  <thead {...props}>
-                    {children}
-                  </thead>
-                )
+            
+            // For inline code, use simple styling
+            if (!className) {
+              return (
+                <Box 
+                  component="code" 
+                  sx={{ 
+                    backgroundColor: '#f5f5f5', 
+                    padding: '2px 4px', 
+                    borderRadius: '3px',
+                    fontFamily: 'monospace',
+                    fontSize: '0.9em'
+                  }}
+                  {...props}
+                >
+                  {children}
+                </Box>
+              );
+            }
+            
+            return <CodeBlock code={String(children).trim()} language={lang} />;
+          },
+          // Enhanced table styling
+          table: ({ children, ...props }) => (
+            <table 
+              {...props} 
+              style={{ 
+                borderCollapse: 'collapse', 
+                width: '100%', 
+                margin: '16px 0',
+                border: '1px solid #ddd'
               }}
             >
-              {processedContent}
-            </ReactMarkdown>
-          );
-        }
-        
-        // fallback
-        return <span key={`fallback-${baseKey}`}>{block.content}</span>;
-      })}
-    </>
+              {children}
+            </table>
+          ),
+          th: ({ children, ...props }) => (
+            <th 
+              {...props} 
+              style={{ 
+                border: '1px solid #ddd', 
+                padding: '12px 8px', 
+                backgroundColor: '#f5f5f5',
+                fontWeight: 'bold',
+                textAlign: 'left'
+              }}
+            >
+              {children}
+            </th>
+          ),
+          td: ({ children, ...props }) => (
+            <td 
+              {...props} 
+              style={{ 
+                border: '1px solid #ddd', 
+                padding: '12px 8px'
+              }}
+            >
+              {children}
+            </td>
+          )
+        }}
+      >
+        {processedContent}
+      </ReactMarkdown>
+    </MathJaxRenderer>
   );
 };
 
@@ -249,30 +292,32 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({
   console.log('  - Display dollar $$...$$:', /\$\$[\s\S]*?\$\$/.test(content));
   console.log('Contains tables:', /\|.*\|/.test(content));
   console.log('Contains code blocks:', /```/.test(content));
+  console.log('Contains special blocks:', /```(mermaid|html|mindmap)/.test(content));
   console.groupEnd();
 
   // Auto-switch to enhanced rendering when stream ends (similar to HTML preview)
   useEffect(() => {
     if (isHistorical && !hasAutoSwitched && !showEnhancedRendering) {
-  console.log('⏱️ Switching to enhanced rendering in 10ms');
-  const timer = setTimeout(() => {
-    setShowEnhancedRendering(true);
-    setHasAutoSwitched(true);
-  }, 10);      return () => clearTimeout(timer);
+      console.log('⏱️ Switching to enhanced rendering in 10ms');
+      const timer = setTimeout(() => {
+        setShowEnhancedRendering(true);
+        setHasAutoSwitched(true);
+      }, 10);      
+      return () => clearTimeout(timer);
     }
   }, [isHistorical, hasAutoSwitched, showEnhancedRendering]);
 
-  // For streaming content, show safe markdown rendering for better UX
+  // For streaming content, show safe markdown rendering without math/highlighting
   if (!showEnhancedRendering) {
     // Conservative approach: Only enable safe markdown features
     // - Tables, lists, emphasis, headers (safe)
-    // - NO code highlighting, NO math, NO HTML
+    // - NO code highlighting, NO math, NO HTML to avoid processing during streaming
     return (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]} // Only GitHub Flavored Markdown (tables, lists, etc.)
         rehypePlugins={[]} // No rehype plugins to avoid any processing risks
         components={{
-          // Block all potentially dangerous elements
+          // Block all potentially dangerous elements during streaming
           script: () => null,
           iframe: () => null,
           embed: () => null,
