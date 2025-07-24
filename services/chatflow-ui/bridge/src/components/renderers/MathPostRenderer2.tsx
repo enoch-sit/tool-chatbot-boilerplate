@@ -25,9 +25,6 @@ const MathPostRenderer: React.FC<MathPostRendererProps> = ({
     const processMathContent = () => {
       if (!containerRef.current) return;
 
-      console.group('🧮 MATH POST-PROCESSING');
-      console.log('Message ID:', messageId);
-
       try {
         // Convert React children to string for processing
         const getTextContent = (node: React.ReactNode): string => {
@@ -46,7 +43,6 @@ const MathPostRenderer: React.FC<MathPostRendererProps> = ({
         };
 
         const textContent = getTextContent(children);
-        console.log('Processing text content:', textContent.length, 'characters');
 
         // Process math in text content and return React nodes
         const processMathInText = (text: string): React.ReactNode[] => {
@@ -94,8 +90,6 @@ const MathPostRenderer: React.FC<MathPostRendererProps> = ({
           // Sort matches by position
           mathMatches.sort((a, b) => a.start - b.start);
 
-          console.log('Found math expressions:', mathMatches.length);
-
           mathMatches.forEach((mathMatch, index) => {
             // Add text before this math expression
             if (mathMatch.start > lastIndex) {
@@ -115,7 +109,6 @@ const MathPostRenderer: React.FC<MathPostRendererProps> = ({
                     errorColor="#cc0000"
                   />
                 );
-                console.log('✅ Rendered display math:', mathMatch.content.substring(0, 50));
               } else {
                 parts.push(
                   <InlineMath 
@@ -124,10 +117,8 @@ const MathPostRenderer: React.FC<MathPostRendererProps> = ({
                     errorColor="#cc0000"
                   />
                 );
-                console.log('✅ Rendered inline math:', mathMatch.content.substring(0, 30));
               }
             } catch (error) {
-              console.warn('❌ Math rendering error:', error, 'Content:', mathMatch.content);
               parts.push(
                 <span 
                   key={`error-${messageId}-${index}`}
@@ -156,17 +147,8 @@ const MathPostRenderer: React.FC<MathPostRendererProps> = ({
         if (/\$\$[\s\S]*?\$\$|\$[^$]+\$/.test(textContent)) {
           const processed = processMathInText(textContent);
           setProcessedChildren(processed);
-          console.log('✅ Math content processed and updated');
-        } else {
-          console.log('ℹ️ No math patterns found');
         }
-
-        console.log('✅ Math post-processing completed');
-        console.groupEnd();
-
       } catch (error) {
-        console.error('❌ Math post-processing failed:', error);
-        console.groupEnd();
       }
     };
 

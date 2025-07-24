@@ -39,19 +39,6 @@ const EnhancedMixedContentRenderer: React.FC<{ content: string; messageId?: stri
       return `$${cleanContent}$`;
     });
     
-    // Log preprocessing results
-    console.group('🔄 MATH PREPROCESSING FOR MATHJAX');
-    console.log('Original content length:', content.length);
-    console.log('Processed content length:', updated.length);
-    console.log('LaTeX patterns converted:');
-    console.log('  - \\[...\\] to $$...$$:', (content.match(/\\\[[\s\S]*?\\\]/g) || []).length);
-    console.log('  - \\(...\\) to $...$:', (content.match(/\\\(.*?\\\)/g) || []).length);
-    console.log('Final math patterns for MathJax:');
-    console.log('  - Display $$...$$:', (updated.match(/\$\$[\s\S]*?\$\$/g) || []).length);
-    console.log('  - Inline $...$:', (updated.match(/\$[^$]+\$/g) || []).length);
-    console.log('Contains tables:', /\|.*\|/.test(updated));
-    console.groupEnd();
-    
     return updated;
   }, [content]);
 
@@ -62,17 +49,6 @@ const EnhancedMixedContentRenderer: React.FC<{ content: string; messageId?: stri
     // Use the existing parser for special blocks, but let ReactMarkdown handle math in text blocks
     const parsedContent = parseMixedContent(content);
     const blocks = parsedContent.blocks;
-    
-    console.group('📝 SPECIAL BLOCKS DETECTED');
-    console.log('Total blocks:', blocks.length);
-    blocks.forEach((block, idx) => {
-      console.log(`Block ${idx}:`, {
-        type: block.type,
-        contentLength: block.content.length,
-        language: 'language' in block ? block.language : undefined
-      });
-    });
-    console.groupEnd();
     
     // Create a unique identifier for this content rendering instance
     const contentHash = React.useMemo(() => {
@@ -276,29 +252,9 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({
   const [showEnhancedRendering, setShowEnhancedRendering] = useState(isHistorical);
   const [hasAutoSwitched, setHasAutoSwitched] = useState(false);
 
-  // Debug: Detailed raw stream content logging
-  console.group('🔍 RAW STREAM DEBUG');
-  console.log('Content:', content);
-  console.log('Content length:', content.length);
-  console.log('Message ID:', messageId);
-  console.log('Is historical:', isHistorical);
-  console.log('Show enhanced rendering:', showEnhancedRendering);
-  console.log('Content preview (first 200 chars):', content.substring(0, 200));
-  console.log('Content lines:', content.split('\n').length);
-  console.log('Contains math patterns:');
-  console.log('  - Inline LaTeX \\(...\\):', /\\\(.*?\\\)/.test(content));
-  console.log('  - Inline dollar $...$:', /\$[^$]+\$/.test(content));
-  console.log('  - Display LaTeX \\[...\\]:', /\\\[[\s\S]*?\\\]/.test(content));
-  console.log('  - Display dollar $$...$$:', /\$\$[\s\S]*?\$\$/.test(content));
-  console.log('Contains tables:', /\|.*\|/.test(content));
-  console.log('Contains code blocks:', /```/.test(content));
-  console.log('Contains special blocks:', /```(mermaid|html|mindmap)/.test(content));
-  console.groupEnd();
-
   // Auto-switch to enhanced rendering when stream ends (similar to HTML preview)
   useEffect(() => {
     if (isHistorical && !hasAutoSwitched && !showEnhancedRendering) {
-      console.log('⏱️ Switching to enhanced rendering in 10ms');
       const timer = setTimeout(() => {
         setShowEnhancedRendering(true);
         setHasAutoSwitched(true);

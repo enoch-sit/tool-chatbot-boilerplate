@@ -11,8 +11,7 @@ interface MathJaxRendererProps {
  * Uses better-react-mathjax for reliable math rendering with auto-detection.
  */
 const MathJaxRenderer: React.FC<MathJaxRendererProps> = ({ 
-  children, 
-  messageId 
+  children,
 }) => {
   // MathJax configuration optimized for our use case
   const config = {
@@ -42,11 +41,6 @@ const MathJaxRenderer: React.FC<MathJaxRendererProps> = ({
       typeset: false // We'll handle typesetting manually for better control
     }
   };
-
-  console.group('🧮 MATHJAX RENDERER');
-  console.log('Message ID:', messageId);
-  console.log('Rendering content with MathJax');
-  console.groupEnd();
 
   return (
     <MathJaxContext config={config}>
