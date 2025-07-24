@@ -76,76 +76,98 @@ export const parseMixedContent = (rawContent: string): ContentBlock[] => {
 
 // Helper function to parse math blocks from text
 function parseMathFromText(text: string, blocks: ContentBlock[]): void {
-  let processedText = text;
-  const mathBlocks: Array<{content: string, display: boolean, placeholder: string}> = [];
-  
-  // Detect LaTeX-style math first ($$...$$, $...$)
-  // Block math: $$...$$
-  processedText = processedText.replace(/\$\$\s*([^$]+)\s*\$\$/g, (_, mathContent) => {
-    const cleanMath = mathContent.trim();
-    const placeholder = `__MATH_DISPLAY_${mathBlocks.length}__`;
-    mathBlocks.push({ content: cleanMath, display: true, placeholder });
-    return placeholder;
-  });
-  
-  // Inline math: $...$
-  processedText = processedText.replace(/\$\s*([^$]+)\s*\$/g, (_, mathContent) => {
-    const cleanMath = mathContent.trim();
-    const placeholder = `__MATH_INLINE_${mathBlocks.length}__`;
-    mathBlocks.push({ content: cleanMath, display: false, placeholder });
-    return placeholder;
-  });
-  
-  // Detect [ math ] blocks (display math)
-  processedText = processedText.replace(/\[\s*([^[\]]+)\s*\]/g, (_, mathContent) => {
-    const cleanMath = mathContent.trim();
-    const placeholder = `__MATH_DISPLAY_${mathBlocks.length}__`;
-    mathBlocks.push({ content: cleanMath, display: true, placeholder });
-    return placeholder;
-  });
-  
-  // Detect ( math ) blocks (inline math) - more flexible approach
-  processedText = processedText.replace(/\(\s*([^()]+)\s*\)/g, (match, mathContent) => {
-    // Only treat as math if it contains mathematical symbols or common math patterns
-    if (/[a-zA-Z=+\-*/^_{}\\]/.test(mathContent) && mathContent.trim().length > 0) {
-      const cleanMath = mathContent.trim();
-      const placeholder = `__MATH_INLINE_${mathBlocks.length}__`;
-      mathBlocks.push({ content: cleanMath, display: false, placeholder });
-      return placeholder;
-    }
-    return match; // Return unchanged if it doesn't look like math
-  });
+  // Define all math patterns with their types
+  const mathPatterns = [
+    { regex: /\$\$\s*([^$]+)\s*\$\$/g, display: true, name: 'display-dollars' },
+    { regex: /\\\[\s*([\s\S]*?)\s*\\\]/g, display: true, name: 'display-brackets' },
+    { regex: /\\\(\s*([\s\S]*?)\s*\\\)/g, display: false, name: 'inline-parens' },
+    { regex: /\$\s*([^$]+)\s*\$/g, display: false, name: 'inline-dollars' },
+    { regex: /\[\s*([^[\]]+)\s*\]/g, display: true, name: 'display-square' },
+  ];
 
-  // Now split the processed text by math placeholders and create blocks
-  if (mathBlocks.length === 0) {
-    // No math found, just add as text block
-    if (processedText.trim()) {
-      blocks.push({ type: 'text', content: processedText });
-    }
-  } else {
-    // Process placeholders in order and create blocks
-    let remainingText = processedText;
-    
-    mathBlocks.forEach((mathBlock) => {
-      const placeholderIndex = remainingText.indexOf(mathBlock.placeholder);
-      
-      if (placeholderIndex !== -1) {
-        // Add text before this math block (if any)
-        const textBefore = remainingText.substring(0, placeholderIndex);
-        if (textBefore.trim()) {
-          blocks.push({ type: 'text', content: textBefore });
+  let processedText = text;
+  const foundMath: Array<{
+    match: string;
+    content: string;
+    display: boolean;
+    start: number;
+    end: number;
+  }> = [];
+
+  // Find all math matches first
+  for (const pattern of mathPatterns) {
+    pattern.regex.lastIndex = 0; // Reset regex
+    let match;
+    while ((match = pattern.regex.exec(text)) !== null) {
+      // For inline parens pattern, only proceed if it looks like math
+      if (pattern.name === 'inline-parens' || pattern.name === 'display-square') {
+        const content = match[1].trim();
+        // Skip if it doesn't look like math (for parens) or is empty
+        if (!content || (pattern.name === 'inline-parens' && !/[a-zA-Z=+\-*/^_{}\\,]/.test(content))) {
+          continue;
         }
-        
-        // Add the math block
-        blocks.push({ type: 'math', content: mathBlock.content, display: mathBlock.display });
-        
-        // Update remaining text to continue after this placeholder
-        remainingText = remainingText.substring(placeholderIndex + mathBlock.placeholder.length);
       }
-    });
+      
+      foundMath.push({
+        match: match[0],
+        content: match[1].trim(),
+        display: pattern.display,
+        start: match.index!,
+        end: match.index! + match[0].length
+      });
+    }
+  }
+
+  // Sort by start position
+  foundMath.sort((a, b) => a.start - b.start);
+
+  // Remove overlapping matches (keep the first one)
+  const uniqueMath: typeof foundMath = [];
+  for (const mathMatch of foundMath) {
+    const hasOverlap = uniqueMath.some(existing => 
+      (mathMatch.start >= existing.start && mathMatch.start < existing.end) ||
+      (mathMatch.end > existing.start && mathMatch.end <= existing.end)
+    );
+    if (!hasOverlap) {
+      uniqueMath.push(mathMatch);
+    }
+  }
+
+  // If no math found, add entire text as one block
+  if (uniqueMath.length === 0) {
+    if (text.length > 0) {
+      blocks.push({ type: 'text', content: text });
+    }
+    return;
+  }
+
+  // Split text and create blocks
+  let lastEnd = 0;
+  for (const mathMatch of uniqueMath) {
+    // Add text before this math block
+    if (mathMatch.start > lastEnd) {
+      const textBefore = text.substring(lastEnd, mathMatch.start);
+      if (textBefore.length > 0) {
+        blocks.push({ type: 'text', content: textBefore });
+      }
+    }
     
-    // Add any remaining text after all math blocks
-    if (remainingText.trim()) {
+    // Add the math block
+    if (mathMatch.content.length > 0) {
+      blocks.push({ 
+        type: 'math', 
+        content: mathMatch.content, 
+        display: mathMatch.display 
+      });
+    }
+    
+    lastEnd = mathMatch.end;
+  }
+
+  // Add any remaining text
+  if (lastEnd < text.length) {
+    const remainingText = text.substring(lastEnd);
+    if (remainingText.length > 0) {
       blocks.push({ type: 'text', content: remainingText });
     }
   }
