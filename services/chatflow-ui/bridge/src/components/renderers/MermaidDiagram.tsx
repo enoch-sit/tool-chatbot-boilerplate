@@ -29,8 +29,6 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   // No aggressive cleanup - let mermaid manage its own DOM elements completely
 
   const renderDiagram = useCallback(async (diagramSource: string) => {
-    console.log('Starting renderDiagram with source length:', diagramSource.length);
-    
     // Clear any pending render to prevent multiple simultaneous renders
     if (renderTimeoutRef.current) {
       clearTimeout(renderTimeoutRef.current);
@@ -45,16 +43,12 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
       // No cleanup on successful render - let mermaid manage successful diagrams
       
       currentDiagramIdRef.current = uniqueId;
-      console.log('Successfully rendered SVG, length:', renderedSvg.length);
       setSvg(renderedSvg);
       setError(null);
       
     } catch (e: any) {
-      console.error('Mermaid rendering failed:', e);
-      
       // Clean up immediate body children only after render failure
       setTimeout(() => {
-        console.log('Cleaning up after render failure');
         
         // Clean up our specific temporary element if it's an immediate child of body
         const tempElement = document.getElementById(uniqueId);

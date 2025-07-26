@@ -33,6 +33,7 @@ import { useChatStore } from '../store/chatStore';
 import { useAuth } from '../hooks/useAuth';
 import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
+import ChatLayout from '../components/layout/ChatLayout';
 import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer';
 import AddIcon from '@mui/icons-material/Add';
 
@@ -154,16 +155,23 @@ const ChatPage: React.FC = () => {
       {/* Error Display: Shows any errors that occur during API calls or streaming */}
       {error && (<Alert color="danger" variant="soft" endDecorator={<Button size="sm" variant="plain" onClick={() => setError(null)}>{t('common.close')}</Button>} sx={{ m: 2 }}>{error}</Alert>)}
 
-      {/* Main Chat Area: Renders either the conversation or a prompt to start */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+      {/* Main Chat Area using ChatLayout */}
+      <Box sx={{ flex: 1, overflow: 'hidden' }}>
         {currentChatflow ? (
-          <>
-            <MessageList />
-            <ChatInput />
-          </>
+          <ChatLayout
+            messages={<MessageList />}
+            input={<ChatInput />}
+          />
         ) : (
           // Placeholder view when no chatflow is selected
-          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+          <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            textAlign: 'center',
+            px: 4 // Add horizontal padding
+          }}>
             <Stack spacing={2}>
               <Typography level="h4" color="neutral">
                 {t('chat.selectChatflowPrompt')}

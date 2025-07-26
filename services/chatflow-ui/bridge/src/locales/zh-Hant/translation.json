@@ -42,11 +42,14 @@
     "loadingSessions": "正在載入會話...",
     "loadingHistory": "正在載入聊天記錄...",
     "selectSession": "選擇一個會話",
-    "selectChatflowPrompt": "請選擇一個聊天流程以開始聊天。"
+    "selectChatflowPrompt": "請選擇一個課程以開始聊天。",
+    "attachImageTooltip": "點擊附加、拖拽圖片或貼上圖片 (Ctrl+V)",
+    "attachImage": "附加圖片",
+    "sendShortcut": "按回車鍵發送，Shift+回車鍵換行"
   },
   "admin": {
     "pageTitle": "管理儀表板",
-    "chatflowManagement": "聊天流程管理",
+    "chatflowManagement": "課程管理",
     "userManagement": "使用者管理",
     "assignUser": "指派使用者",
     "bulkAssign": "批次指派",

@@ -1,6 +1,7 @@
 import React, { useRef, useState, useImperativeHandle, forwardRef, useEffect, useCallback } from 'react';
-import { Box, Button, Typography, Stack, Alert } from '@mui/joy';
-import { AttachFile as AttachFileIcon, Close as CloseIcon } from '@mui/icons-material';
+import { Box, Button, Typography, Stack, Alert, IconButton, Menu, MenuItem } from '@mui/joy';
+import { AttachFile as AttachFileIcon, Close as CloseIcon, MoreVert as MoreVertIcon, ContentCopy as ContentCopyIcon } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { FileService } from '../../services/fileService';
 import type { FileUploadData } from '../../services/fileService';
 
@@ -10,11 +11,13 @@ interface FileUploadProps {
 
 export interface FileUploadRef {
   clearFiles: () => void;
+  triggerFileInput: () => void;
 }
 
 const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({ 
   onFilesSelected
 }, ref) => {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<FileUploadData[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -121,10 +124,37 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
     return file.type.startsWith('image/');
   };
 
+  // Copy image to clipboard
+  const copyImageToClipboard = async (file: FileUploadData) => {
+    if (!isImageFile(file)) return;
+    
+    try {
+      // Convert base64 to blob
+      const response = await fetch(file.data);
+      const blob = await response.blob();
+      
+      // Create clipboard item
+      const clipboardItem = new ClipboardItem({
+        [blob.type]: blob
+      });
+      
+      // Copy to clipboard
+      await navigator.clipboard.write([clipboardItem]);
+      
+      // You could add a toast notification here
+      console.log('Image copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy image:', error);
+    }
+  };
+
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     clearFiles: () => {
       setAttachedFiles([]);
+    },
+    triggerFileInput: () => {
+      fileInputRef.current?.click();
     }
   }));
 
@@ -234,12 +264,12 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
           onClick={() => fileInputRef.current?.click()}
           disabled={isProcessing}
         >
-          {isProcessing ? 'Processing...' : 'Attach Images'}
+          {isProcessing ? 'Processing...' : t('chat.attachImage')}
         </Button>
         
         {attachedFiles.length === 0 && !isDragOver && (
           <Typography level="body-xs" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-            Click to attach, drag & drop images, or paste images (Ctrl+V)
+            {t('chat.attachImageTooltip')}
           </Typography>
         )}
         
@@ -268,7 +298,10 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
               overflow: 'hidden',
               maxWidth: '60px',
               maxHeight: '60px',
+              cursor: isImageFile(file) ? 'pointer' : 'default'
             }}
+            onClick={isImageFile(file) ? () => copyImageToClipboard(file) : undefined}
+            title={isImageFile(file) ? 'Click to copy image' : file.name}
           >
             {isImageFile(file) ? (
               <img

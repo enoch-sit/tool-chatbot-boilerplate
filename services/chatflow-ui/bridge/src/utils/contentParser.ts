@@ -3,21 +3,29 @@
 import type { ContentBlock } from '../types/chat';
 
 /**
- * Parses a raw string from the AI into an array of content blocks.
- * It identifies code, mermaid, mindmap, HTML, and math blocks.
- * @param rawContent The raw string to parse.
- * @returns An array of ContentBlock objects.
+ * Result of parsing mixed content, including both blocks and raw text
  */
-export const parseMixedContent = (rawContent: string): ContentBlock[] => {
+export interface ParsedContent {
+  blocks: ContentBlock[];
+  rawContent: string;
+}
+
+/**
+ * Parses a raw string from the AI into an array of content blocks.
+ * It identifies code, mermaid, mindmap, and HTML blocks, treating all other content as markdown.
+ * @param rawContent The raw string to parse.
+ * @returns ParsedContent object with both blocks and original raw content.
+ */
+export const parseMixedContent = (rawContent: string): ParsedContent => {
   if (!rawContent || !rawContent.trim()) {
-    return [];
+    return { blocks: [], rawContent };
   }
   
   const blocks: ContentBlock[] = [];
   
   // Multi-step parsing approach:
   // 1. First parse code blocks (```...```)
-  // 2. Then parse math blocks from remaining text
+  // 2. Then treat remaining text as markdown blocks
   
   // Step 1: Parse code blocks first
   const regex = /```(\w+)?\n([\s\S]*?)```/g;
@@ -56,107 +64,42 @@ export const parseMixedContent = (rawContent: string): ContentBlock[] => {
     }
   }
 
-  // If no code blocks were found, treat entire content as text
+  // If no code blocks were found, treat entire content as markdown
   if (textSegments.length === 0 && blocks.length === 0 && rawContent.trim()) {
-    textSegments.push(rawContent);
+    blocks.push({ type: 'text', content: rawContent });
+    return { blocks, rawContent };
   }
 
-  // Step 2: Parse math blocks from text segments
+  // Step 2: Treat text segments as markdown (no further math parsing)
   textSegments.forEach(textSegment => {
-    parseMathFromText(textSegment, blocks);
+    if (textSegment.trim().length > 0) {
+      blocks.push({ type: 'text', content: textSegment });
+    }
   });
 
-  // If no blocks were found, treat the entire content as a single text block
+  // If no blocks were found, treat the entire content as a single markdown block
   if (blocks.length === 0 && rawContent.trim()) {
     blocks.push({ type: 'text', content: rawContent });
   }
 
-  return blocks;
+  return { blocks, rawContent };
 };
-
-// Helper function to parse math blocks from text
-function parseMathFromText(text: string, blocks: ContentBlock[]): void {
-  let processedText = text;
-  const mathBlocks: Array<{content: string, display: boolean, placeholder: string}> = [];
-  
-  // Detect LaTeX-style math first ($$...$$, $...$)
-  // Block math: $$...$$
-  processedText = processedText.replace(/\$\$\s*([^$]+)\s*\$\$/g, (_, mathContent) => {
-    const cleanMath = mathContent.trim();
-    const placeholder = `__MATH_DISPLAY_${mathBlocks.length}__`;
-    mathBlocks.push({ content: cleanMath, display: true, placeholder });
-    return placeholder;
-  });
-  
-  // Inline math: $...$
-  processedText = processedText.replace(/\$\s*([^$]+)\s*\$/g, (_, mathContent) => {
-    const cleanMath = mathContent.trim();
-    const placeholder = `__MATH_INLINE_${mathBlocks.length}__`;
-    mathBlocks.push({ content: cleanMath, display: false, placeholder });
-    return placeholder;
-  });
-  
-  // Detect [ math ] blocks (display math)
-  processedText = processedText.replace(/\[\s*([^[\]]+)\s*\]/g, (_, mathContent) => {
-    const cleanMath = mathContent.trim();
-    const placeholder = `__MATH_DISPLAY_${mathBlocks.length}__`;
-    mathBlocks.push({ content: cleanMath, display: true, placeholder });
-    return placeholder;
-  });
-  
-  // Detect ( math ) blocks (inline math) - more flexible approach
-  processedText = processedText.replace(/\(\s*([^()]+)\s*\)/g, (match, mathContent) => {
-    // Only treat as math if it contains mathematical symbols or common math patterns
-    if (/[a-zA-Z=+\-*/^_{}\\]/.test(mathContent) && mathContent.trim().length > 0) {
-      const cleanMath = mathContent.trim();
-      const placeholder = `__MATH_INLINE_${mathBlocks.length}__`;
-      mathBlocks.push({ content: cleanMath, display: false, placeholder });
-      return placeholder;
-    }
-    return match; // Return unchanged if it doesn't look like math
-  });
-
-  // Now split the processed text by math placeholders and create blocks
-  if (mathBlocks.length === 0) {
-    // No math found, just add as text block
-    if (processedText.trim()) {
-      blocks.push({ type: 'text', content: processedText });
-    }
-  } else {
-    // Process placeholders in order and create blocks
-    let remainingText = processedText;
-    
-    mathBlocks.forEach((mathBlock) => {
-      const placeholderIndex = remainingText.indexOf(mathBlock.placeholder);
-      
-      if (placeholderIndex !== -1) {
-        // Add text before this math block (if any)
-        const textBefore = remainingText.substring(0, placeholderIndex);
-        if (textBefore.trim()) {
-          blocks.push({ type: 'text', content: textBefore });
-        }
-        
-        // Add the math block
-        blocks.push({ type: 'math', content: mathBlock.content, display: mathBlock.display });
-        
-        // Update remaining text to continue after this placeholder
-        remainingText = remainingText.substring(placeholderIndex + mathBlock.placeholder.length);
-      }
-    });
-    
-    // Add any remaining text after all math blocks
-    if (remainingText.trim()) {
-      blocks.push({ type: 'text', content: remainingText });
-    }
-  }
-}
 
 /**
  * Converts loading blocks to actual content blocks after streaming is complete.
  * This is called when streaming finishes to trigger the final render.
  * @param rawContent The complete content after streaming
- * @returns An array of ContentBlock objects with all blocks properly rendered
+ * @returns ParsedContent object with all blocks properly rendered and raw content preserved
  */
-export const finalizeStreamedContent = (rawContent: string): ContentBlock[] => {
+export const finalizeStreamedContent = (rawContent: string): ParsedContent => {
   return parseMixedContent(rawContent); // Parse normally
+};
+
+/**
+ * Helper function to extract just the blocks array for backward compatibility
+ * @param rawContent The raw string to parse
+ * @returns An array of ContentBlock objects
+ */
+export const parseMixedContentBlocks = (rawContent: string): ContentBlock[] => {
+  return parseMixedContent(rawContent).blocks;
 };
