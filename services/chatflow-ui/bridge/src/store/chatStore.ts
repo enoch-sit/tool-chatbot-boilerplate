@@ -264,22 +264,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
         isNewSession = false; // Prevent this block from running again for this stream
       }
       // Also handle metadata event for sessionId (robustness)
-      if (isNewSession && event.event === 'metadata' && event.data && event.data.sessionId && typeof event.data.sessionId === 'string') {
-        console.log("get token get session id from metadata");
-        sessionId = event.data.sessionId;
-        addLog(`Bot returned new session ID from metadata: ${sessionId}`);
-        // Create new session object
-        newSessionObj = {
-          session_id: sessionId,
-          chatflow_id: currentChatflow.id,
-          topic: prompt.slice(0, 32) || 'New Chat',
-          created_at: new Date().toISOString(),
-        };
-        
-        // Atomically update all relevant state in a single operation
-        set(state => {
-          // Find any existing session with the same ID to prevent duplicates
-          const filteredSessions = state.sessions.filter(s => s.session_id !== sessionId);
+      if (isNewSession && event.event === 'metadata' && event.data && typeof event.data === 'object') {
+        const data = event.data as Record<string, unknown>;
+        if (data.sessionId && typeof data.sessionId === 'string') {
+          console.log("get token get session id from metadata");
+          sessionId = data.sessionId;
+          addLog(`Bot returned new session ID from metadata: ${sessionId}`);
+          // Create new session object
+          newSessionObj = {
+            session_id: sessionId,
+            chatflow_id: currentChatflow.id,
+            topic: prompt.slice(0, 32) || 'New Chat',
+            created_at: new Date().toISOString(),
+          };
+          
+          // Atomically update all relevant state in a single operation
+          set(state => {
+            // Find any existing session with the same ID to prevent duplicates
+            const filteredSessions = state.sessions.filter(s => s.session_id !== sessionId);
           
           return {
             currentSession: newSessionObj,
@@ -294,6 +296,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
 
         isNewSession = false; // Prevent this block from running again for this stream
+        }
       }
 
       if (event.event === 'content' && event.data?.content) {
@@ -363,5 +366,5 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   /** Sets or clears the global error message. */
-  setError: (error) => set({ error }),
+  setError: (error: string | null) => set({ error }),
 }));

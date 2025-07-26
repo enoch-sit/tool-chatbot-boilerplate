@@ -1,6 +1,6 @@
 import React, { useRef, useState, useImperativeHandle, forwardRef, useEffect, useCallback } from 'react';
-import { Box, Button, Typography, Stack, Alert, IconButton, Menu, MenuItem } from '@mui/joy';
-import { AttachFile as AttachFileIcon, Close as CloseIcon, MoreVert as MoreVertIcon, ContentCopy as ContentCopyIcon } from '@mui/icons-material';
+import { Box, Button, Typography, Stack, Alert } from '@mui/joy';
+import { AttachFile as AttachFileIcon, Close as CloseIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { FileService } from '../../services/fileService';
 import type { FileUploadData } from '../../services/fileService';
