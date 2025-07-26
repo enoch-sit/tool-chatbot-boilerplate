@@ -10,6 +10,7 @@ interface FileUploadProps {
 
 export interface FileUploadRef {
   clearFiles: () => void;
+  triggerFileInput: () => void;
 }
 
 const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({ 
@@ -125,6 +126,9 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
   useImperativeHandle(ref, () => ({
     clearFiles: () => {
       setAttachedFiles([]);
+    },
+    triggerFileInput: () => {
+      fileInputRef.current?.click();
     }
   }));
 

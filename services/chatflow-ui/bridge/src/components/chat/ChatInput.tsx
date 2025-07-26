@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Input, IconButton, Stack } from '@mui/joy';
+import { Box, Textarea, IconButton, Stack, Tooltip } from '@mui/joy';
 import SendIcon from '@mui/icons-material/Send';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useChatStore } from '../../store/chatStore';
 import { useTranslation } from 'react-i18next';
 import FileUpload from './FileUpload';
@@ -13,7 +14,7 @@ const ChatInput: React.FC = () => {
   const [pendingFiles, setPendingFiles] = useState<FileUploadData[]>([]);
   const { streamAssistantResponse, isStreaming, currentSession, currentChatflow } = useChatStore();
   const fileUploadRef = useRef<FileUploadRef>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
   const hasSuccessfulAggressiveFocus = useRef(false); // Track if aggressive approach ever worked
 
   // Helper function to safely focus the input
@@ -23,9 +24,12 @@ const ChatInput: React.FC = () => {
       return;
     }
 
-    if (inputRef.current && !inputRef.current.disabled) {
+    if (inputRef.current) {
       try {
-        inputRef.current.focus();
+        const textarea = inputRef.current.querySelector('textarea');
+        if (textarea && !textarea.disabled) {
+          textarea.focus();
+        }
       } catch (error) {
         console.warn('Failed to focus input:', error);
       }
@@ -65,26 +69,29 @@ const ChatInput: React.FC = () => {
       const timer1 = setTimeout(() => {
         if (!isStreaming) {
           console.log('First focus attempt after streaming ended');
-          inputRef.current?.focus();
+          const textarea = inputRef.current?.querySelector('textarea');
+          textarea?.focus();
           
           // Second attempt after another 1 second if first didn't work
           setTimeout(() => {
-            if (!isStreaming && document.activeElement !== inputRef.current) {
+            const currentTextarea = inputRef.current?.querySelector('textarea');
+            if (!isStreaming && document.activeElement !== currentTextarea) {
               console.log('Second focus attempt after streaming ended');
-              inputRef.current?.focus();
+              currentTextarea?.focus();
               
               // Third aggressive attempt if second failed and we haven't succeeded before
               setTimeout(() => {
-                if (!isStreaming && document.activeElement !== inputRef.current && !hasSuccessfulAggressiveFocus.current) {
+                const retryTextarea = inputRef.current?.querySelector('textarea');
+                if (!isStreaming && document.activeElement !== retryTextarea && !hasSuccessfulAggressiveFocus.current) {
                   console.log('Trying aggressive focus approach after streaming ended');
-                  if (inputRef.current) {
-                    inputRef.current.blur();
+                  if (retryTextarea) {
+                    retryTextarea.blur();
                     setTimeout(() => {
-                      inputRef.current?.focus();
-                      inputRef.current?.click();
+                      retryTextarea.focus();
+                      retryTextarea.click();
                       // Check if aggressive approach worked
                       setTimeout(() => {
-                        if (document.activeElement === inputRef.current) {
+                        if (document.activeElement === retryTextarea) {
                           hasSuccessfulAggressiveFocus.current = true;
                           console.log('Aggressive focus succeeded - will skip aggressive approach in future');
                         }
@@ -121,36 +128,76 @@ const ChatInput: React.FC = () => {
     focusInput();
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+    // Shift+Enter allows new line (default behavior)
+  };
+
+  const handleAttachClick = () => {
+    // Trigger file upload
+    fileUploadRef.current?.triggerFileInput();
+  };
+
   return (
-    <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+    <Box sx={{ p: 2 }}>
       <Stack spacing={1}>
         <FileUpload
           ref={fileUploadRef}
           onFilesSelected={handleFilesSelected}
         />
         
-        <Input
-          ref={inputRef}
-          autoFocus={!isStreaming}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onClick={handleInputClick}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSubmit();
-            }
-          }}
-          placeholder={t('chat.typeMessage')}
-          disabled={isStreaming}
-          endDecorator={
+        <Box sx={{ position: 'relative' }}>
+          <Textarea
+            ref={inputRef}
+            autoFocus={!isStreaming}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onClick={handleInputClick}
+            onKeyDown={handleKeyDown}
+            placeholder={`${t('chat.typeMessage')}\n${t('chat.sendShortcut')}`}
+            disabled={isStreaming}
+            minRows={1}
+            maxRows={6}
+            sx={{ 
+              pr: '120px', // Space for buttons
+              '& textarea': {
+                resize: 'none'
+              }
+            }}
+          />
+          
+          {/* Button container */}
+          <Box sx={{ 
+            position: 'absolute', 
+            right: 8, 
+            bottom: 8, 
+            display: 'flex', 
+            gap: 1 
+          }}>
+            <Tooltip title={t('chat.attachImageTooltip')} placement="top">
+              <IconButton 
+                onClick={handleAttachClick}
+                disabled={isStreaming}
+                size="sm"
+                variant="plain"
+              >
+                <AttachFileIcon />
+              </IconButton>
+            </Tooltip>
+            
             <IconButton 
               onClick={handleSubmit} 
               disabled={isStreaming || !prompt.trim()}
+              size="sm"
+              color="primary"
             >
               <SendIcon />
             </IconButton>
-          }
-        />
+          </Box>
+        </Box>
       </Stack>
     </Box>
   );
