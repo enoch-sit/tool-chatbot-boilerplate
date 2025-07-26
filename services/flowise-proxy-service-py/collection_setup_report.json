@@ -1,5 +1,5 @@
 {
-  "started_at": "2025-07-23T03:51:39.154317",
+  "started_at": "2025-07-23T13:31:52.496055",
   "collections": {
     "users": "exists",
     "chatflows": "exists",
@@ -20,13 +20,13 @@
     "FileUpload": "error: create_indexes"
   },
   "gridfs": {
-    "fs.files": "created",
-    "fs.chunks": "created"
+    "fs.files": "exists",
+    "fs.chunks": "exists"
   },
   "errors": [],
   "success": true,
   "validation": {
-    "collections_count": 11,
+    "collections_count": 12,
     "required_collections": [
       "users",
       "chatflows",
@@ -46,5 +46,5 @@
     },
     "validation_passed": true
   },
-  "completed_at": "2025-07-23T03:51:39.193872"
+  "completed_at": "2025-07-23T13:31:52.548462"
 }
