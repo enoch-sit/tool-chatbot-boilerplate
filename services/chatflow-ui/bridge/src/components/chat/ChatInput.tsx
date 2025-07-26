@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Textarea, IconButton, Stack, Tooltip } from '@mui/joy';
+import { Box, Textarea, IconButton, Stack } from '@mui/joy';
 import SendIcon from '@mui/icons-material/Send';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useChatStore } from '../../store/chatStore';
 import { useTranslation } from 'react-i18next';
 import FileUpload from './FileUpload';
@@ -136,11 +135,6 @@ const ChatInput: React.FC = () => {
     // Shift+Enter allows new line (default behavior)
   };
 
-  const handleAttachClick = () => {
-    // Trigger file upload
-    fileUploadRef.current?.triggerFileInput();
-  };
-
   return (
     <Box sx={{ p: 2 }}>
       <Stack spacing={1}>
@@ -159,35 +153,23 @@ const ChatInput: React.FC = () => {
             onKeyDown={handleKeyDown}
             placeholder={`${t('chat.typeMessage')}\n${t('chat.sendShortcut')}`}
             disabled={isStreaming}
-            minRows={1}
-            maxRows={6}
+            minRows={2}
+            maxRows={8}
             sx={{ 
-              pr: '120px', // Space for buttons
+              pr: '60px', // Space for send button only
               '& textarea': {
-                resize: 'none'
+                resize: 'none',
+                lineHeight: '1.4'
               }
             }}
           />
           
-          {/* Button container */}
+          {/* Send button only */}
           <Box sx={{ 
             position: 'absolute', 
             right: 8, 
-            bottom: 8, 
-            display: 'flex', 
-            gap: 1 
+            bottom: 8
           }}>
-            <Tooltip title={t('chat.attachImageTooltip')} placement="top">
-              <IconButton 
-                onClick={handleAttachClick}
-                disabled={isStreaming}
-                size="sm"
-                variant="plain"
-              >
-                <AttachFileIcon />
-              </IconButton>
-            </Tooltip>
-            
             <IconButton 
               onClick={handleSubmit} 
               disabled={isStreaming || !prompt.trim()}
