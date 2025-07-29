@@ -296,14 +296,14 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
               📚 {t('chat.quickReplies.letsLearn')}
             </Button>
             
-            <Button
+            {/* <Button
               variant="soft"
               size="sm"
               onClick={() => handleQuickReply(t('chat.quickReplies.fantastic'))}
               sx={{ minWidth: 'auto' }}
             >
               ✨ {t('chat.quickReplies.fantastic')}
-            </Button>
+            </Button> */}
             
             <Button
               variant="soft"
