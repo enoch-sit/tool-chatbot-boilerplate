@@ -16,7 +16,12 @@ const MessageList: React.FC = () => {
   }, [messages, isStreaming]);
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ 
+      height: '100%',
+      overflowY: 'auto',
+      overflowX: 'hidden',
+      p: 2,
+    }}>
       {messages.map((msg, idx) => (
         <MessageBubble key={String(msg.id) + String(idx)} message={msg} />
       ))}

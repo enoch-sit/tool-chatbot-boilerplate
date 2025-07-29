@@ -43,11 +43,13 @@
     "loadingHistory": "正在載入聊天記錄...",
     "selectSession": "選擇一個會話",
     "selectChatflowPrompt": "請選擇一個課程以開始聊天。",
+    "selectChatflowHint": "點擊上方選擇課程！👆",
+    "selectChatflowDescription": "從上方的下拉選單中選擇開始聊天！",
     "attachImageTooltip": "點擊附加、拖拽圖片或貼上圖片 (Ctrl+V)",
     "attachImage": "附加圖片",
     "sendShortcut": "按回車鍵發送，Shift+回車鍵換行",
     "quickReplies": {
-      "good": "好的",
+      "good": "好",
       "letsLearn": "我們學習吧",
       "fantastic": "太好了",
       "pleaseRecommend": "請推薦"

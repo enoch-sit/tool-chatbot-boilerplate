@@ -43,6 +43,8 @@
     "loadingHistory": "正在加载聊天记录...",
     "selectSession": "选择一个会话",
     "selectChatflowPrompt": "请选择一个课程以开始聊天。",
+    "selectChatflowHint": "点击上方选择课程！👆",
+    "selectChatflowDescription": "从上方的下拉菜单中选择开始聊天！",
     "attachImageTooltip": "点击附加、拖拽图片或粘贴图片 (Ctrl+V)",
     "attachImage": "附加图片",
     "sendShortcut": "按回车键发送，Shift+回车键换行",

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Chip, CircularProgress, Card, CardContent, Stack } from '@mui/joy';
+import { Box, Typography, Chip, CircularProgress, Card, CardContent, Stack, Button } from '@mui/joy';
 import type { Message, StreamEvent } from '../../types/chat';
 import type { FileUpload } from '../../types/api';
 import AgentFlowTimeline from './AgentFlowTimeline';
@@ -9,6 +9,8 @@ import { isImageUpload } from '../../utils/typeGuards';
 import { AuthenticatedImage } from '../common/AuthenticatedImage';
 import { AuthenticatedLink } from '../common/AuthenticatedLink';
 import { useAuthStore } from '../../store/authStore';
+import { useChatStore } from '../../store/chatStore';
+import { useTranslation } from 'react-i18next';
 import 'highlight.js/styles/github-dark.css';
 
 interface MessageBubbleProps {
@@ -115,6 +117,8 @@ const FileAttachments: React.FC<{ uploads?: FileUpload[] }> = ({ uploads }) => {
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const { content, sender, isStreaming = false, streamEvents, liveEvents, timeMetadata, uploads } = message;
+  const { t } = useTranslation();
+  const { streamAssistantResponse } = useChatStore();
 
   // Detect if this is a historical message (not streaming and has streamEvents)
   const isHistorical = !isStreaming && ((streamEvents?.length ?? 0) > 0 || (!liveEvents || liveEvents.length === 0));
@@ -124,6 +128,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   // Determine if there is any visible content from tokens or the main content string.
   const hasVisibleContent = content || (eventsToDisplay.length > 0 && getAccumulatedTokenContent(eventsToDisplay));
+
+  // Handle quick reply button clicks
+  const handleQuickReply = (message: string) => {
+    streamAssistantResponse(message);
+  };
 
   // Show a loading spinner if the bot is "thinking" but hasn't produced output yet.
   if (sender === 'bot' && isStreaming && !hasVisibleContent) {
@@ -255,6 +264,38 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           <Typography level="body-xs" sx={{ mt: 0.5, opacity: 0.5 }}>
             Generated in {timeMetadata.delta}ms
           </Typography>
+        )}
+
+        {/* Quick reply buttons for bot messages when not streaming */}
+        {sender === 'bot' && !isStreaming && (
+          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
+            <Button
+              variant="soft"
+              size="sm"
+              onClick={() => handleQuickReply(t('chat.quickReplies.good'))}
+              sx={{ minWidth: 'auto' }}
+            >
+              👍 {t('chat.quickReplies.good')}
+            </Button>
+            
+            <Button
+              variant="soft"
+              size="sm"
+              onClick={() => handleQuickReply(t('chat.quickReplies.letsLearn'))}
+              sx={{ minWidth: 'auto' }}
+            >
+              📚 {t('chat.quickReplies.letsLearn')}
+            </Button>
+            
+            <Button
+              variant="soft"
+              size="sm"
+              onClick={() => handleQuickReply(t('chat.quickReplies.pleaseRecommend'))}
+              sx={{ minWidth: 'auto' }}
+            >
+              🤔 {t('chat.quickReplies.pleaseRecommend')}
+            </Button>
+          </Stack>
         )}
       </Box>
     );

@@ -7,7 +7,6 @@ import type { FileUploadData } from '../../services/fileService';
 
 interface FileUploadProps {
   onFilesSelected: (files: FileUploadData[]) => void;
-  onQuickReply?: (message: string) => void;
 }
 
 export interface FileUploadRef {
@@ -16,8 +15,7 @@ export interface FileUploadRef {
 }
 
 const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({ 
-  onFilesSelected,
-  onQuickReply
+  onFilesSelected
 }, ref) => {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -234,12 +232,6 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
     }
   };
 
-  const handleQuickReply = (message: string) => {
-    if (onQuickReply) {
-      onQuickReply(message);
-    }
-  };
-
   return (
     <Box
       onDragOver={handleDragOver}
@@ -274,47 +266,6 @@ const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
         >
           {isProcessing ? 'Processing...' : t('chat.attachImage')}
         </Button>
-        
-        {/* Quick reply buttons */}
-        {onQuickReply && (
-          <>
-            <Button
-              variant="soft"
-              size="sm"
-              onClick={() => handleQuickReply(t('chat.quickReplies.good'))}
-              sx={{ minWidth: 'auto' }}
-            >
-              👍 {t('chat.quickReplies.good')}
-            </Button>
-            
-            <Button
-              variant="soft"
-              size="sm"
-              onClick={() => handleQuickReply(t('chat.quickReplies.letsLearn'))}
-              sx={{ minWidth: 'auto' }}
-            >
-              📚 {t('chat.quickReplies.letsLearn')}
-            </Button>
-            
-            {/* <Button
-              variant="soft"
-              size="sm"
-              onClick={() => handleQuickReply(t('chat.quickReplies.fantastic'))}
-              sx={{ minWidth: 'auto' }}
-            >
-              ✨ {t('chat.quickReplies.fantastic')}
-            </Button> */}
-            
-            <Button
-              variant="soft"
-              size="sm"
-              onClick={() => handleQuickReply(t('chat.quickReplies.pleaseRecommend'))}
-              sx={{ minWidth: 'auto' }}
-            >
-              🤔 {t('chat.quickReplies.pleaseRecommend')}
-            </Button>
-          </>
-        )}
         
         {attachedFiles.length === 0 && !isDragOver && (
           <Typography level="body-xs" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>

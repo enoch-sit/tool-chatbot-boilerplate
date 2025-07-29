@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Textarea, IconButton, Stack } from '@mui/joy';
+import { Box, Textarea, IconButton, Stack, Button } from '@mui/joy';
 import SendIcon from '@mui/icons-material/Send';
 import { useChatStore } from '../../store/chatStore';
 import { useTranslation } from 'react-i18next';
@@ -123,8 +123,7 @@ const ChatInput: React.FC = () => {
   };
 
   const handleQuickReply = (message: string) => {
-    setPrompt(message);
-    // Automatically send the quick reply
+    // Send the quick reply message immediately
     streamAssistantResponse(message, pendingFiles);
     setPendingFiles([]);
     fileUploadRef.current?.clearFiles();
@@ -149,8 +148,40 @@ const ChatInput: React.FC = () => {
         <FileUpload
           ref={fileUploadRef}
           onFilesSelected={handleFilesSelected}
-          onQuickReply={handleQuickReply}
         />
+        
+        {/* Quick reply buttons */}
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+          <Button
+            variant="soft"
+            size="sm"
+            onClick={() => handleQuickReply(t('chat.quickReplies.good'))}
+            disabled={isStreaming}
+            sx={{ minWidth: 'auto' }}
+          >
+            👍 {t('chat.quickReplies.good')}
+          </Button>
+          
+          <Button
+            variant="soft"
+            size="sm"
+            onClick={() => handleQuickReply(t('chat.quickReplies.letsLearn'))}
+            disabled={isStreaming}
+            sx={{ minWidth: 'auto' }}
+          >
+            📚 {t('chat.quickReplies.letsLearn')}
+          </Button>
+          
+          <Button
+            variant="soft"
+            size="sm"
+            onClick={() => handleQuickReply(t('chat.quickReplies.pleaseRecommend'))}
+            disabled={isStreaming}
+            sx={{ minWidth: 'auto' }}
+          >
+            🤔 {t('chat.quickReplies.pleaseRecommend')}
+          </Button>
+        </Stack>
         
         <Box sx={{ position: 'relative' }}>
           <Textarea

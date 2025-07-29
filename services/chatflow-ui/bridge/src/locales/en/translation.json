@@ -43,6 +43,8 @@
     "loadingHistory": "Loading chat history...",
     "selectSession": "View conversations",
     "selectChatflowPrompt": "Please select a course to start chatting.",
+    "selectChatflowHint": "Pick a course above! 👆",
+    "selectChatflowDescription": "Choose from the dropdown menu above to start chatting!",
     "attachImageTooltip": "Click to attach, drag & drop images, or paste images (Ctrl+V)",
     "attachImage": "Attach Image",
     "sendShortcut": "Press Enter to send, Shift+Enter for new line",

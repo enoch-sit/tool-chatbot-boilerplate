@@ -36,6 +36,7 @@ import ChatInput from '../components/chat/ChatInput';
 import ChatLayout from '../components/layout/ChatLayout';
 import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer';
 import AddIcon from '@mui/icons-material/Add';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 
 const ChatPage: React.FC = () => {
   const { t } = useTranslation();
@@ -48,6 +49,7 @@ const ChatPage: React.FC = () => {
     sessions,
     currentSession,
     currentChatflow,
+    messages,
     isLoading,
     error,
     loadChatflows,
@@ -56,6 +58,7 @@ const ChatPage: React.FC = () => {
     setCurrentSession,
     clearSession,
     setError,
+    streamAssistantResponse,
   } = useChatStore();
 
   // On component mount, load the initial data required for the page.
@@ -102,6 +105,18 @@ const ChatPage: React.FC = () => {
         setCurrentSession(selectedSession);
       }
     }
+  };
+
+  /**
+   * Handles the "Let's learn" button click to start the conversation.
+   * Sends an initial greeting message to the selected chatflow.
+   */
+  const handleLetsLearn = async () => {
+    if (!currentChatflow) return;
+    
+    // Send a friendly greeting message to start the conversation
+    const greetingMessage = t('chat.quickReplies.letsLearn');
+    await streamAssistantResponse(greetingMessage);
   };
 
   return (
@@ -156,25 +171,108 @@ const ChatPage: React.FC = () => {
       {error && (<Alert color="danger" variant="soft" endDecorator={<Button size="sm" variant="plain" onClick={() => setError(null)}>{t('common.close')}</Button>} sx={{ m: 2 }}>{error}</Alert>)}
 
       {/* Main Chat Area using ChatLayout */}
-      <Box sx={{ flex: 1, overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
         {currentChatflow ? (
           <ChatLayout
-            messages={<MessageList />}
+            messages={
+              messages.length === 0 && !isLoading ? (
+                // Show "Let's learn" button when chatflow is selected but no messages exist
+                <Box sx={{ 
+                  height: '100%', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  textAlign: 'center',
+                  px: 4,
+                }}>
+                  <Stack spacing={3} alignItems="center">
+                    <Typography level="h3" color="primary">
+                      {currentChatflow.name}
+                    </Typography>
+                    <Typography level="body-md" color="neutral" sx={{ opacity: 0.8 }}>
+                      {t('chat.selectChatflowDescription', { defaultValue: 'Ready to start learning? Click the button below!' })}
+                    </Typography>
+                    <Button
+                      size="lg"
+                      variant="solid"
+                      color="primary"
+                      onClick={handleLetsLearn}
+                      sx={{
+                        fontSize: '1.25rem',
+                        fontWeight: 'bold',
+                        py: 2,
+                        px: 4,
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        '&:hover': {
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+                        },
+                        transition: 'all 0.2s ease-in-out',
+                      }}
+                    >
+                      🚀 {t('chat.quickReplies.letsLearn')}
+                    </Button>
+                  </Stack>
+                </Box>
+              ) : (
+                <MessageList />
+              )
+            }
             input={<ChatInput />}
           />
         ) : (
-          // Placeholder view when no chatflow is selected
+          // Placeholder view when no chatflow is selected with cute arrow pointing up
           <Box sx={{ 
             height: '100%', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center', 
             textAlign: 'center',
-            px: 4 // Add horizontal padding
+            px: 4,
+            position: 'relative'
           }}>
-            <Stack spacing={2}>
+            {/* Cute bouncing arrow pointing up to chatflow selection */}
+            <Box sx={{
+              position: 'absolute',
+              top: '10%',
+              left: '10%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 1,
+              animation: 'bounce 2s infinite',
+              '@keyframes bounce': {
+                '0%, 20%, 50%, 80%, 100%': {
+                  transform: 'translateX(-50%) translateY(0)',
+                },
+                '40%': {
+                  transform: 'translateX(-50%) translateY(-10px)',
+                },
+                '60%': {
+                  transform: 'translateX(-50%) translateY(-5px)',
+                },
+              }
+            }}>
+              <ArrowUpwardIcon 
+                sx={{ 
+                  fontSize: '3rem', 
+                  color: 'primary.500',
+                  filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.2))'
+                }} 
+              />
+              <Typography level="body-sm" color="primary" sx={{ fontWeight: 600 }}>
+                {t('chat.selectChatflowHint', { defaultValue: 'Pick a chatflow above! 👆' })}
+              </Typography>
+            </Box>
+
+            <Stack spacing={2} sx={{ mt: 8 }}>
               <Typography level="h4" color="neutral">
                 {t('chat.selectChatflowPrompt')}
+              </Typography>
+              <Typography level="body-md" color="neutral" sx={{ opacity: 0.7 }}>
+                {t('chat.selectChatflowDescription', { defaultValue: 'Choose from the dropdown menu above to start chatting!' })}
               </Typography>
             </Stack>
           </Box>
