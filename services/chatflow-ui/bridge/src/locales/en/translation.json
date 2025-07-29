@@ -45,7 +45,13 @@
     "selectChatflowPrompt": "Please select a course to start chatting.",
     "attachImageTooltip": "Click to attach, drag & drop images, or paste images (Ctrl+V)",
     "attachImage": "Attach Image",
-    "sendShortcut": "Press Enter to send, Shift+Enter for new line"
+    "sendShortcut": "Press Enter to send, Shift+Enter for new line",
+    "quickReplies": {
+      "good": "Good",
+      "letsLearn": "Let's learn",
+      "fantastic": "Fantastic",
+      "pleaseRecommend": "Please recommend"
+    }
   },
   "admin": {
     "pageTitle": "Admin Dashboard",

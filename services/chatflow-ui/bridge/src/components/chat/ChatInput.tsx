@@ -122,6 +122,14 @@ const ChatInput: React.FC = () => {
     setPendingFiles(files); // Files array now contains all files (existing + new)
   };
 
+  const handleQuickReply = (message: string) => {
+    setPrompt(message);
+    // Automatically send the quick reply
+    streamAssistantResponse(message, pendingFiles);
+    setPendingFiles([]);
+    fileUploadRef.current?.clearFiles();
+  };
+
   const handleInputClick = () => {
     // Ensure focus when input is clicked
     focusInput();
@@ -141,6 +149,7 @@ const ChatInput: React.FC = () => {
         <FileUpload
           ref={fileUploadRef}
           onFilesSelected={handleFilesSelected}
+          onQuickReply={handleQuickReply}
         />
         
         <Box sx={{ position: 'relative' }}>

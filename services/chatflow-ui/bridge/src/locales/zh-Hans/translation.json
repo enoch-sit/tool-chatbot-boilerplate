@@ -45,7 +45,13 @@
     "selectChatflowPrompt": "请选择一个课程以开始聊天。",
     "attachImageTooltip": "点击附加、拖拽图片或粘贴图片 (Ctrl+V)",
     "attachImage": "附加图片",
-    "sendShortcut": "按回车键发送，Shift+回车键换行"
+    "sendShortcut": "按回车键发送，Shift+回车键换行",
+    "quickReplies": {
+      "good": "不错",
+      "letsLearn": "我们学习吧",
+      "fantastic": "太棒了",
+      "pleaseRecommend": "请推荐"
+    }
   },
   "admin": {
     "pageTitle": "管理仪表板",
