@@ -217,6 +217,33 @@ export class TokenService {
       return 0;
     }
   }
+
+  /**
+   * Generate an admin token for service-to-service communication.
+   * This is used by internal services to make API calls with admin privileges.
+   * 
+   * @returns A JWT access token with admin role.
+   */
+  generateAdminToken(): string {
+    // Use the same access token secret
+    const secretString = process.env.JWT_ACCESS_SECRET || 'access_secret';
+    const secret = Buffer.from(secretString, 'utf8');
+    const expiresIn = '15m'; // Admin tokens expire in 15 minutes for security
+    
+    // Create admin payload
+    const payload: TokenPayload = {
+      sub: 'lti-service',
+      username: 'lti-service',
+      email: 'lti-service@system.local',
+      type: 'access',
+      role: UserRole.ADMIN
+    };
+    
+    const options = { expiresIn } as jwt.SignOptions;
+    
+    // Sign and return the admin token
+    return jwt.sign(payload, secret, options);
+  }
 }
 
 export const tokenService = new TokenService();

@@ -821,8 +821,12 @@ testingRouter.post('/verify-user/:userId', async (req: Request, res: Response) =
 // Route Configuration
 // =============================================================================
 
+// Import LTI routes
+import ltiRoutes from './lti.routes';
+
 // Register the routers to the main router
 router.use('/auth', authRouter);
+router.use('/auth/lti', ltiRoutes);
 router.use('/', protectedRouter);
 router.use('/admin', adminRouter);
 router.use('/testing', testingRouter);
