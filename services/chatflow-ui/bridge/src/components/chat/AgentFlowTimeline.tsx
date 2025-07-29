@@ -97,8 +97,11 @@ const AgentFlowTimeline: React.FC<AgentFlowTimelineProps> = ({
 
   const getEventDescription = (event: StreamEvent) => {
     if (typeof event.data === 'string') return event.data;
-    if (event.data?.description) return event.data.description;
-    if (event.data?.status) return event.data.status;
+    if (event.data && typeof event.data === 'object') {
+      const data = event.data as Record<string, unknown>;
+      if (data.description && typeof data.description === 'string') return data.description;
+      if (data.status && typeof data.status === 'string') return data.status;
+    }
     return t('agentFlow.processing');
   };
 

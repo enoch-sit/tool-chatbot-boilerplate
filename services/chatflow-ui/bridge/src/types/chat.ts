@@ -16,7 +16,7 @@ export interface Message {
   sender: string, //'user' | 'bot' | 'agent' | 'system';
   content: string;
   timestamp?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   streamEvents?: StreamEvent[]; // Events stored in history (only token events)
   liveEvents?: StreamEvent[]; // Events shown during real-time streaming (all events)
   isStreaming?: boolean; // Add this to track if message is still streaming
@@ -56,7 +56,7 @@ export interface AgentFlowEvent {
   data: {
     status: 'INPROGRESS' | 'SUCCESS' | 'ERROR';
     flowId: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -65,28 +65,28 @@ export interface NextAgentFlowEvent {
   data: {
     agentName: string;
     status: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
 export interface AgentFlowExecutedDataEvent {
   event: 'agentFlowExecutedData';
-  data: any; // The data resulting from an agent flow execution
+  data: unknown; // The data resulting from an agent flow execution
 }
 
 export interface CalledToolsEvent {
   event: 'calledTools';
-  data: any[]; // Information about any tools that the agent called
+  data: unknown[]; // Information about any tools that the agent called
 }
 
 export interface UsageMetadataEvent {
   event: 'usageMetadata';
-  data: any; // Metadata about resource usage (e.g., token counts)
+  data: unknown; // Metadata about resource usage (e.g., token counts)
 }
 
 export interface MetadataEvent {
   event: 'metadata';
-  data: any; // Generic metadata event
+  data: unknown; // Generic metadata event
 }
 
 export interface EndEvent {
@@ -113,8 +113,8 @@ export interface ContentEvent {
       end: number;
       delta: number;
     };
-    usageMetadata?: any;
-    calledTools?: any[];
+    usageMetadata?: unknown;
+    calledTools?: unknown[];
   };
 }
 
