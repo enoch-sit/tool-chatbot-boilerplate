@@ -1,32 +1,18 @@
 // src/pages/DashboardPage.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Box, Card, CardContent, CircularProgress, Typography } from '@mui/joy';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
-import { getUserCredits } from '../api/user';
+import { useUserStore } from '../store/userStore';
 
 const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [credits, setCredits] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { credits, isLoadingCredits, fetchCredits } = useUserStore();
 
   useEffect(() => {
-    const fetchCredits = async () => {
-      try {
-        setIsLoading(true);
-        const creditData = await getUserCredits();
-        setCredits(creditData.totalCredits);
-      } catch (error) {
-        console.error("Failed to fetch user credits:", error);
-        setCredits(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchCredits();
-  }, []);
+  }, [fetchCredits]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -41,7 +27,7 @@ const DashboardPage: React.FC = () => {
         <CardContent>
           <Typography level="title-md">{t('dashboard.credits')}</Typography>
           <Typography level="h2" sx={{ mt: 1 }}>
-            {isLoading ? (
+            {isLoadingCredits ? (
               <CircularProgress size="sm" />
             ) : (
               credits !== null ? credits : t('dashboard.noCredits')

@@ -14,7 +14,6 @@ const ChatInput: React.FC = () => {
   const { streamAssistantResponse, isStreaming, currentSession, currentChatflow } = useChatStore();
   const fileUploadRef = useRef<FileUploadRef>(null);
   const inputRef = useRef<HTMLDivElement>(null);
-  const hasSuccessfulAggressiveFocus = useRef(false); // Track if aggressive approach ever worked
 
   // Helper function to safely focus the input
   const focusInput = (forceAttempt = false) => {
@@ -81,7 +80,7 @@ const ChatInput: React.FC = () => {
               // Third aggressive attempt if second failed and we haven't succeeded before
               setTimeout(() => {
                 const retryTextarea = inputRef.current?.querySelector('textarea');
-                if (!isStreaming && document.activeElement !== retryTextarea && !hasSuccessfulAggressiveFocus.current) {
+                if (!isStreaming && document.activeElement !== retryTextarea) {
                   console.log('Trying aggressive focus approach after streaming ended');
                   if (retryTextarea) {
                     retryTextarea.blur();
@@ -91,7 +90,7 @@ const ChatInput: React.FC = () => {
                       // Check if aggressive approach worked
                       setTimeout(() => {
                         if (document.activeElement === retryTextarea) {
-                          hasSuccessfulAggressiveFocus.current = true;
+                          // hasSuccessfulAggressiveFocus.current = true;
                           console.log('Aggressive focus succeeded - will skip aggressive approach in future');
                         }
                       }, 100);

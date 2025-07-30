@@ -13,6 +13,7 @@ import type { FileUpload } from './api';
 export interface Message {
   id?: string;
   session_id?: string;
+  role?: 'user' | 'assistant' | 'system' | 'agent'; // Add role to distinguish senders
   sender: string, //'user' | 'bot' | 'agent' | 'system';
   content: string;
   timestamp?: string;

@@ -14,8 +14,24 @@ import type { User } from '../types/auth';
  * to this endpoint.
  */
 export const getUserCredits = async (): Promise<{ totalCredits: number }> => {
-  const response = await apiClient.get<{ totalCredits: number }>('/api/v1/chat/credits');
-  return response.data;
+  console.log('Attempting to fetch user credits...');
+  try {
+    // Handle both { credits: ... } and { totalCredits: ... } formats
+    const response = await apiClient.get<any>('/api/v1/chat/credits');
+    const data = response.data;
+    console.log('Successfully fetched user credits raw data:', data);
+
+    const creditsValue = data.credits ?? data.totalCredits;
+
+    if (creditsValue === undefined || creditsValue === null) {
+      throw new Error('Credit information not found in API response.');
+    }
+
+    return { totalCredits: creditsValue };
+  } catch (error) {
+    console.error('Failed to fetch user credits:', error);
+    throw error;
+  }
 };
 
 /**

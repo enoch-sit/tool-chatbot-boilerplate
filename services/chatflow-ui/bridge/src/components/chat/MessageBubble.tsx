@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box, Typography, Chip, CircularProgress, Card, CardContent, Stack, Button } from '@mui/joy';
+import React, { useState } from 'react';
+import { Box, Typography, Chip, CircularProgress, Card, CardContent, Stack, Button, IconButton, Tooltip } from '@mui/joy';
 import type { Message, StreamEvent } from '../../types/chat';
 import type { FileUpload } from '../../types/api';
 import AgentFlowTimeline from './AgentFlowTimeline';
@@ -11,6 +11,10 @@ import { AuthenticatedLink } from '../common/AuthenticatedLink';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
 import { useTranslation } from 'react-i18next';
+import { usePinStore } from '../../store/pinStore';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import 'highlight.js/styles/github-dark.css';
 
 interface MessageBubbleProps {
@@ -119,6 +123,65 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const { content, sender, isStreaming = false, streamEvents, liveEvents, timeMetadata, uploads } = message;
   const { t } = useTranslation();
   const { streamAssistantResponse } = useChatStore();
+  const { pinMessage, unpinMessage, isPinned } = usePinStore();
+  const [isHovered, setIsHovered] = useState(false);
+
+  const messageIsPinned = message.id ? isPinned(message.id) : false;
+
+  const handlePinClick = () => {
+    if (message.id) {
+      if (messageIsPinned) {
+        unpinMessage(message.id);
+      } else {
+        pinMessage(message);
+      }
+    }
+  };
+
+  const handleCopyClick = async () => {
+    try {
+      // Determine what content to copy based on message type
+      let contentToCopy = '';
+      
+      // If this is a streaming/event-based message, get the accumulated token content
+      if (eventsToDisplay.length > 0) {
+        const tokenContent = getAccumulatedTokenContent(eventsToDisplay);
+        if (tokenContent) {
+          contentToCopy = tokenContent;
+        }
+      }
+      
+      // Fall back to message content if no token content
+      if (!contentToCopy && message.content) {
+        contentToCopy = message.content;
+      }
+      
+      if (!contentToCopy) {
+        console.warn('⚠️ No content to copy');
+        return;
+      }
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(contentToCopy);
+      console.log('✅ Message copied successfully');
+      
+    } catch (err) {
+      console.error('❌ Failed to copy text: ', err);
+      
+      // Fallback: try the older execCommand method
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = message.content || '';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        console.log('✅ Message copied using fallback method');
+      } catch (fallbackErr) {
+        console.error('❌ Fallback copy method also failed:', fallbackErr);
+      }
+    }
+  };
 
   // Detect if this is a historical message (not streaming and has streamEvents)
   const isHistorical = !isStreaming && ((streamEvents?.length ?? 0) > 0 || (!liveEvents || liveEvents.length === 0));
@@ -138,10 +201,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   if (sender === 'bot' && isStreaming && !hasVisibleContent) {
     return (
       <Box
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         sx={{
           display: 'flex',
           justifyContent: 'flex-start',
+          alignItems: 'flex-start',
           mb: 2,
+          gap: 1,
+          width: '100%',
         }}
       >
         <Box
@@ -159,6 +227,48 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         >
           <CircularProgress size="sm" />
         </Box>
+
+        {/* Action buttons on the right for AI messages - even during loading */}
+        {isHovered && (
+          <Stack direction="column" spacing={0.5} sx={{ 
+            opacity: 1, // Make fully visible when hovered
+            transition: 'opacity 0.2s'
+          }}>
+            <Tooltip title={t('chat.copyMessage')}>
+              <IconButton
+                size="sm"
+                variant="solid"
+                color="neutral"
+                onClick={handleCopyClick}
+                disabled={!content} // Disable if no content to copy yet
+                sx={{ 
+                  bgcolor: 'neutral.200',
+                  '&:hover': { bgcolor: 'neutral.300' }
+                }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={message.id ? (messageIsPinned ? t('chat.unpinMessage') : t('chat.pinMessage')) : 'No ID - Cannot pin'}>
+              <IconButton
+                size="sm"
+                variant="solid"
+                color={messageIsPinned ? 'primary' : 'neutral'}
+                onClick={handlePinClick}
+                disabled={!message.id}
+                sx={{ 
+                  bgcolor: messageIsPinned ? 'primary.400' : 'neutral.200',
+                  opacity: message.id ? 1 : 0.5,
+                  '&:hover': { 
+                    bgcolor: messageIsPinned ? 'primary.500' : 'neutral.300' 
+                  }
+                }}
+              >
+                {messageIsPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        )}
       </Box>
     );
   }
@@ -174,18 +284,113 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     );
 
     return (
-      <Box>
-        {/* Show agent flow timeline */}
-        {hasAgentFlowEvents && (
-          <AgentFlowTimeline 
-            events={eventsToDisplay} 
-            isStreaming={isStreaming}
-            isCompact={isStreaming} // Compact view during streaming, full view after
-          />
+      <Box
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        sx={{
+          display: 'flex',
+          justifyContent: sender === 'user' ? 'flex-end' : 'flex-start',
+          alignItems: 'flex-start',
+          mb: 2,
+          gap: 1,
+          width: '100%',
+        }}
+      >
+        {/* Action buttons on the left for user messages - ALWAYS RESERVE SPACE */}
+        {sender === 'user' && (
+          <Stack direction="column" spacing={0.5} sx={{ 
+            opacity: (isHovered || messageIsPinned) ? 1 : 0,
+            transition: 'opacity 0.2s ease-in-out',
+            minWidth: '40px', // Reserve space to prevent layout shift
+          }}>
+            {isHovered && (
+              <Tooltip title={t('chat.copyMessage')}>
+                <IconButton
+                  size="sm"
+                  variant="solid"
+                  color="neutral"
+                  onClick={handleCopyClick}
+                  sx={{ 
+                    bgcolor: 'neutral.200',
+                    '&:hover': { bgcolor: 'neutral.300' }
+                  }}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {(isHovered || messageIsPinned) && message.id && (
+              <Tooltip title={messageIsPinned ? t('chat.unpinMessage') : t('chat.pinMessage')}>
+                <IconButton
+                  size="sm"
+                  variant="solid"
+                  color={messageIsPinned ? 'primary' : 'neutral'}
+                  onClick={handlePinClick}
+                  sx={{ 
+                    bgcolor: messageIsPinned ? 'primary.400' : 'neutral.200',
+                    '&:hover': { 
+                      bgcolor: messageIsPinned ? 'primary.500' : 'neutral.300' 
+                    }
+                  }}
+                >
+                  {messageIsPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
         )}
-        
-        {/* Render accumulated mixed content from tokens */}
-        {tokenContent && <MixedContentRenderer content={tokenContent} messageId={message.id} isHistorical={isHistorical} />}
+
+        <Box sx={{ flex: 1 }}>
+          {/* Show agent flow timeline */}
+          {hasAgentFlowEvents && (
+            <AgentFlowTimeline 
+              events={eventsToDisplay} 
+              isStreaming={isStreaming}
+              isCompact={isStreaming} // Compact view during streaming, full view after
+            />
+          )}
+          
+          {/* Render accumulated mixed content from tokens */}
+          {tokenContent && <MixedContentRenderer content={tokenContent} messageId={message.id} isHistorical={isHistorical} />}
+        </Box>
+
+        {/* Action buttons on the right for AI messages */}
+        {sender !== 'user' && isHovered && (
+          <Stack direction="column" spacing={0.5}>
+            <Tooltip title={t('chat.copyMessage')}>
+              <IconButton
+                size="sm"
+                variant="solid"
+                color="neutral"
+                onClick={handleCopyClick}
+                sx={{ 
+                  bgcolor: 'neutral.200',
+                  '&:hover': { bgcolor: 'neutral.300' }
+                }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={message.id ? (messageIsPinned ? t('chat.unpinMessage') : t('chat.pinMessage')) : 'No ID - Cannot pin'}>
+              <IconButton
+                size="sm"
+                variant="solid"
+                color={messageIsPinned ? 'primary' : 'neutral'}
+                onClick={handlePinClick}
+                disabled={!message.id}
+                sx={{ 
+                  bgcolor: messageIsPinned ? 'primary.400' : 'neutral.200',
+                  opacity: message.id ? 1 : 0.5,
+                  '&:hover': { 
+                    bgcolor: messageIsPinned ? 'primary.500' : 'neutral.300' 
+                  }
+                }}
+              >
+                {messageIsPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        )}
       </Box>
     );
   }
@@ -303,12 +508,61 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <Box
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       sx={{
         display: 'flex',
         justifyContent: sender === 'user' ? 'flex-end' : 'flex-start',
+        alignItems: 'flex-start',
         mb: 2,
+        gap: 1,
+        width: '100%',
       }}
     >
+      {/* Action buttons on the left for user messages - ALWAYS RESERVE SPACE */}
+      {sender === 'user' && (
+        <Stack direction="column" spacing={0.5} sx={{ 
+          opacity: (isHovered || messageIsPinned) ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
+          minWidth: '40px', // Reserve space to prevent layout shift
+        }}>
+          {isHovered && (
+            <Tooltip title={t('chat.copyMessage')}>
+              <IconButton
+                size="sm"
+                variant="solid"
+                color="neutral"
+                onClick={handleCopyClick}
+                sx={{ 
+                  bgcolor: 'neutral.200',
+                  '&:hover': { bgcolor: 'neutral.300' }
+                }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {(isHovered || messageIsPinned) && message.id && (
+            <Tooltip title={messageIsPinned ? t('chat.unpinMessage') : t('chat.pinMessage')}>
+              <IconButton
+                size="sm"
+                variant="solid"
+                color={messageIsPinned ? 'primary' : 'neutral'}
+                onClick={handlePinClick}
+                sx={{ 
+                  bgcolor: messageIsPinned ? 'primary.400' : 'neutral.200',
+                  '&:hover': { 
+                    bgcolor: messageIsPinned ? 'primary.500' : 'neutral.300' 
+                  }
+                }}
+              >
+                {messageIsPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+      )}
+      
       <Box
         sx={{
           maxWidth: '85%',
@@ -321,12 +575,55 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           border: sender === 'bot' ? '1px solid' : 'none',
           borderColor: 'divider',
           boxShadow: sender === 'bot' ? 'sm' : 'none',
-          // Add transition for smooth content updates during streaming
           transition: 'all 0.15s ease-out',
         }}
       >
         {renderContent()}
       </Box>
+      
+      {/* Action buttons on the right for AI messages - ALWAYS RESERVE SPACE */}
+      {sender !== 'user' && (
+        <Stack direction="column" spacing={0.5} sx={{ 
+          opacity: (isHovered || messageIsPinned) ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
+          minWidth: '40px', // Reserve space to prevent layout shift
+        }}>
+          {isHovered && (
+            <Tooltip title={t('chat.copyMessage')}>
+              <IconButton
+                size="sm"
+                variant="solid"
+                color="neutral"
+                onClick={handleCopyClick}
+                sx={{ 
+                  bgcolor: 'neutral.200',
+                  '&:hover': { bgcolor: 'neutral.300' }
+                }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {(isHovered || messageIsPinned) && message.id && (
+            <Tooltip title={messageIsPinned ? t('chat.unpinMessage') : t('chat.pinMessage')}>
+              <IconButton
+                size="sm"
+                variant="solid"
+                color={messageIsPinned ? 'primary' : 'neutral'}
+                onClick={handlePinClick}
+                sx={{ 
+                  bgcolor: messageIsPinned ? 'primary.400' : 'neutral.200',
+                  '&:hover': { 
+                    bgcolor: messageIsPinned ? 'primary.500' : 'neutral.300' 
+                  }
+                }}
+              >
+                {messageIsPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+      )}
     </Box>
   );
 };
