@@ -39,8 +39,20 @@ const Sidebar: React.FC = () => {
   ];
 
   return (
-    <Box component="nav" sx={{ width: 240, flexShrink: 0, bgcolor: 'background.surface', borderRight: '1px solid', borderColor: 'divider' }}>
-      <List size="lg" sx={{ '--ListItem-radius': '8px', '--List-gap': '4px' }}>
+    <Box 
+      component="nav" 
+      sx={{ 
+        width: 240, 
+        flexShrink: 0, 
+        bgcolor: 'background.surface', 
+        borderRight: '1px solid', 
+        borderColor: 'divider',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh'
+      }}
+    >
+      <List size="lg" sx={{ '--ListItem-radius': '8px', '--List-gap': '4px', flex: 1 }}>
         <ListItem nested>
           <Typography level="title-sm" sx={{ textTransform: 'uppercase', letterSpacing: '0.1rem', color: 'text.secondary', px: 2, py: 1 }}>
             {t('appTitle')}
@@ -59,6 +71,28 @@ const Sidebar: React.FC = () => {
           </List>
         </ListItem>
       </List>
+      
+      {/* AI Disclaimer */}
+      <Box
+        sx={{
+          p: 2,
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          backgroundColor: 'background.level1',
+        }}
+      >
+        <Typography 
+          level="body-xs" 
+          color="neutral" 
+          sx={{ 
+            textAlign: 'center',
+            fontStyle: 'italic',
+            opacity: 0.7
+          }}
+        >
+          {t('chat.aiDisclaimer')}
+        </Typography>
+      </Box>
     </Box>
   );
 };

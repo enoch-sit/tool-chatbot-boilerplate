@@ -1,5 +1,5 @@
 {
-  "appTitle": "AIDCEC - 進階聊天機器人",
+  "appTitle": "AIDCEC - 進階學習",
   "auth": {
     "login": "登入",
     "logout": "登出",
@@ -57,6 +57,18 @@
     "voiceNotSupported": "此瀏覽器不支援語音輸入",
     "autoDetect": "自動（跟隨應用程式語言）",
     "selectVoiceLanguage": "選擇語音輸入語言",
+    "pinnedMessages": "固定訊息",
+    "noPinnedMessages": "尚無固定訊息",
+    "user": "您",
+    "bot": "助手",
+    "pinMessage": "固定此訊息",
+    "unpinMessage": "取消固定此訊息",
+    "copyMessage": "複製訊息",
+    "copySuccess": "訊息已複製到剪貼簿",
+    "copyError": "複製訊息失敗",
+    "showPinnedMessages": "顯示固定訊息",
+    "hidePinnedMessages": "隱藏固定訊息",
+    "aiDisclaimer": "AI產生的內容可能不準確",
     "quickReplies": {
       "good": "好",
       "letsLearn": "我們學習吧",

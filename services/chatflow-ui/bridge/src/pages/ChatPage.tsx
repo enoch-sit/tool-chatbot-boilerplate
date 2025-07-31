@@ -32,7 +32,6 @@ import {
 import { NoSsr } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useChatStore } from '../store/chatStore';
-import { useAuth } from '../hooks/useAuth';
 import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
 import ChatLayout from '../components/layout/ChatLayout';
@@ -44,7 +43,6 @@ import PushPinIcon from '@mui/icons-material/PushPin';
 
 const ChatPage: React.FC = () => {
   const { t } = useTranslation();
-  const { user } = useAuth();
   const [showPinnedPanel, setShowPinnedPanel] = useState(true);
 
   // Destructure all necessary state and actions from the central chat store.
@@ -129,61 +127,60 @@ const ChatPage: React.FC = () => {
       {/* Main Content - Left Side */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: '800px' }}>
         {/* Header Section: Contains controls for selecting chatflows and sessions */}
-        <Sheet variant="outlined" sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Stack direction="row" spacing={2} alignItems="center">
-          <Typography level="h4" sx={{ flexGrow: 1 }}>{t('navigation.chat')}</Typography>
-          <Tooltip title={showPinnedPanel ? t('chat.hidePinnedMessages') : t('chat.showPinnedMessages')}>
-            <IconButton
-              variant={showPinnedPanel ? 'solid' : 'outlined'}
-              color={showPinnedPanel ? 'primary' : 'neutral'}
-              size="sm"
-              onClick={() => setShowPinnedPanel(!showPinnedPanel)}
-              sx={{ mr: 2 }}
+        <Sheet variant="outlined" sx={{ p: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Select 
+              placeholder={t('chat.selectChatflow')} 
+              value={currentChatflow?.id || ''} 
+              onChange={handleChatflowChange} 
+              startDecorator={<QuestionAnswerIcon />} 
+              sx={{ minWidth: 200 }} 
+              disabled={isLoading}>
+              {chatflows.map((chatflow) => (<Option key={chatflow.id} value={chatflow.id}>{chatflow.name}</Option>))}
+            </Select>
+            <NoSsr>
+            <Select 
+              placeholder={t('chat.selectSession')} 
+              value={currentSession?.session_id || ''} 
+              onChange={handleSessionChange} 
+              sx={{ minWidth: 200 }} 
+              disabled={!currentChatflow || isLoading}
             >
-              <PushPinIcon />
-            </IconButton>
-          </Tooltip>
-          <Typography level="body-sm" color="neutral">{t('common.welcomeUser', { username: user?.username })}</Typography>
-        </Stack>
-        <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-          <Select 
-            placeholder={t('chat.selectChatflow')} value={currentChatflow?.id || ''} 
-            onChange={handleChatflowChange} 
-            startDecorator={<QuestionAnswerIcon />} 
-            sx={{ minWidth: 200 }} 
-            disabled={isLoading}>
-            {chatflows.map((chatflow) => (<Option key={chatflow.id} value={chatflow.id}>{chatflow.name}</Option>))}
-          </Select>
-          <NoSsr>
-          <Select 
-            placeholder={t('chat.selectSession')} 
-            value={currentSession?.session_id || ''} 
-            onChange={handleSessionChange} 
-            sx={{ minWidth: 200 }} 
-            disabled={!currentChatflow || isLoading}
-          >
-            {sessions
-              .filter(s => s.chatflow_id === currentChatflow?.id)
-              .map((session, idx) => (
-                <Option key={String(session.session_id) + String(idx)} value={session.session_id}>
-                  {session.topic}
-                </Option>
-              ))}
-          </Select>
-          </NoSsr>
-          
-          {/* New Chat Button */}
-          <Button
-            variant="outlined"
-            startDecorator={<AddIcon />}
-            onClick={handleNewChat}
-            disabled={!currentChatflow || isLoading}
-            sx={{ minWidth: 120 }}
-          >
-            {t('chat.newChat')}
-          </Button>
-        </Stack>
-      </Sheet>
+              {sessions
+                .filter(s => s.chatflow_id === currentChatflow?.id)
+                .map((session, idx) => (
+                  <Option key={String(session.session_id) + String(idx)} value={session.session_id}>
+                    {session.topic}
+                  </Option>
+                ))}
+            </Select>
+            </NoSsr>
+            
+            {/* New Chat Button */}
+            <Button
+              variant="outlined"
+              startDecorator={<AddIcon />}
+              onClick={handleNewChat}
+              disabled={!currentChatflow || isLoading}
+              sx={{ minWidth: 120 }}
+            >
+              {t('chat.newChat')}
+            </Button>
+            
+            <Box sx={{ flexGrow: 1 }} />
+            
+            <Tooltip title={showPinnedPanel ? t('chat.hidePinnedMessages') : t('chat.showPinnedMessages')}>
+              <IconButton
+                variant={showPinnedPanel ? 'solid' : 'outlined'}
+                color={showPinnedPanel ? 'primary' : 'neutral'}
+                size="sm"
+                onClick={() => setShowPinnedPanel(!showPinnedPanel)}
+              >
+                <PushPinIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Sheet>
 
       {/* Error Display: Shows any errors that occur during API calls or streaming */}
       {error && (<Alert color="danger" variant="soft" endDecorator={<Button size="sm" variant="plain" onClick={() => setError(null)}>{t('common.close')}</Button>} sx={{ m: 2 }}>{error}</Alert>)}

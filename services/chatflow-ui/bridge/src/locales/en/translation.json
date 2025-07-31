@@ -68,6 +68,7 @@
     "copyError": "Failed to copy message",
     "showPinnedMessages": "Show pinned messages",
     "hidePinnedMessages": "Hide pinned messages",
+    "aiDisclaimer": "AI-generated content may not be accurate",
     "quickReplies": {
       "good": "Good",
       "letsLearn": "Let's learn",
