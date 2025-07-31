@@ -11,6 +11,14 @@ import FileUpload from './FileUpload';
 import type { FileUploadData } from '../../services/fileService';
 import type { FileUploadRef } from './FileUpload';
 
+// Type declarations for speech recognition API
+declare global {
+  interface Window {
+    SpeechRecognition?: typeof SpeechRecognition;
+    webkitSpeechRecognition?: typeof SpeechRecognition;
+  }
+}
+
 const ChatInput: React.FC = () => {
   const { t, i18n } = useTranslation();
   const [prompt, setPrompt] = useState('');
@@ -19,6 +27,7 @@ const ChatInput: React.FC = () => {
   const [lastTranscript, setLastTranscript] = useState(''); // Track last processed transcript
   const [cursorPosition, setCursorPosition] = useState(0); // Track cursor position for voice insertion
   const [isSubmitting, setIsSubmitting] = useState(false); // Track if we're in the process of submitting
+  const [forceStopAttempts, setForceStopAttempts] = useState(0); // Track stop attempts for stubborn browsers
   const { streamAssistantResponse, isStreaming, currentSession, currentChatflow } = useChatStore();
   const fileUploadRef = useRef<FileUploadRef>(null);
   const inputRef = useRef<HTMLDivElement>(null);
@@ -132,14 +141,74 @@ const ChatInput: React.FC = () => {
   };
 
   const stopListening = () => {
-    SpeechRecognition.stopListening();
+    try {
+      // Method 1: Standard stop method
+      SpeechRecognition.stopListening();
+      
+      // Method 2: Force abort using the native API if available
+      if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+        // Try to create a new instance and abort to force stop any active recognition
+        try {
+          const tempRecognition = new SpeechRecognitionAPI();
+          if (tempRecognition.abort) {
+            tempRecognition.abort();
+          }
+        } catch (e) {
+          console.log('Could not force abort via native API');
+        }
+      }
+      
+      // Method 3: Force reset the react-speech-recognition state
+      setTimeout(() => {
+        resetTranscript();
+      }, 50);
+      
+      // Method 4: Additional cleanup after longer delay
+      setTimeout(() => {
+        resetTranscript();
+        setLastTranscript('');
+      }, 200);
+      
+      // Method 5: Aggressive retry mechanism for stubborn browsers
+      setForceStopAttempts(prev => prev + 1);
+      
+    } catch (error) {
+      console.error('Error stopping speech recognition:', error);
+    }
+    
     // Reset transcript tracking when stopping to prevent accumulation
     setLastTranscript('');
-    // Also reset the transcript completely to avoid any residual state
-    setTimeout(() => {
-      resetTranscript();
-    }, 100);
   };
+
+  // Effect to handle forced stopping for stubborn browsers
+  useEffect(() => {
+    if (forceStopAttempts > 0 && listening) {
+      console.log(`Attempting forced stop #${forceStopAttempts}`);
+      
+      // Retry stopping after a delay
+      const timer = setTimeout(() => {
+        if (listening && forceStopAttempts < 5) { // Max 5 attempts
+          try {
+            SpeechRecognition.stopListening();
+            resetTranscript();
+            setForceStopAttempts(prev => prev + 1);
+          } catch (error) {
+            console.error('Force stop retry failed:', error);
+          }
+        } else {
+          // Reset attempts counter after max attempts or success
+          setForceStopAttempts(0);
+        }
+      }, 300 * forceStopAttempts); // Increasing delay: 300ms, 600ms, 900ms...
+
+      return () => clearTimeout(timer);
+    } else if (!listening && forceStopAttempts > 0) {
+      // Successfully stopped, reset attempts
+      console.log('Speech recognition successfully stopped after forced attempts');
+      setForceStopAttempts(0);
+    }
+  }, [forceStopAttempts, listening]);
 
   // Helper function to safely focus the input
   const focusInput = (forceAttempt = false) => {
