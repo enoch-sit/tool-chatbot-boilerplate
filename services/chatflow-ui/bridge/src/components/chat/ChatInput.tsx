@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Textarea, IconButton, Stack, Button } from '@mui/joy';
+import { Box, Textarea, IconButton, Stack, Button, Tooltip, Select, Option } from '@mui/joy';
 import SendIcon from '@mui/icons-material/Send';
+import MicIcon from '@mui/icons-material/Mic';
+import MicOffIcon from '@mui/icons-material/MicOff';
+import LanguageIcon from '@mui/icons-material/Language';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import { useChatStore } from '../../store/chatStore';
 import { useTranslation } from 'react-i18next';
 import FileUpload from './FileUpload';
@@ -8,12 +12,78 @@ import type { FileUploadData } from '../../services/fileService';
 import type { FileUploadRef } from './FileUpload';
 
 const ChatInput: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [prompt, setPrompt] = useState('');
   const [pendingFiles, setPendingFiles] = useState<FileUploadData[]>([]);
+  const [voiceLanguage, setVoiceLanguage] = useState('zh-TW'); // Default to Traditional Chinese
   const { streamAssistantResponse, isStreaming, currentSession, currentChatflow } = useChatStore();
   const fileUploadRef = useRef<FileUploadRef>(null);
   const inputRef = useRef<HTMLDivElement>(null);
+
+  // Speech recognition hooks
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition
+  } = useSpeechRecognition();
+
+  // Available voice languages
+  const voiceLanguages = [
+    { value: 'auto', label: t('chat.autoDetect'), flag: '🌐' },
+    { value: 'en-US', label: 'English (US)', flag: '🇺🇸' },
+    { value: 'zh-CN', label: '中文 (简体)', flag: '🇨🇳' },
+    { value: 'zh-TW', label: '中文 (繁體)', flag: '🇹🇼' },
+    { value: 'es-ES', label: 'Español', flag: '🇪🇸' },
+    { value: 'fr-FR', label: 'Français', flag: '🇫🇷' },
+    { value: 'de-DE', label: 'Deutsch', flag: '🇩🇪' },
+    { value: 'ja-JP', label: '日本語', flag: '🇯🇵' },
+    { value: 'ko-KR', label: '한국어', flag: '🇰🇷' },
+  ];
+
+  // Get speech recognition language based on current locale or user selection
+  const getSpeechLanguage = () => {
+    if (voiceLanguage === 'auto') {
+      switch (i18n.language) {
+        case 'zh-Hans':
+          return 'zh-CN';
+        case 'zh-Hant':
+          return 'zh-TW';
+        case 'en':
+        default:
+          return 'en-US';
+      }
+    }
+    return voiceLanguage;
+  };
+
+  // Update prompt when transcript changes
+  useEffect(() => {
+    if (transcript) {
+      setPrompt(transcript);
+    }
+  }, [transcript]);
+
+  // Speech recognition controls
+  const startListening = () => {
+    resetTranscript();
+    SpeechRecognition.startListening({ 
+      continuous: true,
+      language: getSpeechLanguage()
+    });
+  };
+
+  const stopListening = () => {
+    SpeechRecognition.stopListening();
+  };
+
+  const toggleListening = () => {
+    if (listening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
 
   // Helper function to safely focus the input
   const focusInput = (forceAttempt = false) => {
@@ -108,6 +178,10 @@ const ChatInput: React.FC = () => {
 
   const handleSubmit = () => {
     if (prompt.trim() && !isStreaming) {
+      // Stop listening when sending message
+      if (listening) {
+        stopListening();
+      }
       streamAssistantResponse(prompt, pendingFiles);
       setPrompt('');
       setPendingFiles([]);
@@ -148,6 +222,31 @@ const ChatInput: React.FC = () => {
           ref={fileUploadRef}
           onFilesSelected={handleFilesSelected}
         />
+        
+        {/* Voice recognition status */}
+        {listening && (
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1, 
+            color: 'danger.500',
+            fontSize: 'sm'
+          }}>
+            <MicIcon sx={{ fontSize: 16 }} />
+            {t('chat.listening')}
+          </Box>
+        )}
+        
+        {/* Browser support warning */}
+        {!browserSupportsSpeechRecognition && (
+          <Box sx={{ 
+            fontSize: 'xs', 
+            color: 'warning.500',
+            textAlign: 'center'
+          }}>
+            {t('chat.voiceNotSupported')}
+          </Box>
+        )}
         
         {/* Quick reply buttons */}
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
@@ -195,7 +294,7 @@ const ChatInput: React.FC = () => {
             minRows={2}
             maxRows={8}
             sx={{ 
-              pr: '60px', // Space for send button only
+              pr: browserSupportsSpeechRecognition ? '180px' : '120px', // More space when mic is available
               '& textarea': {
                 resize: 'none',
                 lineHeight: '1.4'
@@ -203,12 +302,58 @@ const ChatInput: React.FC = () => {
             }}
           />
           
-          {/* Send button only */}
+          {/* Language selector, Microphone and Send buttons */}
           <Box sx={{ 
             position: 'absolute', 
             right: 8, 
-            bottom: 8
+            bottom: 8,
+            display: 'flex',
+            gap: 0.5,
+            alignItems: 'center'
           }}>
+            {/* Voice language selector */}
+            {browserSupportsSpeechRecognition && (
+              <Select
+                value={voiceLanguage}
+                onChange={(_, value) => setVoiceLanguage(value as string)}
+                size="sm"
+                disabled={listening || isStreaming}
+                sx={{ 
+                  minWidth: 80,
+                  maxWidth: 100,
+                  '& .MuiSelect-button': {
+                    fontSize: '12px'
+                  }
+                }}
+                startDecorator={<LanguageIcon sx={{ fontSize: 14 }} />}
+              >
+                {voiceLanguages.map((lang) => (
+                  <Option key={lang.value} value={lang.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <span style={{ fontSize: '12px' }}>{lang.flag}</span>
+                      <span style={{ fontSize: '11px' }}>{lang.value === 'auto' ? 'Auto' : lang.value}</span>
+                    </Box>
+                  </Option>
+                ))}
+              </Select>
+            )}
+            
+            {/* Microphone button */}
+            {browserSupportsSpeechRecognition && (
+              <Tooltip title={listening ? t('chat.stopListening') : t('chat.startListening')}>
+                <IconButton 
+                  onClick={toggleListening} 
+                  disabled={isStreaming}
+                  size="sm"
+                  color={listening ? "danger" : "neutral"}
+                  variant={listening ? "solid" : "soft"}
+                >
+                  {listening ? <MicIcon /> : <MicOffIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
+            
+            {/* Send button */}
             <IconButton 
               onClick={handleSubmit} 
               disabled={isStreaming || !prompt.trim()}
