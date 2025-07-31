@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Box, Textarea, IconButton, Stack, Button, Tooltip, Select, Option } from '@mui/joy';
 import SendIcon from '@mui/icons-material/Send';
 import MicIcon from '@mui/icons-material/Mic';
-import MicOffIcon from '@mui/icons-material/MicOff';
+import StopIcon from '@mui/icons-material/Stop';
 import LanguageIcon from '@mui/icons-material/Language';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import { useChatStore } from '../../store/chatStore';
@@ -16,13 +16,17 @@ const ChatInput: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [pendingFiles, setPendingFiles] = useState<FileUploadData[]>([]);
   const [voiceLanguage, setVoiceLanguage] = useState('zh-TW'); // Default to Traditional Chinese
+  const [lastTranscript, setLastTranscript] = useState(''); // Track last processed transcript
+  const [cursorPosition, setCursorPosition] = useState(0); // Track cursor position for voice insertion
+  const [isSubmitting, setIsSubmitting] = useState(false); // Track if we're in the process of submitting
   const { streamAssistantResponse, isStreaming, currentSession, currentChatflow } = useChatStore();
   const fileUploadRef = useRef<FileUploadRef>(null);
   const inputRef = useRef<HTMLDivElement>(null);
 
   // Speech recognition hooks
   const {
-    transcript,
+    finalTranscript,
+    interimTranscript,
     listening,
     resetTranscript,
     browserSupportsSpeechRecognition
@@ -57,16 +61,70 @@ const ChatInput: React.FC = () => {
     return voiceLanguage;
   };
 
-  // Update prompt when transcript changes
+  // Update prompt when transcript changes - use finalTranscript to avoid duplication
   useEffect(() => {
-    if (transcript) {
-      setPrompt(transcript);
+    // Don't process transcript if we're in the middle of submitting
+    if (isSubmitting) {
+      return;
     }
-  }, [transcript]);
+    
+    // Only process final transcript to avoid progressive duplication
+    if (finalTranscript && finalTranscript !== lastTranscript) {
+      // Check if this is truly new content or just a repeat of existing content
+      const newText = finalTranscript.slice(lastTranscript.length);
+      
+      // Additional safety check: ensure we're not adding duplicate content
+      if (newText && newText.trim()) {
+        let spaceAdded = 0;
+        
+        setPrompt(prev => {
+          // Check if the new text is already at the end of the current prompt
+          const trimmedNewText = newText.trim();
+          if (prev.endsWith(trimmedNewText)) {
+            // This content is already in the prompt, don't add it again
+            console.log('Duplicate content detected, skipping:', trimmedNewText);
+            return prev;
+          }
+          
+          // Insert text at cursor position
+          const beforeCursor = prev.slice(0, cursorPosition);
+          const afterCursor = prev.slice(cursorPosition);
+          
+          // Smart spacing logic - only add space for word boundaries in languages that use spaces
+          let textToInsert = newText;
+          const currentLang = getSpeechLanguage();
+          
+          // Only add automatic spacing for languages that use spaces (English, etc.)
+          // Skip automatic spacing for Chinese, Japanese, Korean
+          if (currentLang.startsWith('en') || currentLang.startsWith('es') || currentLang.startsWith('fr') || currentLang.startsWith('de')) {
+            if (beforeCursor && !beforeCursor.endsWith(' ') && !newText.startsWith(' ') && !newText.startsWith(' ')) {
+              textToInsert = ' ' + newText;
+              spaceAdded = 1;
+            }
+          }
+          
+          return beforeCursor + textToInsert + afterCursor;
+        });
+        
+        // Update cursor position to be after the inserted text
+        setCursorPosition(prev => prev + newText.length + spaceAdded);
+        setLastTranscript(finalTranscript);
+      }
+    }
+  }, [finalTranscript, lastTranscript, cursorPosition, isSubmitting]);
 
   // Speech recognition controls
   const startListening = () => {
+    // Capture current cursor position before starting voice input
+    const textarea = inputRef.current?.querySelector('textarea') as HTMLTextAreaElement;
+    if (textarea) {
+      setCursorPosition(textarea.selectionStart || prompt.length);
+    }
+    
+    // Clear previous transcript tracking completely
     resetTranscript();
+    setLastTranscript('');
+    
     SpeechRecognition.startListening({ 
       continuous: true,
       language: getSpeechLanguage()
@@ -75,14 +133,12 @@ const ChatInput: React.FC = () => {
 
   const stopListening = () => {
     SpeechRecognition.stopListening();
-  };
-
-  const toggleListening = () => {
-    if (listening) {
-      stopListening();
-    } else {
-      startListening();
-    }
+    // Reset transcript tracking when stopping to prevent accumulation
+    setLastTranscript('');
+    // Also reset the transcript completely to avoid any residual state
+    setTimeout(() => {
+      resetTranscript();
+    }, 100);
   };
 
   // Helper function to safely focus the input
@@ -178,15 +234,30 @@ const ChatInput: React.FC = () => {
 
   const handleSubmit = () => {
     if (prompt.trim() && !isStreaming) {
+      // Set submitting flag to prevent transcript updates during submission
+      setIsSubmitting(true);
+      
       // Stop listening when sending message
       if (listening) {
         stopListening();
       }
-      streamAssistantResponse(prompt, pendingFiles);
+      
+      // Clear the prompt immediately to prevent race conditions
+      const messageToSend = prompt;
       setPrompt('');
+      
+      // Send the message
+      streamAssistantResponse(messageToSend, pendingFiles);
       setPendingFiles([]);
+      
       // Clear files from FileUpload component
       fileUploadRef.current?.clearFiles();
+      
+      // Reset submitting flag after a short delay to allow speech recognition to settle
+      setTimeout(() => {
+        setIsSubmitting(false);
+      }, 500);
+      
       // Focus will happen when streaming ends
     }
   };
@@ -203,13 +274,35 @@ const ChatInput: React.FC = () => {
   };
 
   const handleInputClick = () => {
-    // Ensure focus when input is clicked
+    // Ensure focus when input is clicked and update cursor position
     focusInput();
+    const textarea = inputRef.current?.querySelector('textarea') as HTMLTextAreaElement;
+    if (textarea) {
+      // Update cursor position after a short delay to ensure click has been processed
+      setTimeout(() => {
+        setCursorPosition(textarea.selectionStart || 0);
+      }, 10);
+    }
+  };
+
+  const handleCursorChange = (e: React.SyntheticEvent) => {
+    // Update cursor position when user clicks or uses arrow keys
+    const textarea = e.currentTarget.querySelector('textarea') as HTMLTextAreaElement;
+    if (textarea) {
+      setCursorPosition(textarea.selectionStart || 0);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // Set submitting flag immediately to prevent race conditions
+      setIsSubmitting(true);
+      
+      // Stop listening when sending message via Enter key
+      if (listening) {
+        stopListening();
+      }
       handleSubmit();
     }
     // Shift+Enter allows new line (default behavior)
@@ -286,9 +379,16 @@ const ChatInput: React.FC = () => {
             ref={inputRef}
             autoFocus={!isStreaming}
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              // Update cursor position when text changes
+              const textarea = e.target;
+              setCursorPosition(textarea.selectionStart || 0);
+            }}
             onClick={handleInputClick}
             onKeyDown={handleKeyDown}
+            onSelect={handleCursorChange}
+            onKeyUp={handleCursorChange}
             placeholder={`${t('chat.typeMessage')}\n${t('chat.sendShortcut')}`}
             disabled={isStreaming}
             minRows={2}
@@ -301,6 +401,32 @@ const ChatInput: React.FC = () => {
               }
             }}
           />
+          
+          {/* Real-time speech recognition preview popup */}
+          {listening && interimTranscript && (
+            <Box sx={{
+              position: 'absolute',
+              bottom: '100%',
+              left: 8,
+              right: 8,
+              mb: 1,
+              backgroundColor: 'background.popup',
+              border: '1px solid',
+              borderColor: 'neutral.outlinedBorder',
+              borderRadius: 'sm',
+              boxShadow: 'md',
+              p: 1.5,
+              zIndex: 1000,
+              fontSize: 'sm',
+              fontStyle: 'italic',
+              color: 'text.secondary'
+            }}>
+              <Box sx={{ fontSize: 'xs', color: 'text.tertiary', mb: 0.5 }}>
+                {t('chat.recognizing')}...
+              </Box>
+              "{interimTranscript}"
+            </Box>
+          )}
           
           {/* Language selector, Microphone and Send buttons */}
           <Box sx={{ 
@@ -338,19 +464,35 @@ const ChatInput: React.FC = () => {
               </Select>
             )}
             
-            {/* Microphone button */}
+            {/* Microphone button with stop button when listening */}
             {browserSupportsSpeechRecognition && (
-              <Tooltip title={listening ? t('chat.stopListening') : t('chat.startListening')}>
-                <IconButton 
-                  onClick={toggleListening} 
-                  disabled={isStreaming}
-                  size="sm"
-                  color={listening ? "danger" : "neutral"}
-                  variant={listening ? "solid" : "soft"}
-                >
-                  {listening ? <MicIcon /> : <MicOffIcon />}
-                </IconButton>
-              </Tooltip>
+              <Box sx={{ display: 'flex', gap: 0.25 }}>
+                <Tooltip title={listening ? t('chat.listening') : t('chat.startListening')}>
+                  <IconButton 
+                    onClick={startListening} 
+                    disabled={isStreaming || listening}
+                    size="sm"
+                    color={listening ? "danger" : "neutral"}
+                    variant={listening ? "solid" : "soft"}
+                  >
+                    <MicIcon />
+                  </IconButton>
+                </Tooltip>
+                
+                {/* Stop button - only show when listening */}
+                {listening && (
+                  <Tooltip title={t('chat.stopListening')}>
+                    <IconButton 
+                      onClick={stopListening}
+                      size="sm"
+                      color="danger"
+                      variant="soft"
+                    >
+                      <StopIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             )}
             
             {/* Send button */}

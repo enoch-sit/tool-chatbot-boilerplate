@@ -52,6 +52,8 @@
     "startListening": "點擊開始語音輸入",
     "stopListening": "點擊停止語音輸入",
     "listening": "正在聆聽...",
+    "recognizing": "識別中",
+    "stopRecording": "停止錄音",
     "voiceNotSupported": "此瀏覽器不支援語音輸入",
     "autoDetect": "自動（跟隨應用程式語言）",
     "selectVoiceLanguage": "選擇語音輸入語言",

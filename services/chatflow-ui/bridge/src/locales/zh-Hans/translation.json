@@ -52,6 +52,8 @@
     "startListening": "点击开始语音输入",
     "stopListening": "点击停止语音输入", 
     "listening": "正在听取...",
+    "recognizing": "识别中",
+    "stopRecording": "停止录音",
     "voiceNotSupported": "此浏览器不支持语音输入",
     "autoDetect": "自动（跟随应用语言）",
     "selectVoiceLanguage": "选择语音输入语言",

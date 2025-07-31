@@ -52,6 +52,8 @@
     "startListening": "Click to start voice input",
     "stopListening": "Click to stop voice input",
     "listening": "Listening...",
+    "recognizing": "Recognizing",
+    "stopRecording": "Stop Recording",
     "voiceNotSupported": "Voice input not supported in this browser",
     "autoDetect": "Auto (follows app language)",
     "selectVoiceLanguage": "Select voice input language",
