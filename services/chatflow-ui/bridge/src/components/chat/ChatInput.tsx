@@ -54,6 +54,28 @@ const ChatInput: React.FC = () => {
     { value: 'ko-KR', label: '한국어', flag: '🇰🇷' },
   ];
 
+  // Auto-detect language based on chatflow name
+  useEffect(() => {
+    if (currentChatflow?.name) {
+      const chatflowName = currentChatflow.name.toLowerCase();
+      
+      // Check if chatflow name contains "english"
+      if (chatflowName.includes('english')) {
+        console.log(`Detected English chatflow: "${currentChatflow.name}" - Auto-switching to English`);
+        
+        // Set i18n language to English
+        i18n.changeLanguage('en');
+        
+        // Set speech recognition language to English
+        setVoiceLanguage('en-US');
+      } else {
+        // For all other chatflows, set speech recognition to Traditional Chinese
+        console.log(`Non-English chatflow detected: "${currentChatflow.name}" - Setting speech recognition to zh-TW`);
+        setVoiceLanguage('zh-TW');
+      }
+    }
+  }, [currentChatflow?.name, i18n]);
+
   // Get speech recognition language based on current locale or user selection
   const getSpeechLanguage = () => {
     if (voiceLanguage === 'auto') {
