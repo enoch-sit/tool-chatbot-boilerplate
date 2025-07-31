@@ -72,7 +72,9 @@
       "good": "Good",
       "letsLearn": "Let's learn",
       "fantastic": "Fantastic",
-      "pleaseRecommend": "Please recommend"
+      "pleaseRecommend": "Please recommend",
+      "pleaseContinue": "Please continue",
+      "letsJustChat": "Let's just chat"
     }
   },
   "admin": {

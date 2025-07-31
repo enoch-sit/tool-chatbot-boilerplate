@@ -372,6 +372,26 @@ const ChatInput: React.FC = () => {
           >
             🤔 {t('chat.quickReplies.pleaseRecommend')}
           </Button>
+          
+          <Button
+            variant="soft"
+            size="sm"
+            onClick={() => handleQuickReply(t('chat.quickReplies.pleaseContinue'))}
+            disabled={isStreaming}
+            sx={{ minWidth: 'auto' }}
+          >
+            ➡️ {t('chat.quickReplies.pleaseContinue')}
+          </Button>
+          
+          <Button
+            variant="soft"
+            size="sm"
+            onClick={() => handleQuickReply(t('chat.quickReplies.letsJustChat'))}
+            disabled={isStreaming}
+            sx={{ minWidth: 'auto' }}
+          >
+            💬 {t('chat.quickReplies.letsJustChat')}
+          </Button>
         </Stack>
         
         <Box sx={{ position: 'relative' }}>

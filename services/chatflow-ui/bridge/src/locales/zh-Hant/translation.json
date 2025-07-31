@@ -61,7 +61,9 @@
       "good": "好",
       "letsLearn": "我們學習吧",
       "fantastic": "太好了",
-      "pleaseRecommend": "請推薦"
+      "pleaseRecommend": "請推薦",
+      "pleaseContinue": "請繼續",
+      "letsJustChat": "請隨便傾傾"
     }
   },
   "admin": {

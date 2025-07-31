@@ -61,7 +61,9 @@
       "good": "不错",
       "letsLearn": "我们学习吧",
       "fantastic": "太棒了",
-      "pleaseRecommend": "请推荐"
+      "pleaseRecommend": "请推荐",
+      "pleaseContinue": "请继续",
+      "letsJustChat": "请随便聊聊"
     }
   },
   "admin": {
