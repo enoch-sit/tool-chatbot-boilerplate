@@ -45,7 +45,7 @@ import PushPinIcon from '@mui/icons-material/PushPin';
 const ChatPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [showPinnedPanel, setShowPinnedPanel] = useState(false);
+  const [showPinnedPanel, setShowPinnedPanel] = useState(true);
 
   // Destructure all necessary state and actions from the central chat store.
   // This is the primary way the component interacts with the application's state.
@@ -125,9 +125,11 @@ const ChatPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header Section: Contains controls for selecting chatflows and sessions */}
-      <Sheet variant="outlined" sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'row' }}>
+      {/* Main Content - Left Side */}
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: '800px' }}>
+        {/* Header Section: Contains controls for selecting chatflows and sessions */}
+        <Sheet variant="outlined" sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Stack direction="row" spacing={2} alignItems="center">
           <Typography level="h4" sx={{ flexGrow: 1 }}>{t('navigation.chat')}</Typography>
           <Tooltip title={showPinnedPanel ? t('chat.hidePinnedMessages') : t('chat.showPinnedMessages')}>
@@ -186,15 +188,8 @@ const ChatPage: React.FC = () => {
       {/* Error Display: Shows any errors that occur during API calls or streaming */}
       {error && (<Alert color="danger" variant="soft" endDecorator={<Button size="sm" variant="plain" onClick={() => setError(null)}>{t('common.close')}</Button>} sx={{ m: 2 }}>{error}</Alert>)}
 
-      {/* Main Content Area - Horizontal Layout */}
-      <Box sx={{ flex: 1, overflow: 'hidden', minHeight: 0, display: 'flex' }}>
-        {/* Chat Content Area */}
-        <Box sx={{ 
-          flex: showPinnedPanel ? '1 1 0' : '1', 
-          overflow: 'hidden', 
-          minHeight: 0,
-          transition: 'flex 0.3s ease-in-out'
-        }}>
+        {/* Main Content Area */}
+        <Box sx={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
           {currentChatflow ? (
           <ChatLayout
             messages={
@@ -207,6 +202,7 @@ const ChatPage: React.FC = () => {
                   justifyContent: 'center', 
                   textAlign: 'center',
                   px: 4,
+                  minWidth: '800px',
                 }}>
                   <Stack spacing={3} alignItems="center">
                     <Typography level="h3" color="primary">
@@ -301,25 +297,25 @@ const ChatPage: React.FC = () => {
           </Box>
         )}
         </Box>
-        
-        {/* Pinned Messages Panel - Fixed at Far Right */}
-        {showPinnedPanel && (
-          <Box sx={{ 
-            width: '400px', 
-            minWidth: '400px',
-            maxWidth: '400px',
-            borderLeft: '1px solid', 
-            borderColor: 'divider',
-            overflow: 'hidden',
-            backgroundColor: 'background.surface',
-            boxShadow: '-2px 0 8px rgba(0,0,0,0.1)',
-            zIndex: 1,
-            transition: 'all 0.3s ease-in-out'
-          }}>
-            <PinnedMessagesPanel />
-          </Box>
-        )}
       </Box>
+      
+      {/* Pinned Messages Panel - Fixed at Far Right */}
+      {showPinnedPanel && (
+        <Box sx={{ 
+          width: '600px', 
+          minWidth: '600px',
+          maxWidth: '600px',
+          borderLeft: '1px solid', 
+          borderColor: 'divider',
+          overflow: 'hidden',
+          backgroundColor: 'background.surface',
+          boxShadow: '-2px 0 8px rgba(0,0,0,0.1)',
+          zIndex: 1,
+          transition: 'all 0.3s ease-in-out'
+        }}>
+          <PinnedMessagesPanel />
+        </Box>
+      )}
     </Box>
   );
 };

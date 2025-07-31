@@ -1,16 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Button } from '@mui/joy';
+import { Box, Button, IconButton, Tooltip } from '@mui/joy';
 import CodeBlock from './CodeBlock';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 
 interface HtmlPreviewProps {
   htmlContent: string;
   isHistorical?: boolean; // Flag to indicate this is from completed stream
+  messageId?: string; // Message ID for pinning
+  onPin?: () => void; // Pin callback
+  onCopy?: () => void; // Copy callback
+  isPinned?: boolean; // Whether this HTML section is pinned
 }
 
-const HtmlPreview: React.FC<HtmlPreviewProps> = ({ htmlContent, isHistorical = false }) => {
+const HtmlPreview: React.FC<HtmlPreviewProps> = ({ 
+  htmlContent, 
+  isHistorical = false, 
+  messageId, 
+  onPin, 
+  onCopy, 
+  isPinned = false 
+}) => {
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [iframeHeight, setIframeHeight] = useState(300);
   const [hasAutoSwitched, setHasAutoSwitched] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const togglePreview = () => {
@@ -78,7 +93,68 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({ htmlContent, isHistorical = f
   };
 
   return (
-    <Box>
+    <Box
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      sx={{ position: 'relative' }}
+    >
+      {/* Floating controls for HTML blocks */}
+      {(isHovered || isPinned) && (onPin || onCopy) && (
+        <Box sx={{ 
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          display: 'flex',
+          gap: 1,
+          zIndex: 10,
+          bgcolor: 'rgba(255, 255, 255, 0.9)',
+          borderRadius: 'md',
+          p: 0.5,
+          boxShadow: 'sm',
+          opacity: (isHovered || isPinned) ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
+        }}>
+          {onCopy && (
+            <Tooltip title="Copy HTML">
+              <IconButton
+                size="sm"
+                variant="soft"
+                color="neutral"
+                onClick={onCopy}
+                sx={{ 
+                  bgcolor: 'rgba(255,255,255,0.8)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                  minHeight: '24px',
+                  minWidth: '24px',
+                }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {onPin && messageId && (
+            <Tooltip title={isPinned ? "Unpin HTML" : "Pin HTML"}>
+              <IconButton
+                size="sm"
+                variant="soft"
+                color={isPinned ? 'primary' : 'neutral'}
+                onClick={onPin}
+                sx={{ 
+                  bgcolor: isPinned ? 'rgba(25,118,210,0.8)' : 'rgba(255,255,255,0.8)',
+                  '&:hover': { 
+                    bgcolor: isPinned ? 'rgba(25,118,210,1)' : 'rgba(255,255,255,1)'
+                  },
+                  minHeight: '24px',
+                  minWidth: '24px',
+                }}
+              >
+                {isPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      )}
+
       {/* Toggle between code and preview */}
       {isPreviewMode ? (
         <Box 

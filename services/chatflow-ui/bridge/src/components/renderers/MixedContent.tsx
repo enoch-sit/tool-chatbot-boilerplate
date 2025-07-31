@@ -14,12 +14,24 @@ interface MixedContentRendererProps {
   content: string;
   messageId?: string; // Add optional message ID for better keying
   isHistorical?: boolean; // Flag to indicate this is from chat history
+  onPinHtml?: (htmlContent: string) => void; // Callback for pinning HTML
+  onCopyHtml?: (htmlContent: string) => void; // Callback for copying HTML
+  isHtmlPinned?: (htmlContent: string) => boolean; // Check if HTML is pinned
 }
 
 // Enhanced renderer component that uses unified ReactMarkdown approach
-const EnhancedMixedContentRenderer: React.FC<{ content: string; messageId?: string }> = ({ 
+const EnhancedMixedContentRenderer: React.FC<{ 
+  content: string; 
+  messageId?: string;
+  onPinHtml?: (htmlContent: string) => void;
+  onCopyHtml?: (htmlContent: string) => void;
+  isHtmlPinned?: (htmlContent: string) => boolean;
+}> = ({ 
   content, 
-  messageId 
+  messageId,
+  onPinHtml,
+  onCopyHtml,
+  isHtmlPinned
 }) => {
   // Global preprocessing: Convert LaTeX delimiters for MathJax compatibility  
   const processedContent = React.useMemo(() => {
@@ -76,7 +88,17 @@ const EnhancedMixedContentRenderer: React.FC<{ content: string; messageId?: stri
           }
           
           if (block.type === 'html') {
-            return <HtmlPreview key={`html-${baseKey}`} htmlContent={block.content} isHistorical={true} />;
+            return (
+              <HtmlPreview 
+                key={`html-${baseKey}`} 
+                htmlContent={block.content} 
+                isHistorical={true}
+                messageId={messageId}
+                onPin={onPinHtml ? () => onPinHtml(block.content) : undefined}
+                onCopy={onCopyHtml ? () => onCopyHtml(block.content) : undefined}
+                isPinned={isHtmlPinned ? isHtmlPinned(block.content) : false}
+              />
+            );
           }
           
           if (block.type === 'text') {
@@ -173,7 +195,17 @@ const EnhancedMixedContentRenderer: React.FC<{ content: string; messageId?: stri
             }
             
             if (lang === 'html') {
-              return <HtmlPreview htmlContent={String(children).trim()} isHistorical={true} />;
+              const htmlContent = String(children).trim();
+              return (
+                <HtmlPreview 
+                  htmlContent={htmlContent} 
+                  isHistorical={true}
+                  messageId={messageId}
+                  onPin={onPinHtml ? () => onPinHtml(htmlContent) : undefined}
+                  onCopy={onCopyHtml ? () => onCopyHtml(htmlContent) : undefined}
+                  isPinned={isHtmlPinned ? isHtmlPinned(htmlContent) : false}
+                />
+              );
             }
             
             // For inline code, use simple styling
@@ -247,7 +279,10 @@ const EnhancedMixedContentRenderer: React.FC<{ content: string; messageId?: stri
 export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({ 
   content, 
   messageId, 
-  isHistorical = false
+  isHistorical = false,
+  onPinHtml,
+  onCopyHtml,
+  isHtmlPinned
 }) => {
   const [showEnhancedRendering, setShowEnhancedRendering] = useState(isHistorical);
   const [hasAutoSwitched, setHasAutoSwitched] = useState(false);
@@ -358,7 +393,15 @@ export const MixedContentRenderer: React.FC<MixedContentRendererProps> = ({
   }
 
   // Use enhanced rendering for final content
-  return <EnhancedMixedContentRenderer content={content} messageId={messageId} />;
+  return (
+    <EnhancedMixedContentRenderer 
+      content={content} 
+      messageId={messageId}
+      onPinHtml={onPinHtml}
+      onCopyHtml={onCopyHtml}
+      isHtmlPinned={isHtmlPinned}
+    />
+  );
 };
 
 export default MixedContentRenderer;
