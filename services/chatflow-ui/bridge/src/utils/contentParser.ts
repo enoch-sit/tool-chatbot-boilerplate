@@ -31,13 +31,14 @@ export const parseMixedContent = (rawContent: string): ParsedContent => {
   const regex = /```(\w+)?\n([\s\S]*?)```/g;
   let lastIndex = 0;
   let match;
+  const textSegments: string[] = [];
 
   while ((match = regex.exec(rawContent)) !== null) {
     // Capture any text that appeared before this block
     if (match.index > lastIndex) {
       const textContent = rawContent.substring(lastIndex, match.index);
       if (textContent && textContent.trim()) {
-        blocks.push({ type: 'text', content: textContent });
+        textSegments.push(textContent);
       }
     }
 
@@ -59,11 +60,24 @@ export const parseMixedContent = (rawContent: string): ParsedContent => {
   if (lastIndex < rawContent.length) {
     const remainingText = rawContent.substring(lastIndex);
     if (remainingText && remainingText.trim()) {
-      blocks.push({ type: 'text', content: remainingText });
+      textSegments.push(remainingText);
     }
   }
 
   // If no code blocks were found, treat entire content as markdown
+  if (textSegments.length === 0 && blocks.length === 0 && rawContent.trim()) {
+    blocks.push({ type: 'text', content: rawContent });
+    return { blocks, rawContent };
+  }
+
+  // Step 2: Treat text segments as markdown (no further math parsing)
+  textSegments.forEach(textSegment => {
+    if (textSegment.trim().length > 0) {
+      blocks.push({ type: 'text', content: textSegment });
+    }
+  });
+
+  // If no blocks were found, treat the entire content as a single markdown block
   if (blocks.length === 0 && rawContent.trim()) {
     blocks.push({ type: 'text', content: rawContent });
   }
