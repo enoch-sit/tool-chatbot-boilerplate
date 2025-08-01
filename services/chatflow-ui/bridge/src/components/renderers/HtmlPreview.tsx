@@ -37,7 +37,7 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
     const iframe = iframeRef.current;
     if (iframe && iframe.contentWindow) {
       try {
-        // Wait a bit for content to render
+        // Wait a bit for content to render and scripts to execute
         setTimeout(() => {
           const contentWindow = iframe.contentWindow;
           if (contentWindow) {
@@ -54,7 +54,7 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
               setIframeHeight(newHeight);
             }
           }
-        }, 100);
+        }, 500); // Increased delay to allow scripts like MathJax to render
       } catch (error) {
         // Fallback if we can't access iframe content due to CORS
         console.warn('Could not resize iframe automatically:', error);
@@ -62,6 +62,60 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
       }
     }
   };
+
+  // Create a version of the HTML with a MathJax configuration script injected.
+  const enhancedHtmlContent = React.useMemo(() => {
+    // Only inject config if MathJax seems to be used.
+    if (!htmlContent.includes('mathjax')) {
+      return htmlContent;
+    }
+
+    const mathJaxConfigScript = `
+      <script>
+        window.MathJax = {
+          tex: {
+            inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+            displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']]
+          },
+          startup: {
+            ready: () => {
+              MathJax.startup.defaultReady();
+              // Small delay to ensure DOM is updated after typesetting
+              setTimeout(() => {
+                if (window.parent) {
+                  // Notify parent window to resize the iframe
+                  window.parent.postMessage('mathjax-rendered', '*');
+                }
+              }, 100);
+            }
+          }
+        };
+      </script>
+    `;
+
+    // Inject the configuration script inside the <head> tag.
+    const headIndex = htmlContent.indexOf('<head>');
+    if (headIndex > -1) {
+      const insertionPoint = headIndex + '<head>'.length;
+      return `${htmlContent.slice(0, insertionPoint)}${mathJaxConfigScript}${htmlContent.slice(insertionPoint)}`;
+    }
+    
+    // Fallback if no <head> tag is found
+    return mathJaxConfigScript + htmlContent;
+  }, [htmlContent]);
+
+  // Listen for the message from the iframe to resize it.
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source === iframeRef.current?.contentWindow && event.data === 'mathjax-rendered') {
+        resizeIframe();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
 
   // Reset height when switching to preview mode
   useEffect(() => {
@@ -167,7 +221,7 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
         >
           <iframe
             ref={iframeRef}
-            srcDoc={htmlContent}
+            srcDoc={enhancedHtmlContent}
             style={{
               width: '100%',
               height: `${iframeHeight}px`,
