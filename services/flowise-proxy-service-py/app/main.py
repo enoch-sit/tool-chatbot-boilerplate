@@ -1,7 +1,7 @@
 # app/main.py
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import chatflows, chat, admin
+from app.api import chatflows, admin, auth_routes, predict_routes, session_routes, file_routes
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
 
@@ -233,7 +233,10 @@ module_logger.info(
 
 # Include routers
 app.include_router(chatflows.router)
-app.include_router(chat.router)
+app.include_router(auth_routes.router)
+app.include_router(predict_routes.router)
+app.include_router(session_routes.router)
+app.include_router(file_routes.router)
 app.include_router(admin.router)
 module_logger.info(f"Routers included. (PID: {PID})")
 

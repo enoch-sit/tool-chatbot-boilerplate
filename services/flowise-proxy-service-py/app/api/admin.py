@@ -294,33 +294,3 @@ async def bulk_add_users_to_chatflow(
     except Exception as e:
         logger.error(f"Error in bulk add users to chatflow {flowise_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-# Untested endpoint preserved for backward compatibility.
-# Note: This now expects external_user_ids, not internal ones.
-# @router.post("/chatflows/add-users", response_model=BulkUserAssignmentResponse, deprecated=True)
-# async def add_users_to_chatflow(
-#     request: AddUsersByEmailRequest, # Re-using for structure, but field name is different in service
-#     current_user: Dict = Depends(require_admin_role),
-#     chatflow_service: ChatflowService = Depends(get_chatflow_service)
-# ):
-#     """
-#     DEPRECATED: Add multiple users to a chatflow using their external_user_ids.
-#     This endpoint is not covered by current tests. It has been preserved
-#     and adapted to use the service layer and external_user_ids.
-#     """
-#     try:
-#         # This is a bit of a hack to reuse the model. The service layer expects emails.
-#         # A dedicated request model for external_user_ids would be better.
-#         # For now, we assume the service can handle it or this endpoint is truly deprecated.
-#         # The ideal service method would be add_users_to_chatflow_by_external_ids
-#         logger.warning("Deprecated endpoint /chatflows/add-users called.")
-#         # This will likely fail if the service expects emails. This highlights the need
-#         # for a dedicated service method if this endpoint is to be maintained.
-#         return await chatflow_service.add_users_to_chatflow_by_email(
-#             emails=request.emails, # This is incorrect, but reflects the original issue
-#             flowise_id=request.chatflow_id,
-#             admin_user=current_user
-#         )
-#     except Exception as e:
-#         logger.error(f"Error in deprecated add_users_to_chatflow: {e}")
-#         raise HTTPException(status_code=500, detail="Internal server error in deprecated endpoint.")

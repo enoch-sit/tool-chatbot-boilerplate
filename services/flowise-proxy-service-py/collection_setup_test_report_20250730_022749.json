@@ -1,5 +1,5 @@
 {
-  "started_at": "2025-07-24T00:47:12.910268",
+  "started_at": "2025-07-30T02:27:48.910816",
   "tests": {
     "database_connection": "\u2705 PASSED",
     "collection_setup": "\u2705 PASSED",
@@ -12,7 +12,7 @@
   "errors": [],
   "success": true,
   "setup_report": {
-    "started_at": "2025-07-24T00:47:13.244256",
+    "started_at": "2025-07-30T02:27:49.289630",
     "collections": {
       "users": "exists",
       "chatflows": "exists",
@@ -59,12 +59,12 @@
       },
       "validation_passed": true
     },
-    "completed_at": "2025-07-24T00:47:13.268411"
+    "completed_at": "2025-07-30T02:27:49.310198"
   },
   "health_report": {
-    "timestamp": "2025-07-24T00:47:13.268411",
+    "timestamp": "2025-07-30T02:27:49.310198",
     "setup_completed": true,
-    "setup_timestamp": "2025-07-24T00:47:13.268411",
+    "setup_timestamp": "2025-07-30T02:27:49.310198",
     "collections_status": {
       "users": true,
       "chatflows": true,
@@ -92,7 +92,7 @@
     "refresh_tokens": 0,
     "chat_sessions": 0,
     "chat_messages": 0,
-    "file_uploads": 2
+    "file_uploads": 3
   },
-  "completed_at": "2025-07-24T00:47:13.335194"
+  "completed_at": "2025-07-30T02:27:49.366947"
 }

@@ -1,5 +1,5 @@
 {
-  "started_at": "2025-07-29T00:34:55.032645",
+  "started_at": "2025-08-01T01:13:55.065396",
   "collections": {
     "users": "exists",
     "chatflows": "exists",
@@ -46,5 +46,5 @@
     },
     "validation_passed": true
   },
-  "completed_at": "2025-07-29T00:34:55.045767"
+  "completed_at": "2025-08-01T01:13:55.098645"
 }
