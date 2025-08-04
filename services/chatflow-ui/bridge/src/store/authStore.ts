@@ -20,8 +20,8 @@ interface AuthActions {
   setUser: (user: User) => void;
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => void;
-  refreshToken: () => Promise<void>;
-  checkAuthStatus: () => void;
+  refreshToken: (isBackground?: boolean) => Promise<void>;
+  checkAuthStatus: (isBackground?: boolean) => void;
   clearError: () => void;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: User['role'] | User['role'][]) => boolean;
@@ -105,6 +105,15 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           const data = await apiLogin(credentials);
           const { user, tokens } = transformLoginResponse(data);
           
+          // Debug logging to see if refresh token is received and stored
+          console.log('🔑 Login response tokens:', {
+            hasAccessToken: !!tokens.accessToken,
+            hasRefreshToken: !!tokens.refreshToken,
+            accessTokenLength: tokens.accessToken?.length || 0,
+            refreshTokenLength: tokens.refreshToken?.length || 0,
+            expiresIn: tokens.expiresIn
+          });
+          
           set({ user, tokens, isAuthenticated: true, isLoading: false });
         } catch (error: any) {
           set({ error: error.message || 'Login failed', isLoading: false });
@@ -116,32 +125,75 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
       },
-      refreshToken: async () => {
-        set({ isLoading: true, error: null });
+      refreshToken: async (isBackground = false) => {
+        // Don't show loading for background refreshes
+        if (!isBackground) {
+          set({ isLoading: true, error: null });
+        }
+        
         const { tokens } = get();
+        
+        // Debug logging to understand what's happening
+        console.log('🔍 Debug refresh token attempt:', {
+          hasTokens: !!tokens,
+          hasAccessToken: !!tokens?.accessToken,
+          hasRefreshToken: !!tokens?.refreshToken,
+          isBackground,
+          refreshTokenLength: tokens?.refreshToken?.length || 0
+        });
+        
         if (!tokens?.refreshToken) {
-          set({ isLoading: false, error: 'No refresh token available.' });
-          get().logout();
+          console.error('❌ No refresh token available - this is why the app is "refreshing"');
+          if (!isBackground) {
+            set({ isLoading: false, error: 'No refresh token available.' });
+            get().logout();
+          }
           throw new Error('No refresh token available.');
         }
+        
         try {
+          console.log('🔄 Attempting to refresh token...');
           const data = await apiRefreshToken(tokens.refreshToken);
           const { user, tokens: newTokens } = transformLoginResponse(data);
-          set({ user, tokens: newTokens, isAuthenticated: true, isLoading: false });
+          set({ 
+            user, 
+            tokens: newTokens, 
+            isAuthenticated: true, 
+            isLoading: false,
+            error: null // Clear any previous errors on successful refresh
+          });
+          console.log('✅ Token refreshed successfully');
         } catch (error: any) {
-          set({ error: error.message || 'Token refresh failed', isLoading: false });
-          get().logout();
+          console.error('❌ Token refresh failed:', {
+            error: error.message,
+            status: error.response?.status,
+            isBackground
+          });
+          
+          if (!isBackground) {
+            set({ error: error.message || 'Token refresh failed', isLoading: false });
+            get().logout();
+          } else {
+            // For background refreshes, don't logout immediately
+            // Let the user continue and handle it gracefully on next API call
+            set({ isLoading: false });
+          }
           throw error;
         }
       },
-      checkAuthStatus: () => {
+      checkAuthStatus: (isBackground = false) => {
         const { tokens } = get();
         if (tokens?.accessToken) {
           try {
             const decoded: DecodedToken = jwtDecode(tokens.accessToken);
             if (decoded.exp * 1000 < Date.now()) {
-              get().refreshToken().catch(() => {
-                // If refresh fails, the refreshToken action will log out
+              // Pass isBackground flag to refreshToken
+              get().refreshToken(isBackground).catch((error) => {
+                if (isBackground) {
+                  console.warn('⚠️ Background token refresh failed, will retry on next interval or API call:', error.message);
+                }
+                // For background checks, don't throw - let the user continue
+                // The axios interceptor will handle this when they make an API call
               });
             } else {
               // Re-derive permissions from role in case they changed
@@ -155,7 +207,9 @@ export const useAuthStore = create<AuthState & AuthActions>()(
               }
             }
           } catch {
-            get().logout();
+            if (!isBackground) {
+              get().logout();
+            }
           }
         }
       },

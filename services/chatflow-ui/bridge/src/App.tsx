@@ -19,14 +19,35 @@ function App() {
   const { toggleDebugMode } = useDebugStore();
 
   useEffect(() => {
-    // Check authentication status on app start and set up an interval
+    // Check authentication status on app start (foreground check)
     checkAuthStatus();
+    
+    // Set up background token refresh interval
     const interval = setInterval(() => {
-      checkAuthStatus();
+      // Only check tokens if the page is visible to avoid unnecessary API calls
+      if (!document.hidden) {
+        console.log('🕐 Running background token check...');
+        checkAuthStatus(true); // Pass true for background check
+      } else {
+        console.log('📵 Skipping background token check - page is hidden');
+      }
     }, 14 * 60 * 1000); // 14 minutes
 
-    // Clean up the interval on component unmount
-    return () => clearInterval(interval);
+    // Also check when page becomes visible again (user switches back to tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('👁️ Page became visible - checking token status');
+        checkAuthStatus(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Clean up on component unmount
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [checkAuthStatus]);
 
   useEffect(() => {
