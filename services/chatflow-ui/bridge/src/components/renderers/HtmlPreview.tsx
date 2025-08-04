@@ -65,33 +65,109 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
 
   // Create a version of the HTML with a MathJax configuration script injected.
   const enhancedHtmlContent = React.useMemo(() => {
-    // Only inject config if MathJax seems to be used.
-    if (!htmlContent.includes('mathjax')) {
+    // Detect if MathJax is used via multiple indicators
+    const hasMathJax = 
+      htmlContent.includes('mathjax') || // CDN or script references (case-insensitive)
+      htmlContent.includes('MathJax') || // Case variations
+      htmlContent.includes('\\(') ||     // LaTeX inline math delimiters
+      htmlContent.includes('\\[') ||     // LaTeX display math delimiters
+      htmlContent.includes('$$') ||      // Display math delimiters
+      /\$[^$\n]+\$/.test(htmlContent) || // Inline math with $ delimiters (more robust)
+      htmlContent.includes('\\dfrac') || // LaTeX fraction commands
+      htmlContent.includes('\\frac') ||  // LaTeX fraction commands
+      htmlContent.includes('\\times') || // LaTeX multiplication
+      htmlContent.includes('\\cdot') ||  // LaTeX dot product
+      htmlContent.includes('\\alpha') || // Greek letters (common in math)
+      htmlContent.includes('\\beta') ||
+      htmlContent.includes('\\gamma') ||
+      htmlContent.includes('\\sum') ||   // Summation symbols
+      htmlContent.includes('\\int');     // Integral symbols
+
+    // Debug logging (remove in production)
+    console.log('MathJax Detection Debug:', {
+      hasMathJax,
+      hasMathjax: htmlContent.includes('mathjax'),
+      hasMathJax_caps: htmlContent.includes('MathJax'),
+      hasParens: htmlContent.includes('\\('),
+      hasBrackets: htmlContent.includes('\\['),
+      hasDoubleDollar: htmlContent.includes('$$'),
+      hasDollarMath: /\$[^$\n]+\$/.test(htmlContent),
+      hasDfrac: htmlContent.includes('\\dfrac'),
+      hasFrac: htmlContent.includes('\\frac')
+    });
+
+    if (!hasMathJax) {
       return htmlContent;
     }
 
-    const mathJaxConfigScript = `
-      <script>
-        window.MathJax = {
-          tex: {
-            inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
-            displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']]
-          },
-          startup: {
-            ready: () => {
-              MathJax.startup.defaultReady();
-              // Small delay to ensure DOM is updated after typesetting
-              setTimeout(() => {
-                if (window.parent) {
-                  // Notify parent window to resize the iframe
-                  window.parent.postMessage('mathjax-rendered', '*');
-                }
-              }, 100);
+    // Different handling based on whether MathJax is already loaded via CDN
+    const hasCDNMathJax = htmlContent.includes('cdn.jsdelivr.net/npm/mathjax') || 
+                          htmlContent.includes('cdnjs.cloudflare.com/ajax/libs/mathjax') ||
+                          (htmlContent.includes('polyfill.io') && htmlContent.includes('cdn.jsdelivr.net/npm/mathjax')); // polyfill + jsdelivr combination
+
+    // Debug logging (remove in production)
+    console.log('CDN Detection Debug:', {
+      hasCDNMathJax,
+      hasJsdelivr: htmlContent.includes('cdn.jsdelivr.net/npm/mathjax'),
+      hasCdnjs: htmlContent.includes('cdnjs.cloudflare.com/ajax/libs/mathjax'),
+      hasPolyfill: htmlContent.includes('polyfill.io')
+    });
+
+    let mathJaxConfigScript;
+
+    if (hasCDNMathJax) {
+      // MathJax is loaded via CDN - just add the completion callback
+      mathJaxConfigScript = `
+        <script>
+          // Wait for MathJax to be available and configure completion callback
+          function waitForMathJax() {
+            if (typeof MathJax !== 'undefined' && MathJax.startup) {
+              // Override or extend the ready function
+              const originalReady = MathJax.startup.ready;
+              MathJax.startup.ready = function() {
+                originalReady.call(this);
+                // Notify parent after rendering is complete
+                MathJax.startup.promise.then(() => {
+                  setTimeout(() => {
+                    if (window.parent) {
+                      window.parent.postMessage('mathjax-rendered', '*');
+                    }
+                  }, 200);
+                });
+              };
+            } else {
+              // MathJax not yet loaded, try again
+              setTimeout(waitForMathJax, 100);
             }
           }
-        };
-      </script>
-    `;
+          waitForMathJax();
+        </script>
+      `;
+    } else {
+      // No CDN MathJax detected - inject full configuration
+      mathJaxConfigScript = `
+        <script>
+          window.MathJax = {
+            tex: {
+              inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+              displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']]
+            },
+            startup: {
+              ready: () => {
+                MathJax.startup.defaultReady();
+                // Small delay to ensure DOM is updated after typesetting
+                setTimeout(() => {
+                  if (window.parent) {
+                    // Notify parent window to resize the iframe
+                    window.parent.postMessage('mathjax-rendered', '*');
+                  }
+                }, 100);
+              }
+            }
+          };
+        </script>
+      `;
+    }
 
     // Inject the configuration script inside the <head> tag.
     const headIndex = htmlContent.indexOf('<head>');
