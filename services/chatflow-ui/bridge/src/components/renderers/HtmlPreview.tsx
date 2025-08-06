@@ -144,13 +144,19 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
         </script>
       `;
     } else {
-      // No CDN MathJax detected - inject full configuration
+      // No CDN MathJax detected - inject full configuration AND load MathJax
       mathJaxConfigScript = `
         <script>
           window.MathJax = {
             tex: {
               inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
-              displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']]
+              displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+              processEscapes: true,
+              processEnvironments: true
+            },
+            options: {
+              skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+              ignoreHtmlClass: 'no-mathjax'
             },
             startup: {
               ready: () => {
@@ -166,6 +172,7 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
             }
           };
         </script>
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       `;
     }
 

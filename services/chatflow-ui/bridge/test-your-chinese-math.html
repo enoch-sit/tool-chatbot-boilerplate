@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Chinese Math Test - Your Specific Content</title>
+    <style>
+        body { 
+            font-family: "Microsoft YaHei", "Noto Sans CJK TC", "PingFang TC", Arial, sans-serif;
+            margin: 20px; 
+            line-height: 1.8;
+            font-size: 16px;
+        }
+        .hint {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .test-section { 
+            border: 1px solid #ddd; 
+            margin: 20px 0; 
+            padding: 20px; 
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .original { background: #ffe7e7; }
+        .fixed { background: #e7ffe7; }
+    </style>
+    
+    <!-- MathJax Configuration -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            startup: {
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                    console.log('✅ MathJax ready for Chinese math content');
+                }
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <h1>🧮 Your Chinese Math Content Test</h1>
+    
+    <div class="test-section original">
+        <h2>🔴 Original Issue - Should Now Work!</h2>
+        <div class="hint">
+            從右邊開始，$2$ 不能減 $8$，要向 $5$ 借 $1$，$2$ 變 $12$，$5$ 變 $4$。<br>
+            你能把每一位數字減下來嗎？記得小數點要對齊喔！<br>
+            寫下你的答案，老師會一起檢查！
+        </div>
+    </div>
+    
+    <div class="test-section fixed">
+        <h2>✅ Additional Test Cases</h2>
+        <div class="hint">
+            這就是 $\dfrac{1}{4}$！<br>
+            分數練習：$\frac{1}{2} + \frac{1}{4} = \frac{3}{4}$<br>
+            複雜分數：$\dfrac{x^2 - 1}{x + 1} = x - 1$
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>🔢 Math Detection Test</h2>
+        <p>各種數學符號測試：</p>
+        <ul>
+            <li>基本數字：$1$, $2$, $5$, $8$, $12$</li>
+            <li>分數：$\frac{1}{4}$, $\dfrac{1}{4}$</li>
+            <li>運算：$2 + 3 = 5$</li>
+            <li>複雜表達式：$\sqrt{x^2 + y^2}$</li>
+        </ul>
+    </div>
+
+    <script>
+        setTimeout(() => {
+            console.log('=== 數學內容測試 ===');
+            const bodyText = document.body.textContent;
+            console.log('中文字符:', /[\u4e00-\u9fff]/.test(bodyText));
+            console.log('數學表達式:', (bodyText.match(/\$[^$\n]+\$/g) || []).length);
+            console.log('dfrac 指令:', bodyText.includes('\\dfrac'));
+            
+            const mathElements = document.querySelectorAll('.MathJax');
+            console.log('MathJax 元素數量:', mathElements.length);
+            
+            if (mathElements.length > 0) {
+                console.log('✅ 數學渲染成功！');
+            } else {
+                console.log('❌ 數學渲染失敗');
+            }
+        }, 2000);
+    </script>
+</body>
+</html>
