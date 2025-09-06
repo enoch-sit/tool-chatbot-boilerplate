@@ -43,7 +43,7 @@ import PushPinIcon from '@mui/icons-material/PushPin';
 
 const ChatPage: React.FC = () => {
   const { t } = useTranslation();
-  const [showPinnedPanel, setShowPinnedPanel] = useState(true);
+  const [showPinnedPanel, setShowPinnedPanel] = useState(false);
 
   // Destructure all necessary state and actions from the central chat store.
   // This is the primary way the component interacts with the application's state.

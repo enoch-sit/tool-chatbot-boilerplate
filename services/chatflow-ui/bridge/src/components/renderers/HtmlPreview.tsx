@@ -37,6 +37,15 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
     const iframe = iframeRef.current;
     if (iframe && iframe.contentWindow) {
       try {
+        // Check if user is near bottom before resizing
+        const scrollThreshold = 100; // pixels from bottom
+        const isNearBottom = window.innerHeight + window.scrollY >= 
+                           document.documentElement.scrollHeight - scrollThreshold;
+        
+        // Store current scroll position before resizing
+        const scrollY = window.scrollY;
+        const scrollX = window.scrollX;
+        
         // Wait a bit for content to render and scripts to execute
         setTimeout(() => {
           const contentWindow = iframe.contentWindow;
@@ -52,6 +61,13 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
               // Set minimum height of 200px and maximum of 800px for reasonable display
               const newHeight = Math.max(200, Math.min(height + 20, 800));
               setIframeHeight(newHeight);
+              
+              // Only restore scroll position if user was near bottom
+              if (isNearBottom) {
+                requestAnimationFrame(() => {
+                  window.scrollTo(scrollX, scrollY);
+                });
+              }
             }
           }
         }, 500); // Increased delay to allow scripts like MathJax to render
@@ -116,31 +132,58 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
     let mathJaxConfigScript;
 
     if (hasCDNMathJax) {
-      // MathJax is loaded via CDN - just add the completion callback
+      // MathJax is loaded via CDN - add a more robust configuration and trigger
       mathJaxConfigScript = `
         <script>
-          // Wait for MathJax to be available and configure completion callback
-          function waitForMathJax() {
-            if (typeof MathJax !== 'undefined' && MathJax.startup) {
-              // Override or extend the ready function
-              const originalReady = MathJax.startup.ready;
-              MathJax.startup.ready = function() {
-                originalReady.call(this);
-                // Notify parent after rendering is complete
-                MathJax.startup.promise.then(() => {
+          // Configure MathJax if not already configured
+          window.MathJax = window.MathJax || {
+            tex: {
+              inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+              displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+              processEscapes: true,
+              processEnvironments: true
+            },
+            options: {
+              skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+              ignoreHtmlClass: 'no-mathjax'
+            }
+          };
+          
+          // Function to process MathJax when ready
+          function processMathJax() {
+            if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+              // Process all math on the page
+              MathJax.typesetPromise()
+                .then(() => {
+                  // Notify parent after rendering is complete
                   setTimeout(() => {
                     if (window.parent) {
                       window.parent.postMessage('mathjax-rendered', '*');
                     }
                   }, 200);
-                });
-              };
+                })
+                .catch((err) => console.log('MathJax error:', err));
+            } else if (typeof MathJax !== 'undefined' && MathJax.Hub) {
+              // MathJax v2 compatibility
+              MathJax.Hub.Queue(["Typeset", MathJax.Hub]);
+              MathJax.Hub.Queue(() => {
+                if (window.parent) {
+                  window.parent.postMessage('mathjax-rendered', '*');
+                }
+              });
             } else {
               // MathJax not yet loaded, try again
-              setTimeout(waitForMathJax, 100);
+              setTimeout(processMathJax, 100);
             }
           }
-          waitForMathJax();
+          
+          // Start processing when DOM is ready
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', processMathJax);
+          } else {
+            // DOM already loaded, process immediately
+            processMathJax();
+          }
         </script>
       `;
     } else {
@@ -210,10 +253,26 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
   // Auto-switch to preview mode when stream ends
   useEffect(() => {
     if (isHistorical && !hasAutoSwitched && !isPreviewMode) {
+      // Check if user is near bottom
+      const scrollThreshold = 100; // pixels from bottom
+      const isNearBottom = window.innerHeight + window.scrollY >= 
+                         document.documentElement.scrollHeight - scrollThreshold;
+      
+      // Store scroll position before switching
+      const scrollY = window.scrollY;
+      const scrollX = window.scrollX;
+      
       // Wait 1 second after stream ends, then switch to preview mode
       const timer = setTimeout(() => {
         setIsPreviewMode(true);
         setHasAutoSwitched(true);
+        
+        // Only restore scroll position if user was near bottom
+        if (isNearBottom) {
+          requestAnimationFrame(() => {
+            window.scrollTo(scrollX, scrollY);
+          });
+        }
       }, 10);
 
       return () => clearTimeout(timer);
@@ -299,7 +358,9 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
             border: '1px solid #ccc', 
             borderRadius: 1,
             overflow: 'hidden',
-            backgroundColor: 'white'
+            backgroundColor: 'white',
+            transition: 'height 0.3s ease-in-out', // Add smooth transition
+            height: `${iframeHeight}px` // Control height at container level
           }}
         >
           <iframe
@@ -307,7 +368,7 @@ const HtmlPreview: React.FC<HtmlPreviewProps> = ({
             srcDoc={enhancedHtmlContent}
             style={{
               width: '100%',
-              height: `${iframeHeight}px`,
+              height: '100%', // Change to 100% of container
               border: 'none',
             }}
             sandbox="allow-scripts allow-same-origin"

@@ -280,46 +280,17 @@ const ChatInput: React.FC = () => {
   // Refocus when streaming ends
   useEffect(() => {
     if (!isStreaming) {
-      // First attempt after 1.5 seconds
-      const timer1 = setTimeout(() => {
+      // Single gentle focus attempt after streaming ends
+      const timer = setTimeout(() => {
         if (!isStreaming) {
-          console.log('First focus attempt after streaming ended');
+          console.log('Focus attempt after streaming ended');
           const textarea = inputRef.current?.querySelector('textarea');
-          textarea?.focus();
-          
-          // Second attempt after another 1 second if first didn't work
-          setTimeout(() => {
-            const currentTextarea = inputRef.current?.querySelector('textarea');
-            if (!isStreaming && document.activeElement !== currentTextarea) {
-              console.log('Second focus attempt after streaming ended');
-              currentTextarea?.focus();
-              
-              // Third aggressive attempt if second failed and we haven't succeeded before
-              setTimeout(() => {
-                const retryTextarea = inputRef.current?.querySelector('textarea');
-                if (!isStreaming && document.activeElement !== retryTextarea) {
-                  console.log('Trying aggressive focus approach after streaming ended');
-                  if (retryTextarea) {
-                    retryTextarea.blur();
-                    setTimeout(() => {
-                      retryTextarea.focus();
-                      retryTextarea.click();
-                      // Check if aggressive approach worked
-                      setTimeout(() => {
-                        if (document.activeElement === retryTextarea) {
-                          // hasSuccessfulAggressiveFocus.current = true;
-                          console.log('Aggressive focus succeeded - will skip aggressive approach in future');
-                        }
-                      }, 100);
-                    }, 100);
-                  }
-                }
-              }, 1000);
-            }
-          }, 1000);
+          if (textarea && !textarea.disabled) {
+            textarea.focus();
+          }
         }
-      }, 1500);
-      return () => clearTimeout(timer1);
+      }, 1000); // Reduced delay
+      return () => clearTimeout(timer);
     }
   }, [isStreaming]);
 
