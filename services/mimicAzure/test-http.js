@@ -6,7 +6,7 @@ const postData = JSON.stringify({
 
 const options = {
   hostname: 'localhost',
-  port: 5555,
+  port: 5557, // Different port to avoid conflicts
   path: '/openai/deployments/gpt-35-turbo/chat/completions?api-version=2023-05-15&stream=true',
   method: 'POST',
   headers: {
@@ -15,7 +15,8 @@ const options = {
   }
 };
 
-console.log('Testing mimicAzure service...');
+console.log('Testing mimicAzure HTTP service...');
+console.log('URL: http://localhost:5557');
 
 const req = http.request(options, (res) => {
   console.log(`Status: ${res.statusCode}`);
@@ -27,12 +28,13 @@ const req = http.request(options, (res) => {
   });
   
   res.on('end', () => {
-    console.log('\nTest completed!');
+    console.log('\n🌐 HTTP Test completed!');
   });
 });
 
 req.on('error', (e) => {
-  console.error(`Problem with request: ${e.message}`);
+  console.error(`❌ Problem with HTTP request: ${e.message}`);
+  console.log('Make sure the HTTP server is running on port 5557');
 });
 
 req.write(postData);

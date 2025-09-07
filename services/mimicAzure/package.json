@@ -5,8 +5,12 @@
   "main": "server.js",
   "scripts": {
     "build": "npx tsc",
+    "build:https": "npx tsc src/server-https.ts --outDir dist",
     "start": "node dist/server.js",
-    "dev": "npx tsc && node dist/server.js"
+    "start:https": "npm run build:https && node dist/server-https.js",
+    "dev": "npx tsc && node dist/server.js",
+    "dev:https": "npm run build:https && node dist/server-https.js",
+    "generate-certs": "node generate-certs.js"
   },
   "keywords": ["azure", "openai", "mimic", "streaming"],
   "author": "",

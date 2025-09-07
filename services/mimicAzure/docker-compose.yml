@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  mimic-azure:
+    build: .
+    ports:
+      - "5555:5555"   # HTTP
+      - "5556:5556"   # HTTPS
+    environment:
+      - PORT=5555
+      - HTTPS_PORT=5556
+      - NODE_ENV=production
+    volumes:
+      - ./certs:/app/certs:ro  # Mount certificates
+    restart: unless-stopped
+    container_name: mimic-azure-openai

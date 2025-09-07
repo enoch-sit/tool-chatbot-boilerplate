@@ -4,3 +4,10 @@ dist/
 .env
 .DS_Store
 Thumbs.db
+
+# SSL Certificates (never commit these!)
+certs/
+*.key
+*.crt
+*.pfx
+*.pem
