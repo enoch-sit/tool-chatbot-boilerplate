@@ -42,6 +42,18 @@ const validApiKeys = process.env.VALID_API_KEYS ?
   process.env.VALID_API_KEYS.split(',') : 
   ['test-key-123', 'dev-key-456', 'demo-key-789'];
 
+// OPTIONS handler for CORS preflight requests
+export const corsHandler = (req: express.Request, res: express.Response) => {
+  console.log('🌐 [CORS PREFLIGHT] OPTIONS request received');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,api-key');
+  res.setHeader('Access-Control-Max-Age', '1728000');
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Length', '0');
+  res.status(204).end();
+};
+
 // Chat completions handler
 export const chatCompletionsHandler = (req: express.Request, res: express.Response) => {
   console.log('\n🎯 [CHAT COMPLETIONS ENDPOINT HIT]');
@@ -91,7 +103,9 @@ export const chatCompletionsHandler = (req: express.Request, res: express.Respon
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, api-key');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,api-key');
+      res.setHeader('Access-Control-Max-Age', '1728000');
       
       // Transform request to EdUHK format
       const eduhkRequest = reformatRequest(req.body);
@@ -129,7 +143,9 @@ export const chatCompletionsHandler = (req: express.Request, res: express.Respon
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, api-key');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,api-key');
+    res.setHeader('Access-Control-Max-Age', '1728000');
     console.log('📤 SSE headers set');
 
     const chatId = generateChatId();

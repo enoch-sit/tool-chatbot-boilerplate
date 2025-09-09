@@ -8,7 +8,7 @@ import https = require('https');
 import http = require('http');
 import fs = require('fs');
 import path = require('path');
-import { chatCompletionsHandler, healthHandler, notFoundHandler } from './shared-handlers';
+import { chatCompletionsHandler, healthHandler, notFoundHandler, corsHandler } from './shared-handlers';
 import { requestLoggingMiddleware } from './middleware';
 
 const app = express();
@@ -21,6 +21,9 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Detailed request logging
 app.use(requestLoggingMiddleware);
+
+// Handle OPTIONS requests for CORS preflight
+app.options('*', corsHandler);
 
 // Chat completions endpoint
 app.post('/openai/deployments/:deployment/chat/completions', chatCompletionsHandler);
