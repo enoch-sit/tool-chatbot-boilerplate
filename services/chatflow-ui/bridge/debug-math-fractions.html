@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Math Fraction Test - Debug Session</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            line-height: 1.6;
+        }
+        .test-section { 
+            border: 1px solid #ddd; 
+            margin: 20px 0; 
+            padding: 15px; 
+            background: #f9f9f9; 
+        }
+        .inline-test { background: #e7f3ff; }
+        .display-test { background: #fff2e7; }
+        .problematic { background: #ffe7e7; }
+    </style>
+    
+    <!-- MathJax Configuration and Loading (This was missing!) -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            startup: {
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                    console.log('✅ MathJax loaded and ready');
+                }
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <h1>Math Fraction Rendering Test</h1>
+    <p>Testing various fraction syntaxes to identify the rendering issue with <code>$\dfrac{1}{4}$</code></p>
+    
+    <div class="test-section inline-test">
+        <h2>1. Inline Math - Standard Fraction</h2>
+        <p>This is an inline fraction: $\frac{1}{4}$ within text.</p>
+        <p>LaTeX source: <code>$\frac{1}{4}$</code></p>
+    </div>
+    
+    <div class="test-section problematic">
+        <h2>2. Inline Math - Display-Style Fraction (Your Issue)</h2>
+        <p>This is the problematic fraction: $\dfrac{1}{4}$ within text.</p>
+        <p>LaTeX source: <code>$\dfrac{1}{4}$</code></p>
+        <p><strong>Note:</strong> This might not render properly because \dfrac is meant for display math, not inline.</p>
+    </div>
+    
+    <div class="test-section display-test">
+        <h2>3. Display Math - Standard Fraction</h2>
+        <p>This is a display fraction:</p>
+        $$\frac{1}{4}$$
+        <p>LaTeX source: <code>$$\frac{1}{4}$$</code></p>
+    </div>
+    
+    <div class="test-section display-test">
+        <h2>4. Display Math - Display-Style Fraction</h2>
+        <p>This is a display-style fraction in display mode:</p>
+        $$\dfrac{1}{4}$$
+        <p>LaTeX source: <code>$$\dfrac{1}{4}$$</code></p>
+    </div>
+    
+    <div class="test-section">
+        <h2>5. LaTeX-Style Delimiters</h2>
+        <p>Using LaTeX \( and \[ delimiters:</p>
+        <p>Inline: \(\frac{1}{4}\) and \(\dfrac{1}{4}\)</p>
+        <p>Display: \[\dfrac{1}{4}\]</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>6. Multiple Fractions</h2>
+        <p>Several fractions: $\frac{1}{2}$, $\frac{3}{4}$, $\frac{5}{8}$</p>
+        <p>With dfrac: $\dfrac{1}{2}$, $\dfrac{3}{4}$, $\dfrac{5}{8}$</p>
+    </div>
+
+    <script>
+        // Debug script to check math detection
+        console.log('=== MATH DETECTION DEBUG ===');
+        const bodyText = document.body.textContent || document.body.innerText;
+        
+        console.log('Contains \\dfrac:', bodyText.includes('\\dfrac'));
+        console.log('Contains \\frac:', bodyText.includes('\\frac'));
+        console.log('Contains $...$ patterns:', /\$[^$]+\$/.test(bodyText));
+        console.log('Contains $$...$$ patterns:', /\$\$[^$]*\$\$/.test(bodyText));
+        
+        // Count different patterns
+        const dollarMath = bodyText.match(/\$[^$\n]+\$/g) || [];
+        const displayMath = bodyText.match(/\$\$[\s\S]*?\$\$/g) || [];
+        const latexInline = bodyText.match(/\\\([^)]+\\\)/g) || [];
+        const latexDisplay = bodyText.match(/\\\[[\s\S]*?\\\]/g) || [];
+        
+        console.log('Dollar inline math count:', dollarMath.length);
+        console.log('Dollar display math count:', displayMath.length);
+        console.log('LaTeX inline math count:', latexInline.length);
+        console.log('LaTeX display math count:', latexDisplay.length);
+        
+        console.log('Sample dollar math expressions:', dollarMath.slice(0, 3));
+        console.log('All dfrac expressions:', bodyText.match(/\\dfrac\{[^}]*\}\{[^}]*\}/g) || []);
+    </script>
+</body>
+</html>

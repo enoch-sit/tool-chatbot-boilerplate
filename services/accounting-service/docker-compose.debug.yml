@@ -1,0 +1,27 @@
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432" # Hardcoded port
+    environment:
+      POSTGRES_DB: accounting_db # Hardcoded DB name
+      POSTGRES_USER: postgres    # Hardcoded user
+      POSTGRES_PASSWORD: postgres # Hardcoded password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - accounting-network
+    restart: always
+
+networks:
+  accounting-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    # This ensures the volume is scoped to this compose setup if it needs to be unique,
+    # though typically the project name prefix handles this.
+    # For maximum safety, you could use a unique name like 'debug-postgres-data' here
+    # and in the service volume mapping, if you suspect collision.
+    # However, 'postgres-data' should be fine with the 'down --volumes' command.

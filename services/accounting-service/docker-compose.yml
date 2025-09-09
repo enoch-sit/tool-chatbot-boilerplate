@@ -1,0 +1,58 @@
+services:
+  accounting-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${ACCOUNTING_SERVICE_PORT:-3001}:3001"
+      - "9229:9229" # <-- Add this line to expose the debug port
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${ACCOUNTING_SERVICE_PORT:-3001}
+      - DB_HOST=postgres
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-accounting_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-dev_access_secret_key_change_this_in_production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev_refresh_secret_key_change_this_in_production}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - CORS_ORIGIN=*
+    # Add the command to start Node.js in debug mode
+    # This overrides the CMD in your Dockerfile when running with docker-compose
+    command: node --inspect=0.0.0.0:9229 dist/src/server.js
+    depends_on:
+      - postgres
+    volumes:
+      - ./src:/usr/src/app/src
+      # This line is commented out to avoid conflicts with local builds
+      # - ./dist:/usr/src/app/dist
+      - ./node_modules:/usr/src/app/node_modules
+    networks:
+      - accounting-network
+    restart: always
+
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DB=${DB_NAME:-accounting_db}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - accounting-network
+    restart: always
+
+networks:
+  accounting-network:
+    driver: bridge
+
+volumes:
+  postgres-data:

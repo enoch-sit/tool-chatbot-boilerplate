@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  azure-openai-mock:
+    build: 
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: azure-openai-mock-server
+    restart: unless-stopped
+    
+    # Port mapping - HTTP only for nginx proxy
+    ports:
+      - "5555:5555"  # HTTP port only (HTTPS handled by nginx proxy)
+    
+    # Environment variables from .env file
+    env_file:
+      - .env
+    
+    # Override specific environment variables for server deployment
+    environment:
+      - NODE_ENV=production
+      - ENABLE_HTTP=true
+      - ENABLE_HTTPS=false
+      
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5555/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Volumes for logs only (certificates handled by nginx proxy)
+    volumes:
+      - ./logs:/app/logs       # Mount logs directory
+    
+    # Resource limits (adjust as needed for server)
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '1.0'
+    
+    # Labels for organization
+    labels:
+      - "com.example.description=Azure OpenAI Mock Server with EdUHK Proxy - Server Deployment"
+      - "com.example.service=azure-openai-mock"
+      - "com.example.environment=production"
+
+# Optional: Create a custom network
+networks:
+  default:
+    name: azure-openai-network-server

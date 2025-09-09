@@ -1,0 +1,98 @@
+{
+  "started_at": "2025-07-30T02:27:48.910816",
+  "tests": {
+    "database_connection": "\u2705 PASSED",
+    "collection_setup": "\u2705 PASSED",
+    "health_check": "\u2705 PASSED",
+    "file_storage": "\u2705 PASSED",
+    "file_retrieval": "\u2705 PASSED",
+    "file_cleanup": "\u2705 PASSED",
+    "collection_queries": "\u2705 PASSED"
+  },
+  "errors": [],
+  "success": true,
+  "setup_report": {
+    "started_at": "2025-07-30T02:27:49.289630",
+    "collections": {
+      "users": "exists",
+      "chatflows": "exists",
+      "user_chatflows": "exists",
+      "refresh_tokens": "exists",
+      "chat_sessions": "exists",
+      "chat_messages": "exists",
+      "file_uploads": "exists"
+    },
+    "indexes": {
+      "gridfs": "created",
+      "User": "error: create_indexes",
+      "Chatflow": "error: create_indexes",
+      "UserChatflow": "error: create_indexes",
+      "RefreshToken": "error: create_indexes",
+      "ChatSession": "error: create_indexes",
+      "ChatMessage": "error: create_indexes",
+      "FileUpload": "error: create_indexes"
+    },
+    "gridfs": {
+      "fs.files": "exists",
+      "fs.chunks": "exists"
+    },
+    "errors": [],
+    "success": true,
+    "validation": {
+      "collections_count": 11,
+      "required_collections": [
+        "users",
+        "chatflows",
+        "user_chatflows",
+        "refresh_tokens",
+        "chat_sessions",
+        "chat_messages",
+        "file_uploads",
+        "fs.files",
+        "fs.chunks"
+      ],
+      "missing_collections": [],
+      "indexes_validated": {},
+      "gridfs_status": {
+        "collections": "present",
+        "functionality": "working"
+      },
+      "validation_passed": true
+    },
+    "completed_at": "2025-07-30T02:27:49.310198"
+  },
+  "health_report": {
+    "timestamp": "2025-07-30T02:27:49.310198",
+    "setup_completed": true,
+    "setup_timestamp": "2025-07-30T02:27:49.310198",
+    "collections_status": {
+      "users": true,
+      "chatflows": true,
+      "user_chatflows": true,
+      "refresh_tokens": true,
+      "chat_sessions": true,
+      "chat_messages": true,
+      "file_uploads": true
+    },
+    "database_status": {
+      "connection": "healthy",
+      "collections_count": 11
+    },
+    "gridfs_status": {
+      "collections_present": true,
+      "files_count": 1,
+      "status": "healthy"
+    },
+    "overall_health": "healthy"
+  },
+  "collection_counts": {
+    "users": 0,
+    "chatflows": 0,
+    "user_chatflows": 0,
+    "refresh_tokens": 0,
+    "chat_sessions": 0,
+    "chat_messages": 0,
+    "file_uploads": 3
+  },
+  "completed_at": "2025-07-30T02:27:49.366947"
+}

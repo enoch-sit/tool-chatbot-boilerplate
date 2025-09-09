@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ReactMarkdown Math Test</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script src="https://unpkg.com/react@19/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@19/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react-markdown@9/umd/react-markdown.js"></script>
+    <script src="https://unpkg.com/remark-math@6/index.js"></script>
+    <script src="https://unpkg.com/rehype-katex@7/index.js"></script>
+    
+    <script type="text/babel">
+        const { useState } = React;
+        const ReactMarkdown = window.ReactMarkdown;
+        
+        function TestComponent() {
+            const testContent = `Here's some inline math: \\(x_i\\): Each value, \\(\\mu\\): Mean, \\(N\\): Number of values.
+            
+And display math:
+\\[
+S_n = \\frac{n}{2} (a + l)
+\\]`;
+
+            return (
+                <div>
+                    <h2>Test ReactMarkdown Math Rendering</h2>
+                    <div style={{ border: '1px solid #ccc', padding: '20px', margin: '10px 0' }}>
+                        <h3>Raw Content:</h3>
+                        <pre>{testContent}</pre>
+                    </div>
+                    
+                    <div style={{ border: '1px solid #ccc', padding: '20px', margin: '10px 0' }}>
+                        <h3>ReactMarkdown with Math:</h3>
+                        <ReactMarkdown
+                            remarkPlugins={[window.remarkMath]}
+                            rehypePlugins={[window.rehypeKatex]}
+                        >
+                            {testContent}
+                        </ReactMarkdown>
+                    </div>
+                </div>
+            );
+        }
+        
+        ReactDOM.render(<TestComponent />, document.getElementById('root'));
+    </script>
+</body>
+</html>

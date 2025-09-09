@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chinese Math Content Test</title>
+    <style>
+        body { 
+            font-family: "Microsoft YaHei", "Noto Sans CJK TC", "PingFang TC", Arial, sans-serif;
+            margin: 20px; 
+            line-height: 1.8;
+            font-size: 16px;
+        }
+        .test-section { 
+            border: 1px solid #ddd; 
+            margin: 20px 0; 
+            padding: 20px; 
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .original { background: #ffe7e7; }
+        .fixed { background: #e7ffe7; }
+        .hint {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .debug {
+            background: #e3f2fd;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+    </style>
+    
+    <!-- MathJax Configuration -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+                ignoreHtmlClass: 'no-mathjax'
+            },
+            startup: {
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                    console.log('MathJax ready for Chinese math content');
+                }
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <h1>🧮 Chinese Math Content Rendering Test</h1>
+    
+    <div class="test-section original">
+        <h2>🔴 Original Problematic Content</h2>
+        <div class="hint">
+            從右邊開始，$2$ 不能減 $8$，要向 $5$ 借 $1$，$2$ 變 $12$，$5$ 變 $4$。<br>
+            你能把每一位數字減下來嗎？記得小數點要對齊喔！<br>
+            寫下你的答案，老師會一起檢查！
+        </div>
+        <p><strong>Issue:</strong> This might not display properly in your HTML preview.</p>
+    </div>
+    
+    <div class="test-section fixed">
+        <h2>✅ Should Work With MathJax</h2>
+        <div class="hint">
+            從右邊開始，$2$ 不能減 $8$，要向 $5$ 借 $1$，$2$ 變 $12$，$5$ 變 $4$。<br>
+            你能把每一位數字減下來嗎？記得小數點要對齊喔！<br>
+            寫下你的答案，老師會一起檢查！
+        </div>
+        <p><strong>With MathJax:</strong> The math expressions should render properly now.</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>🔢 More Chinese Math Examples</h2>
+        <p>基本運算：$1 + 1 = 2$</p>
+        <p>分數：這裡有 $\frac{1}{2}$ 個蘋果</p>
+        <p>百分比：考試得了 $85\%$ 的分數</p>
+        <p>方程式：如果 $x + 3 = 7$，那麼 $x = 4$</p>
+        <p>複雜表達式：面積公式是 $A = \pi r^2$</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>📐 Math Teaching Example</h2>
+        <div class="hint">
+            計算 $52 - 28$：<br>
+            第一步：從個位開始，$2 - 8$ 不夠減<br>
+            第二步：向十位借 $1$，$2$ 變成 $12$<br>
+            第三步：$12 - 8 = 4$<br>
+            第四步：十位 $5 - 1 = 4$，再減 $2$ 得 $2$<br>
+            答案：$52 - 28 = 24$
+        </div>
+    </div>
+    
+    <div class="test-section debug">
+        <h2>🐛 Debug Information</h2>
+        <pre id="debug-info">Loading debug information...</pre>
+    </div>
+
+    <script>
+        // Debug script
+        setTimeout(() => {
+            const debugInfo = document.getElementById('debug-info');
+            const bodyText = document.body.textContent || document.body.innerText;
+            
+            const debug = {
+                'Page charset': document.characterSet,
+                'Chinese chars detected': /[\u4e00-\u9fff]/.test(bodyText),
+                'Math expressions ($...$)': (bodyText.match(/\$[^$\n]+\$/g) || []).length,
+                'BR tags': document.querySelectorAll('br').length,
+                'Hint divs': document.querySelectorAll('.hint').length,
+                'MathJax loaded': typeof MathJax !== 'undefined',
+                'MathJax version': typeof MathJax !== 'undefined' ? MathJax.version : 'Not loaded',
+                'Sample math found': bodyText.match(/\$\d+\$/g) || []
+            };
+            
+            debugInfo.textContent = JSON.stringify(debug, null, 2);
+            console.log('Debug info:', debug);
+        }, 1000);
+        
+        // Wait for MathJax to render, then check results
+        setTimeout(() => {
+            const mathElements = document.querySelectorAll('.MathJax');
+            console.log('MathJax elements rendered:', mathElements.length);
+            
+            if (mathElements.length > 0) {
+                console.log('✅ MathJax rendering successful');
+            } else {
+                console.log('❌ MathJax rendering failed - check configuration');
+            }
+        }, 3000);
+    </script>
+</body>
+</html>

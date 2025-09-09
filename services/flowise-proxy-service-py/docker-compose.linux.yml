@@ -1,0 +1,53 @@
+services:
+  flowise-proxy-test:
+    build: .
+    container_name: flowise-proxy-test
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env.test
+    environment:
+      - MONGODB_URL=mongodb://admin:password@mongodb-test:27017/flowise_proxy_test?authSource=admin
+      - EXTERNAL_AUTH_URL=http://auth-service-dev:3000
+      - ACCOUNTING_SERVICE_URL=http://accounting-service:3001
+      # Collection setup configuration
+      - FORCE_COLLECTION_SETUP=${FORCE_COLLECTION_SETUP:-false}
+      - FAIL_ON_COLLECTION_SETUP_ERROR=${FAIL_ON_COLLECTION_SETUP_ERROR:-false}
+    volumes:
+      - .:/project_root
+    command: hypercorn app.main:app --bind 0.0.0.0:8000 --reload
+    depends_on:
+      - mongodb-test
+    networks:
+      - test-network
+      - auth-network
+      - accounting-network
+
+  mongodb-test:
+    image: mongo:latest
+    container_name: mongodb-test
+    restart: unless-stopped
+    ports:
+      - "27020:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: flowise_proxy_test
+    volumes:
+      - mongodb_test_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - test-network
+
+volumes:
+  mongodb_test_data:
+
+networks:
+  test-network:
+    driver: bridge
+  auth-network:
+    external:
+      name: boilerplate-accounting-nodejs-typescript_auth-network
+  accounting-network:
+    external:
+      name: accounting-service_accounting-network

@@ -1,0 +1,51 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine  # Lightweight PostgreSQL image
+    container_name: langflow-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-langflowuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword}
+      POSTGRES_DB: ${POSTGRES_DB:-langflowdb}
+    ports:
+      - "15432:5432"  # Optional: Expose for external tools
+    volumes:
+      - langflow-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: on-failure:5
+
+  langflow:
+    image: langflowai/langflow:1.5.0  # Latest full version
+    container_name: langflow-app
+    user: root  # Fix for PermissionError: Runs as root to allow writing to mounted volume
+    ports:
+      - "7860:7860"  # Access Langflow UI at http://localhost:7860
+    environment:
+      LANGFLOW_DATABASE_URL: postgresql://${POSTGRES_USER:-langflowuser}:${POSTGRES_PASSWORD:-securepassword}@postgres:5432/${POSTGRES_DB:-langflowdb}
+      LANGFLOW_CONFIG_DIR: /app/langflow  # Directory for config, secrets, and storage
+      LANGFLOW_SUPERUSER: ${LANGFLOW_SUPERUSER:-admin}
+      LANGFLOW_SUPERUSER_PASSWORD: ${LANGFLOW_SUPERUSER_PASSWORD:-adminpass}
+      LANGFLOW_AUTO_LOGIN: ${LANGFLOW_AUTO_LOGIN:-true}  # Optional: Auto-login as superuser
+      LANGFLOW_BACKEND_ONLY: ${LANGFLOW_BACKEND_ONLY:-false}  # Optional: Set to true for API-only mode
+      LANGFLOW_STORE_CACHE_ENABLED: ${LANGFLOW_STORE_CACHE_ENABLED:-true}  # Optional: Enable caching
+      # Add more env vars as needed (e.g., LANGFLOW_LOG_LEVEL=DEBUG for troubleshooting)
+    volumes:
+      - langflow-data:/app/langflow  # Persistent storage for flows, secrets, etc.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure:5
+
+volumes:
+  langflow-postgres-data:
+  langflow-data:

@@ -1,0 +1,7 @@
+Hello, can you introduce yourself?
+What are your capabilities?
+stream
+Tell me a short story about AI and humans working together.
+standard
+How can I use AWS Bedrock in my applications?
+quit

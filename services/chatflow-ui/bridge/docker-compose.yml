@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  bridge-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bridge-ui
+    ports:
+      - "3082:3082"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - VITE_FLOWISE_PROXY_API_URL=http://host.docker.internal:8000
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3082"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - bridge-network
+
+networks:
+  bridge-network:
+    driver: bridge

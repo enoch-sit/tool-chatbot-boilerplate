@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Math Fraction Test with MathJax</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            line-height: 1.6;
+        }
+        .test-section { 
+            border: 1px solid #ddd; 
+            margin: 20px 0; 
+            padding: 15px; 
+            background: #f9f9f9; 
+        }
+        .inline-test { background: #e7f3ff; }
+        .display-test { background: #fff2e7; }
+        .problematic { background: #ffe7e7; }
+        .solution { background: #e7ffe7; }
+    </style>
+    
+    <!-- MathJax Configuration and Loading -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            startup: {
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                    console.log('MathJax loaded and configured');
+                }
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <h1>Math Fraction Rendering Test - WITH MathJax</h1>
+    <p>Testing various fraction syntaxes with MathJax loaded</p>
+    
+    <div class="test-section problematic">
+        <h2>🔍 Your Original Issue</h2>
+        <p>Original problematic expression: $\dfrac{1}{4}$</p>
+        <p><code>$\dfrac{1}{4}$</code> should now render properly with MathJax</p>
+    </div>
+    
+    <div class="test-section solution">
+        <h2>✅ Better Solution</h2>
+        <p>Recommended inline fraction: $\frac{1}{4}$</p>
+        <p><code>$\frac{1}{4}$</code> is more appropriate for inline text</p>
+        <p>Display-style for display math: $$\dfrac{1}{4}$$</p>
+        <p><code>$$\dfrac{1}{4}$$</code> for proper display formatting</p>
+    </div>
+    
+    <div class="test-section inline-test">
+        <h2>Inline Math Comparison</h2>
+        <p>Standard inline: The fraction $\frac{1}{4}$ is quarter.</p>
+        <p>Display-style inline: The fraction $\dfrac{1}{4}$ is quarter.</p>
+        <p>Notice the size difference - $\dfrac{1}{4}$ might be too large for inline text.</p>
+    </div>
+    
+    <div class="test-section display-test">
+        <h2>Display Math Examples</h2>
+        <p>Proper display math:</p>
+        $$\dfrac{1}{4} + \dfrac{1}{4} = \dfrac{2}{4} = \dfrac{1}{2}$$
+        <p>Mixed with variables:</p>
+        $$f(x) = \dfrac{x^2 - 1}{x + 1} = x - 1 \quad \text{for } x \neq -1$$
+    </div>
+    
+    <div class="test-section">
+        <h2>LaTeX-Style Delimiters</h2>
+        <p>Inline: \(\frac{1}{4}\) and \(\dfrac{1}{4}\)</p>
+        <p>Display:</p>
+        \[\dfrac{1}{4} = 0.25\]
+    </div>
+    
+    <div class="test-section">
+        <h2>Complex Fractions</h2>
+        <p>Nested fractions work better in display mode:</p>
+        $$\dfrac{\dfrac{1}{2} + \dfrac{1}{3}}{\dfrac{1}{4} + \dfrac{1}{5}} = \dfrac{\frac{5}{6}}{\frac{9}{20}} = \dfrac{5}{6} \cdot \dfrac{20}{9} = \dfrac{100}{54} = \dfrac{50}{27}$$
+    </div>
+
+    <script>
+        // Wait for MathJax to finish rendering
+        setTimeout(() => {
+            console.log('=== MATHJAX RENDERING TEST ===');
+            console.log('MathJax version:', MathJax?.version || 'Not loaded');
+            console.log('Math expressions found and processed');
+            
+            // Check if math expressions are rendered
+            const mathElements = document.querySelectorAll('.MathJax');
+            console.log('Rendered MathJax elements:', mathElements.length);
+            
+            if (mathElements.length === 0) {
+                console.warn('No MathJax elements found - check configuration');
+            }
+        }, 2000);
+    </script>
+</body>
+</html>
