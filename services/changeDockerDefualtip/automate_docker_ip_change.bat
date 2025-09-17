@@ -8,9 +8,9 @@ REM Usage: automate_docker_ip_change.bat [hostname] [username] [password]
 setlocal enabledelayedexpansion
 
 REM Default values (can be overridden by command line arguments)
-set DEFAULT_HOST=proj03@project-1-03.eduhk.hk
-set DEFAULT_PASSWORD=password:
-set SCRIPT_NAME=docker_ip_change_script.sh
+set DEFAULT_HOST=proj04@project-1-04.eduhk.hk
+set DEFAULT_PASSWORD=proj04flow
+set SCRIPT_NAME=universal_docker_ip_change_script.sh
 set REMOTE_SCRIPT_PATH=/tmp/%SCRIPT_NAME%
 set LOCAL_SCRIPT_PATH=%~dp0%SCRIPT_NAME%
 
