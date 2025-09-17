@@ -65,12 +65,20 @@ POST /openai/deployments/{deployment}/chat/completions
 
 Supports both streaming (`stream=true`) and non-streaming (`stream=false` or omitted) responses.
 
-### Test with curl
+### Test Streaming with curl
 
 ```bash
 curl -X POST http://localhost:5555/openai/deployments/gpt-35-turbo/chat/completions?api-version=2023-05-15&stream=true ^
   -H "Content-Type: application/json" ^
   -d "{\"messages\": [{\"role\": \"user\", \"content\": \"Say something\"}]}"
+```
+
+### Test Non-Streaming with curl
+
+```bash
+curl -X POST http://localhost:5555/openai/deployments/gpt-35-turbo/chat/completions?api-version=2023-05-15 ^
+  -H "Content-Type: application/json" ^
+  -d "{\"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}]}"
 ```
 
 ### Test with Postman
@@ -86,7 +94,7 @@ curl -X POST http://localhost:5555/openai/deployments/gpt-35-turbo/chat/completi
 }
 ```
 
-The service will stream "hello how are you" word by word with a 500ms delay between chunks.
+The service will stream responses word by word with a 200ms delay between chunks for streaming requests, or return complete Azure-format responses for non-streaming requests.
 
 ## Scripts
 
@@ -109,6 +117,7 @@ The service will stream "hello how are you" word by word with a 500ms delay betw
 ## Features
 
 - Mimics Azure OpenAI chat completions endpoint
-- Supports streaming responses
-- Returns proper SSE (Server-Sent Events) format
+- Supports both streaming and non-streaming responses
+- Returns proper SSE (Server-Sent Events) format for streaming
+- Returns complete Azure format with content filters for non-streaming
 - Compatible with Azure OpenAI API format
