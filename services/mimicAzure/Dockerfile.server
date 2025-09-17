@@ -14,10 +14,6 @@ COPY tsconfig.json ./
 # Copy source code
 COPY src/ ./src/
 
-# Create certs directory and copy certificates if they exist
-RUN mkdir -p ./certs
-COPY certs/ ./certs/
-
 # Build the application
 RUN npm run build:docker
 
@@ -32,8 +28,8 @@ RUN addgroup -g 1001 -S nodejs && \
 RUN chown -R appuser:nodejs /app
 USER appuser
 
-# Expose both HTTP and HTTPS ports
-EXPOSE 5555 5556
+# Expose HTTP port only (HTTPS handled by nginx proxy)
+EXPOSE 5555
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

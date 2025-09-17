@@ -1,29 +1,21 @@
-// Load environment variables from .env file
-require('dotenv').config();
-console.log('🔧 Loaded environment from .env file');
-
 import express = require('express');
 import bodyParser = require('body-parser');
 import https = require('https');
 import http = require('http');
 import fs = require('fs');
 import path = require('path');
-import { chatCompletionsHandler, healthHandler, notFoundHandler, corsHandler } from './shared-handlers';
+import { chatCompletionsHandler, healthHandler, notFoundHandler } from './shared-handlers';
 import { requestLoggingMiddleware } from './middleware';
 
 const app = express();
 const port = process.env.PORT || 5555;
 const httpsPort = process.env.HTTPS_PORT || 5556;
 
-// Middleware to parse JSON bodies with increased size limit for large payloads (images, long conversations)
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+// Middleware to parse JSON bodies
+app.use(bodyParser.json());
 
 // Detailed request logging
 app.use(requestLoggingMiddleware);
-
-// Handle OPTIONS requests for CORS preflight
-app.options('*', corsHandler);
 
 // Chat completions endpoint
 app.post('/openai/deployments/:deployment/chat/completions', chatCompletionsHandler);

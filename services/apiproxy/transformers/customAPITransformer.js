@@ -141,53 +141,30 @@ function transformStreamingChunk(customChunk, id, created, model) {
     return null;
   }
 
+  // Your API already returns Azure OpenAI compatible format!
+  // Just ensure it has the right structure and add any missing fields
+  
+  // If it already has the correct structure, use it as-is
+  if (customChunk.object === 'chat.completion.chunk' && customChunk.choices) {
+    return customChunk;
+  }
+
   // Base streaming response structure matching Azure OpenAI format
   const azureChunk = {
-    id: id,
+    id: customChunk.id || id,
     object: 'chat.completion.chunk',
-    created: created,
-    model: model,
-    system_fingerprint: 'fp_custom_proxy',
-    choices: []
+    created: customChunk.created || created,
+    model: customChunk.model || model,
+    system_fingerprint: customChunk.system_fingerprint || 'fp_custom_proxy',
+    choices: customChunk.choices || []
   };
 
-  // Transform choices from your custom API format
-  if (customChunk.choices && Array.isArray(customChunk.choices)) {
-    azureChunk.choices = customChunk.choices.map((choice, index) => {
-      const transformedChoice = {
-        index: index,
-        delta: {},
-        finish_reason: choice.finish_reason || null,
-        logprobs: null,
-        content_filter_results: choice.finish_reason ? {} : {
-          hate: { filtered: false, severity: 'safe' },
-          self_harm: { filtered: false, severity: 'safe' },
-          sexual: { filtered: false, severity: 'safe' },
-          violence: { filtered: false, severity: 'safe' }
-        }
-      };
-
-      // Handle message content delta
-      if (choice.delta?.content) {
-        transformedChoice.delta.content = choice.delta.content;
-      } else if (choice.message?.content) {
-        transformedChoice.delta.content = choice.message.content;
-      }
-
-      // Handle role (usually only in first chunk)
-      if (choice.delta?.role) {
-        transformedChoice.delta.role = choice.delta.role;
-      } else if (choice.message?.role && !choice.delta?.content) {
-        transformedChoice.delta.role = choice.message.role;
-      }
-
-      return transformedChoice;
-    });
-  } else {
-    // Handle single choice format (most common)
-    const choice = {
+  // If your API returns choices in a different format, transform them
+  if (!customChunk.choices && customChunk.delta) {
+    // Handle single delta format
+    azureChunk.choices = [{
       index: 0,
-      delta: {},
+      delta: customChunk.delta,
       finish_reason: customChunk.finish_reason || null,
       logprobs: null,
       content_filter_results: customChunk.finish_reason ? {} : {
@@ -196,33 +173,15 @@ function transformStreamingChunk(customChunk, id, created, model) {
         sexual: { filtered: false, severity: 'safe' },
         violence: { filtered: false, severity: 'safe' }
       }
-    };
-
-    // Extract content from various possible locations in your custom format
-    if (customChunk.delta?.content) {
-      choice.delta.content = customChunk.delta.content;
-    } else if (customChunk.content) {
-      choice.delta.content = customChunk.content;
-    } else if (customChunk.message?.content) {
-      choice.delta.content = customChunk.message.content;
-    }
-
-    // Handle role (usually only in first chunk)
-    if (customChunk.delta?.role) {
-      choice.delta.role = customChunk.delta.role;
-    } else if (customChunk.role) {
-      choice.delta.role = customChunk.role;
-    }
-
-    azureChunk.choices = [choice];
+    }];
   }
 
-  // Only return chunk if it has meaningful content
-  const hasContent = azureChunk.choices.some(choice => 
-    choice.delta.content || choice.delta.role || choice.finish_reason
-  );
+  // Add usage info if present and it's the final chunk
+  if (customChunk.usage) {
+    azureChunk.usage = customChunk.usage;
+  }
 
-  return hasContent ? azureChunk : null;
+  return azureChunk;
 }
 
 /**

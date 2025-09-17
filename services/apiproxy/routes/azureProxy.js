@@ -65,9 +65,10 @@ router.post('/openai/deployments/:deployment/chat/completions', async (req, res)
       res.write(`data: ${JSON.stringify(initialChunk)}\n\n`);
 
       try {
-        await callCustomAPIStreaming('/chatgpt/v1/completions', customRequest, (chunk) => {
+        await callCustomAPIStreaming(null, customRequest, (chunk) => {
           try {
-            // Transform chunk to Azure format
+            // Your API already returns Azure-compatible format, so we can use it directly
+            // But we still need to ensure it matches Azure OpenAI exactly
             const azureChunk = transformCustomResponseToAzure(chunk, azureRequest, deployment, true);
             if (azureChunk) {
               res.write(`data: ${JSON.stringify(azureChunk)}\n\n`);
@@ -94,7 +95,7 @@ router.post('/openai/deployments/:deployment/chat/completions', async (req, res)
       }
     } else {
       // Non-streaming request
-      const customResponse = await callCustomAPI('/chatgpt/v1/completions', 'POST', customRequest);
+      const customResponse = await callCustomAPI(null, 'POST', customRequest);
       const azureResponse = transformCustomResponseToAzure(customResponse, azureRequest, deployment, false);
       
       // Add Azure-specific headers

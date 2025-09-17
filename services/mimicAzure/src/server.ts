@@ -1,6 +1,8 @@
-// server.ts
-import express from 'express';
-import bodyParser from 'body-parser';
+import express = require('express');
+import bodyParser = require('body-parser');
+import http = require('http');
+import { chatCompletionsHandler, healthHandler, notFoundHandler } from './shared-handlers';
+import { basicLoggingMiddleware } from './middleware';
 
 const app = express();
 const port = process.env.PORT || 5555;
@@ -8,168 +10,27 @@ const port = process.env.PORT || 5555;
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
 
-// Generate realistic Azure-like IDs and fingerprints
-const generateChatId = () => `chatcmpl-${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-const generateSystemFingerprint = () => `fp_${Math.random().toString(36).substring(2, 12)}`;
+// Basic request logging
+app.use(basicLoggingMiddleware);
 
-// Content filter template
-const getContentFilter = () => ({
-  hate: { filtered: false, severity: "safe" },
-  self_harm: { filtered: false, severity: "safe" },
-  sexual: { filtered: false, severity: "safe" },
-  violence: { filtered: false, severity: "safe" }
-});
+// Chat completions endpoint
+app.post('/openai/deployments/:deployment/chat/completions', chatCompletionsHandler);
 
-// Mimic Azure OpenAI chat completions endpoint with streaming
-app.post('/openai/deployments/:deployment/chat/completions', (req, res) => {
-  const { stream } = req.query;
-  const chatId = generateChatId();
-  const systemFingerprint = generateSystemFingerprint();
-  const created = Math.floor(Date.now() / 1000);
+// Health check endpoint
+app.get('/health', healthHandler);
 
-  if (stream !== 'true') {
-    // For non-streaming, return full Azure-compatible response
-    const responseContent = 'Hello! I\'m just a program, so I don\'t have feelings, but I\'m here and ready to help you. How can I assist you today?';
-    res.json({
-      choices: [{
-        content_filter_results: getContentFilter(),
-        finish_reason: "stop",
-        index: 0,
-        logprobs: null,
-        message: {
-          annotations: [],
-          content: responseContent,
-          refusal: null,
-          role: "assistant"
-        }
-      }],
-      created: created,
-      id: chatId,
-      model: "gpt-4.1-2025-04-14",
-      object: "chat.completion",
-      prompt_filter_results: [{
-        prompt_index: 0,
-        content_filter_results: {
-          ...getContentFilter(),
-          jailbreak: {
-            filtered: false,
-            detected: false
-          }
-        }
-      }],
-      system_fingerprint: systemFingerprint,
-      usage: {
-        completion_tokens: 30,
-        completion_tokens_details: {
-          accepted_prediction_tokens: 0,
-          audio_tokens: 0,
-          reasoning_tokens: 0,
-          rejected_prediction_tokens: 0
-        },
-        prompt_tokens: 13,
-        prompt_tokens_details: {
-          audio_tokens: 0,
-          cached_tokens: 0
-        },
-        total_tokens: 43
-      }
-    });
-    return;
-  }
+// Catch-all for unmatched routes
+app.use('*', notFoundHandler);
 
-  // Set headers for Server-Sent Events (SSE)
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  // Send initial prompt filter chunk (like real Azure)
-  const promptFilterData = {
-    choices: [],
-    created: 0,
-    id: "",
-    model: "",
-    object: "",
-    prompt_filter_results: [{
-      prompt_index: 0,
-      content_filter_results: {
-        ...getContentFilter(),
-        jailbreak: { filtered: false, detected: false }
-      }
-    }]
-  };
-  res.write(`data: ${JSON.stringify(promptFilterData)}\n\n`);
-
-  // Send initial role chunk
-  const roleData = {
-    choices: [{
-      content_filter_results: {},
-      delta: { content: "", refusal: null, role: "assistant" },
-      finish_reason: null,
-      index: 0,
-      logprobs: null
-    }],
-    created: created,
-    id: chatId,
-    model: "gpt-4.1-2025-04-14",
-    object: "chat.completion.chunk",
-    system_fingerprint: systemFingerprint
-  };
-  res.write(`data: ${JSON.stringify(roleData)}\n\n`);
-
-  // The message to stream
-  const message = 'Hello! I\'m doing well, thank you for asking. How can I assist you today?';
-  const chunks = message.split(' '); // Split into words for chunking
-
-  // Function to send a data chunk
-  const sendChunk = (content: string, isFirst: boolean = false) => {
-    const data = {
-      choices: [{
-        content_filter_results: getContentFilter(),
-        delta: { content },
-        finish_reason: null,
-        index: 0,
-        logprobs: null
-      }],
-      created: created,
-      id: chatId,
-      model: "gpt-4.1-2025-04-14",
-      object: "chat.completion.chunk",
-      system_fingerprint: systemFingerprint
-    };
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  // Stream the chunks with a delay
-  let index = 0;
-  const interval = setInterval(() => {
-    if (index < chunks.length) {
-      sendChunk(chunks[index] + (index < chunks.length - 1 ? ' ' : ''), index === 0);
-      index++;
-    } else {
-      // Send the final chunk
-      const finalData = {
-        choices: [{
-          content_filter_results: {},
-          delta: {},
-          finish_reason: "stop",
-          index: 0,
-          logprobs: null
-        }],
-        created: created,
-        id: chatId,
-        model: "gpt-4.1-2025-04-14",
-        object: "chat.completion.chunk",
-        system_fingerprint: systemFingerprint
-      };
-      res.write(`data: ${JSON.stringify(finalData)}\n\n`);
-      res.write('data: [DONE]\n\n');
-      clearInterval(interval);
-      res.end();
-    }
-  }, 200); // Faster 200ms delay to match real Azure timing
-});
-
-// Start the server
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+// Start HTTP server only
+const httpServer = http.createServer(app);
+httpServer.listen(port, () => {
+  console.log('\n' + '🌐'.repeat(40));
+  console.log(`🌐 HTTP Server running at http://localhost:${port}`);
+  console.log('🌐 Available endpoints:');
+  console.log('🌐   POST /openai/deployments/{deployment}/chat/completions');
+  console.log('🌐   GET  /health');
+  console.log('\n📝 Basic logging enabled - requests will be logged');
+  console.log('📝 Use Ctrl+C to stop the server');
+  console.log('='.repeat(80));
 });

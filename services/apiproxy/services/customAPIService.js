@@ -27,7 +27,7 @@ class CustomAPIService {
     try {
       const config = {
         method: 'POST',
-        url: `${this.baseURL}/chatgpt/v1/completions`, // Your API endpoint
+        url: `${this.baseURL}`, // Your API endpoint is already complete in baseURL
         headers: {
           'Content-Type': 'application/json',
           'api-key': this.apiKey // Your API uses 'api-key' header
@@ -82,7 +82,7 @@ class CustomAPIService {
     try {
       const config = {
         method: 'POST',
-        url: `${this.baseURL}/chatgpt/v1/completions`, // Your API streaming endpoint
+        url: `${this.baseURL}`, // Your API endpoint is already complete in baseURL
         headers: {
           'Content-Type': 'application/json',
           'api-key': this.apiKey // Your API uses 'api-key' header
@@ -177,7 +177,7 @@ const customAPIService = new CustomAPIService();
 async function callCustomAPI(endpoint, method = 'POST', data = null) {
   const config = {
     method,
-    url: `${customAPIService.baseURL}${endpoint}`,
+    url: customAPIService.baseURL, // Use the baseURL directly since it's complete
     headers: {
       'Content-Type': 'application/json',
       'api-key': customAPIService.apiKey
@@ -201,6 +201,6 @@ module.exports = {
   // Export class methods
   callCustomAPI: (request) => customAPIService.callCustomAPI(request),
   callCustomAPIStream: (request, onChunk) => customAPIService.callCustomAPIStream(request, onChunk),
-  // Export simple wrappers for the azureProxy route
-  callCustomAPIStreaming
+  // Export simple wrappers for the azureProxy route - fix the parameters
+  callCustomAPIStreaming: (endpoint, data, onChunk) => customAPIService.callCustomAPIStream(data, onChunk)
 };

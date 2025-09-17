@@ -105,3 +105,11 @@ This method clones the official repo and uses the provided `docker-compose.yml` 
 - If you need queue mode for scaling (e.g., with Redis for handling multiple predictions), use the specialized `docker-compose-queue-prebuilt.yml` file from the docs and configure the `.env` accordingly (e.g., set `MODE=queue` and Redis URL).
 
 If you encounter issues (e.g., port conflicts or missing dependencies), check the container logs with `docker logs flowise` or `docker compose logs`. For advanced configurations like using PostgreSQL instead of SQLite, modify the compose file to add a database service. Always pull the latest image with `docker pull flowiseai/flowise` before running.
+
+## Mimic Azure
+
+aai02.eduhk.hk/openai/deployments/gpt-4o-mini/chat/completions?Hello=
+
+gpt-4o-mini
+
+2024-12-01

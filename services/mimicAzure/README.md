@@ -57,28 +57,18 @@ A Node.js service that mimics the Azure OpenAI chat completions endpoint with st
 
 ## Usage
 
-The server runs on `http://localhost:5555` and mimics the Azure OpenAI API at:
+The server runs on `http://localhost:5555` and mimics the Azure OpenAI streaming API at:
 
 ```
-POST /openai/deployments/{deployment}/chat/completions
+POST /openai/deployments/{deployment}/chat/completions?stream=true
 ```
 
-Supports both streaming (`stream=true`) and non-streaming (`stream=false` or omitted) responses.
-
-### Test Streaming with curl
+### Test with curl
 
 ```bash
 curl -X POST http://localhost:5555/openai/deployments/gpt-35-turbo/chat/completions?api-version=2023-05-15&stream=true ^
   -H "Content-Type: application/json" ^
   -d "{\"messages\": [{\"role\": \"user\", \"content\": \"Say something\"}]}"
-```
-
-### Test Non-Streaming with curl
-
-```bash
-curl -X POST http://localhost:5555/openai/deployments/gpt-35-turbo/chat/completions?api-version=2023-05-15 ^
-  -H "Content-Type: application/json" ^
-  -d "{\"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}]}"
 ```
 
 ### Test with Postman
@@ -94,7 +84,7 @@ curl -X POST http://localhost:5555/openai/deployments/gpt-35-turbo/chat/completi
 }
 ```
 
-The service will stream responses word by word with a 200ms delay between chunks for streaming requests, or return complete Azure-format responses for non-streaming requests.
+The service will stream "hello how are you" word by word with a 500ms delay between chunks.
 
 ## Scripts
 
@@ -117,7 +107,6 @@ The service will stream responses word by word with a 200ms delay between chunks
 ## Features
 
 - Mimics Azure OpenAI chat completions endpoint
-- Supports both streaming and non-streaming responses
-- Returns proper SSE (Server-Sent Events) format for streaming
-- Returns complete Azure format with content filters for non-streaming
+- Supports streaming responses
+- Returns proper SSE (Server-Sent Events) format
 - Compatible with Azure OpenAI API format
