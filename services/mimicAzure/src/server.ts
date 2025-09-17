@@ -28,26 +28,51 @@ app.post('/openai/deployments/:deployment/chat/completions', (req, res) => {
   const created = Math.floor(Date.now() / 1000);
 
   if (stream !== 'true') {
-    // For non-streaming, just return a simple response
+    // For non-streaming, return full Azure-compatible response
+    const responseContent = 'Hello! I\'m just a program, so I don\'t have feelings, but I\'m here and ready to help you. How can I assist you today?';
     res.json({
-      id: chatId,
-      object: 'chat.completion',
-      created: created,
-      model: 'gpt-4.1-2025-04-14',
-      choices: [{ 
-        message: { 
-          role: 'assistant',
-          content: 'hello how are you' 
-        },
-        finish_reason: 'stop',
-        index: 0
+      choices: [{
+        content_filter_results: getContentFilter(),
+        finish_reason: "stop",
+        index: 0,
+        logprobs: null,
+        message: {
+          annotations: [],
+          content: responseContent,
+          refusal: null,
+          role: "assistant"
+        }
       }],
+      created: created,
+      id: chatId,
+      model: "gpt-4.1-2025-04-14",
+      object: "chat.completion",
+      prompt_filter_results: [{
+        prompt_index: 0,
+        content_filter_results: {
+          ...getContentFilter(),
+          jailbreak: {
+            filtered: false,
+            detected: false
+          }
+        }
+      }],
+      system_fingerprint: systemFingerprint,
       usage: {
-        prompt_tokens: 12,
-        completion_tokens: 4,
-        total_tokens: 16
-      },
-      system_fingerprint: systemFingerprint
+        completion_tokens: 30,
+        completion_tokens_details: {
+          accepted_prediction_tokens: 0,
+          audio_tokens: 0,
+          reasoning_tokens: 0,
+          rejected_prediction_tokens: 0
+        },
+        prompt_tokens: 13,
+        prompt_tokens_details: {
+          audio_tokens: 0,
+          cached_tokens: 0
+        },
+        total_tokens: 43
+      }
     });
     return;
   }

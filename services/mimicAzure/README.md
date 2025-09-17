@@ -57,11 +57,13 @@ A Node.js service that mimics the Azure OpenAI chat completions endpoint with st
 
 ## Usage
 
-The server runs on `http://localhost:5555` and mimics the Azure OpenAI streaming API at:
+The server runs on `http://localhost:5555` and mimics the Azure OpenAI API at:
 
 ```
-POST /openai/deployments/{deployment}/chat/completions?stream=true
+POST /openai/deployments/{deployment}/chat/completions
 ```
+
+Supports both streaming (`stream=true`) and non-streaming (`stream=false` or omitted) responses.
 
 ### Test with curl
 
