@@ -93,6 +93,72 @@ export function reformatStreamResponse(eduhkChunk: string): string | null {
   }
 }
 
+// Transform EdUHK non-streaming response to Azure format
+export function reformatNonStreamResponse(eduhkResponse: any): any {
+  try {
+    console.log('🔄 Transforming EdUHK response to Azure format');
+    console.log('📥 EdUHK response:', JSON.stringify(eduhkResponse, null, 2));
+
+    // Generate Azure-compatible values if missing
+    const chatId = eduhkResponse.id || `chatcmpl-${Math.random().toString(36).substring(2, 32)}`;
+    const created = eduhkResponse.created || Math.floor(Date.now() / 1000);
+    const systemFingerprint = eduhkResponse.system_fingerprint || `fp_${Math.random().toString(36).substring(2, 12)}`;
+
+    const azureResponse = {
+      id: chatId,
+      object: 'chat.completion',
+      created: created,
+      model: eduhkResponse.model || 'gpt-4.1-2025-04-14',
+      choices: eduhkResponse.choices?.map((choice: any) => ({
+        index: choice.index || 0,
+        message: {
+          role: choice.message?.role || 'assistant',
+          content: choice.message?.content || '',
+          refusal: choice.message?.refusal || null,
+          annotations: choice.message?.annotations || [],
+          audio: choice.message?.audio || null,
+          function_call: choice.message?.function_call || null,
+          tool_calls: choice.message?.tool_calls || null
+        },
+        logprobs: choice.logprobs || null,
+        finish_reason: choice.finish_reason || 'stop',
+        content_filter_results: choice.content_filter_results || {
+          hate: { filtered: false, severity: 'safe' },
+          self_harm: { filtered: false, severity: 'safe' },
+          sexual: { filtered: false, severity: 'safe' },
+          violence: { filtered: false, severity: 'safe' }
+        }
+      })) || [],
+      usage: eduhkResponse.usage || {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+        completion_tokens_details: null,
+        prompt_tokens_details: null
+      },
+      system_fingerprint: systemFingerprint,
+      service_tier: eduhkResponse.service_tier || null,
+      _request_id: eduhkResponse._request_id || null,
+      prompt_filter_results: eduhkResponse.prompt_filter_results || [{
+        prompt_index: 0,
+        content_filter_results: {
+          hate: { filtered: false, severity: 'safe' },
+          self_harm: { filtered: false, severity: 'safe' },
+          sexual: { filtered: false, severity: 'safe' },
+          violence: { filtered: false, severity: 'safe' }
+        }
+      }]
+    };
+
+    console.log('📤 Transformed Azure response:', JSON.stringify(azureResponse, null, 2));
+    return azureResponse;
+  } catch (error) {
+    console.error('❌ Error transforming EdUHK response:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Response transformation failed: ${errorMessage}`);
+  }
+}
+
 // Send request to EdUHK API
 export function sendToEdUHK(requestData: any, onData: (chunk: string) => void, onEnd: () => void, onError: (error: Error) => void): void {
   const url = new URL(EDUHK_ENDPOINT);

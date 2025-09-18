@@ -1,5 +1,5 @@
 import express = require('express');
-import { reformatRequest, reformatStreamResponse, sendToEdUHK } from './eduhk-proxy';
+import { reformatRequest, reformatStreamResponse, reformatNonStreamResponse, sendToEdUHK } from './eduhk-proxy';
 
 // Enable/disable proxy mode
 const envValue = process.env.USE_EDUHK_PROXY;
@@ -276,26 +276,67 @@ export const chatCompletionsHandler = (req: express.Request, res: express.Respon
     // Transform request to EdUHK format (disable streaming)
     const eduhkRequest = reformatRequest({ ...req.body, stream: false });
     
+    // Accumulate response data for non-streaming
+    let responseBuffer = '';
+    
     // Forward to EdUHK API
     sendToEdUHK(
       eduhkRequest,
       (chunk: string) => {
-        // For non-streaming, collect all data
+        // For non-streaming, accumulate all data chunks
         console.log('📥 Received EdUHK chunk:', chunk);
+        responseBuffer += chunk;
       },
       () => {
         console.log('✅ EdUHK non-streaming completed');
-        // Send a simple non-streaming response
-        const response = {
-          choices: [{ message: { content: 'Response from EdUHK API (non-streaming mode)' } }]
-        };
-        res.json(response);
+        console.log('📦 Complete response buffer:', responseBuffer);
+        
+        try {
+          // Parse the complete EdUHK response
+          let eduhkResponse;
+          if (responseBuffer.trim().startsWith('{')) {
+            // Direct JSON response
+            eduhkResponse = JSON.parse(responseBuffer.trim());
+          } else {
+            // Handle potential data: prefix or multiple lines
+            const lines = responseBuffer.split('\n').filter(line => line.trim());
+            const jsonLine = lines.find(line => 
+              line.includes('{') && line.includes('}')
+            );
+            if (jsonLine) {
+              const jsonStr = jsonLine.replace(/^data:\s*/, '').trim();
+              eduhkResponse = JSON.parse(jsonStr);
+            } else {
+              throw new Error('No valid JSON found in response');
+            }
+          }
+          
+          // Transform EdUHK response to Azure format
+          const azureResponse = reformatNonStreamResponse(eduhkResponse);
+          
+          console.log('📤 Sending transformed Azure response');
+          res.json(azureResponse);
+          
+        } catch (parseError) {
+          console.error('❌ Failed to parse EdUHK response:', parseError);
+          console.error('📦 Raw response buffer:', responseBuffer);
+          
+          const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
+          res.status(500).json({
+            error: {
+              code: 'ProxyParsingError',
+              message: `Failed to parse API response: ${errorMessage}`,
+              details: process.env.NODE_ENV === 'development' ? responseBuffer : undefined
+            }
+          });
+        }
       },
       (error: Error) => {
         console.error('❌ EdUHK proxy error:', error);
         res.status(500).json({
           error: {
-            message: `Proxy error: ${error.message}`
+            code: 'ProxyRequestError',
+            message: `Proxy request failed: ${error.message}`
           }
         });
       }
