@@ -23,7 +23,13 @@ export function reformatRequest(azureRequest: any): any {
         ]
       };
     } else if (Array.isArray(msg.content)) {
-      // Already in correct format
+      // Handle content array (text + images)
+      // This preserves image_url content types for vision requests
+      console.log(`📸 Processing content array with ${msg.content.length} items`);
+      const hasImage = msg.content.some((item: any) => item.type === 'image_url');
+      if (hasImage) {
+        console.log('🖼️  Image content detected - forwarding to EdUHK vision model');
+      }
       return msg;
     } else {
       // Fallback for other formats
