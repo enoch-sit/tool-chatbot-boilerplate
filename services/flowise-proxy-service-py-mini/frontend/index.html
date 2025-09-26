@@ -166,41 +166,75 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let botResponse = '';
-                
+                let buffer = '';
+
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
                     
-                    const chunk = decoder.decode(value, { stream: true });
+                    // Add the new chunk to the buffer
+                    buffer += decoder.decode(value, { stream: true });
                     
-                    // Parse stream events
-                    const lines = chunk.split('\n');
-                    for (const line of lines) {
-                        if (line.trim()) {
-                            try {
-                                const event = JSON.parse(line);
-                                if (event.event === 'token') {
-                                    botResponse += event.data;
-                                    botMessageDiv.textContent = botResponse;
-                                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    // Process all complete SSE messages in the buffer
+                    let boundary = buffer.indexOf('\n\n');
+                    while (boundary !== -1) {
+                        const message = buffer.substring(0, boundary);
+                        buffer = buffer.substring(boundary + 2);
+                        
+                        // Skip empty messages
+                        if (!message.trim()) {
+                            boundary = buffer.indexOf('\n\n');
+                            continue;
+                        }
+
+                        // Extract the 'data:' part
+                        const lines = message.split('\n');
+                        for (const line of lines) {
+                            if (line.startsWith('data:')) {
+                                const dataContent = line.substring(5).trim();
+                                if (dataContent) {
+                                    try {
+                                        // First, try to parse it as JSON (standard Flowise format)
+                                        const eventData = JSON.parse(dataContent);
+                                        
+                                        // Check for different possible data structures
+                                        if (typeof eventData.token === 'string') {
+                                            botResponse += eventData.token;
+                                        } else if (typeof eventData.message === 'string') {
+                                            botResponse += eventData.message;
+                                        } else if (typeof eventData === 'string') {
+                                            // Handle cases where the data is just a string
+                                            botResponse += eventData;
+                                        }
+                                        
+                                    } catch (e) {
+                                        // If JSON parsing fails, it might be a plain string chunk
+                                        // This handles cases where the stream sends non-JSON text
+                                        console.warn("Received non-JSON data, treating as plain text:", dataContent);
+                                        botResponse += dataContent;
+                                    }
                                 }
-                            } catch (e) {
-                                // If not JSON, treat as plain text
-                                botResponse += chunk;
-                                botMessageDiv.textContent = botResponse;
-                                chatContainer.scrollTop = chatContainer.scrollHeight;
                             }
                         }
+                        
+                        // Update the UI with the latest complete response
+                        botMessageDiv.textContent = botResponse;
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        
+                        boundary = buffer.indexOf('\n\n');
                     }
                 }
                 
-                if (!botResponse) {
-                    botMessageDiv.textContent = 'No response received';
+                // Final UI update in case the stream ends without a double newline
+                if (botResponse) {
+                    botMessageDiv.textContent = botResponse;
+                } else {
+                    botMessageDiv.textContent = 'Stream finished, but no valid data was received.';
                 }
                 
             } catch (error) {
-                console.error('Error:', error);
-                addMessage(`Error: ${error.message}`, false);
+                console.error('Error during streaming:', error);
+                addMessage(`Streaming Error: ${error.message}`, false);
             } finally {
                 sendButton.disabled = false;
                 sendButton.textContent = 'Send';

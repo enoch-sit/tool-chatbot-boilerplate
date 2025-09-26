@@ -1,0 +1,34 @@
+{
+  "name": "flowise-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "docker:build": "docker build -t flowise-frontend .",
+    "docker:run": "docker run -p 3002:3002 flowise-frontend",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "pm2:start": "pm2 start ecosystem.config.cjs --env production",
+    "pm2:stop": "pm2 stop flowise-frontend",
+    "pm2:restart": "pm2 restart flowise-frontend",
+    "pm2:delete": "pm2 delete flowise-frontend",
+    "pm2:logs": "pm2 logs flowise-frontend",
+    "pm2:status": "pm2 status flowise-frontend",
+    "pm2:monit": "pm2 monit"
+  },
+  "dependencies": {
+    "flowise-sdk": "^1.0.9",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "vite": "^4.4.5"
+  }
+}
