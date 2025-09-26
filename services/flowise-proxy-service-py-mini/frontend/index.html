@@ -194,22 +194,20 @@
                                 const dataContent = line.substring(5).trim();
                                 if (dataContent) {
                                     try {
-                                        // First, try to parse it as JSON (standard Flowise format)
                                         const eventData = JSON.parse(dataContent);
                                         
-                                        // Check for different possible data structures
-                                        if (typeof eventData.token === 'string') {
-                                            botResponse += eventData.token;
-                                        } else if (typeof eventData.message === 'string') {
-                                            botResponse += eventData.message;
-                                        } else if (typeof eventData === 'string') {
-                                            // Handle cases where the data is just a string
-                                            botResponse += eventData;
+                                        // *** NEW: Handle complex event stream from Flowise ***
+                                        if (eventData.event === 'token' && typeof eventData.data === 'string') {
+                                            // This is a text token, append it to the response
+                                            botResponse += eventData.data;
+                                        } else {
+                                            // This is a non-token event (e.g., agentFlowEvent, metadata)
+                                            // We can log it for debugging but not display it
+                                            console.log('Received non-token event:', eventData);
                                         }
                                         
                                     } catch (e) {
                                         // If JSON parsing fails, it might be a plain string chunk
-                                        // This handles cases where the stream sends non-JSON text
                                         console.warn("Received non-JSON data, treating as plain text:", dataContent);
                                         botResponse += dataContent;
                                     }
@@ -229,7 +227,7 @@
                 if (botResponse) {
                     botMessageDiv.textContent = botResponse;
                 } else {
-                    botMessageDiv.textContent = 'Stream finished, but no valid data was received.';
+                    botMessageDiv.textContent = 'Stream finished, but no displayable text was received.';
                 }
                 
             } catch (error) {
