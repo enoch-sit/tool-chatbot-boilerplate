@@ -89,7 +89,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## 🚀 Step 3: Start Your Services
+## 🚀 Step 3: Initial Service Setup
 
 1. **Upload Files to Server:**
 ```bash
@@ -103,8 +103,7 @@ scp -r flowise-proxy-service-py-mini/ proj13@project-1-13:~/
 ```bash
 # For Ubuntu/Debian systems - install venv package first
 sudo apt update
-sudo apt install python3-venv
-Y
+sudo apt install python3-venv -y
 ```
 
 **Create and Activate Virtual Environment:**
@@ -133,21 +132,7 @@ pip install -r requirements.txt
 cd ..
 ```
 
-4. **Start Services:**
-
-### **Simple Manual Method (Recommended for First Time):**
-
-**Step 1: Set Up Virtual Environment**
-```bash
-cd ~/flowise-proxy-service-py-mini
-python3 -m venv venv
-source venv/bin/activate
-cd backend
-pip install -r requirements.txt
-cd ..
-```
-
-**Step 1.5: Configure Environment Variables**
+4. **Configure Environment Variables:**
 ```bash
 # Create the .env configuration file
 cd backend
@@ -184,32 +169,58 @@ cd ..
 ```
 
 **Important Notes:**
-- **FLOWISE_API_KEY**: Leave empty if your Flowise instance doesn't require authentication
-- **If Flowise requires API key**: Get it from your Flowise dashboard and replace the empty value
-- **BASE_PATH**: Must match nginx location path (`/projectproxy`)
+- **FLOWISE_API_KEY**: Leave empty if your Flowise instance doesn't require authentication.
+- **If Flowise requires API key**: Get it from your Flowise dashboard and replace the empty value.
+- **BASE_PATH**: Must match the nginx location path (`/projectproxy`).
 
-**Step 2A: Start for Testing (Terminal Dependent)**
+## ⚙️ Service Management
+
+Once the initial setup is complete, you can manage the backend and frontend services using one of the methods below.
+
+### Method 1: Using the Management Script (Recommended)
+
+The `manage.sh` script in the `maintain/` directory simplifies managing your services.
+
+**1. Make the script executable (run once):**
 ```bash
-# Backend (Terminal 1)
-source venv/bin/activate
-cd backend
-python -m uvicorn main:app --host 0.0.0.0 --port 5000
-
-# Frontend (Terminal 2) 
-cd ~/flowise-proxy-service-py-mini
-source venv/bin/activate
-python frontend_server.py
-
-# ⚠️ Note: Services stop when you close terminals
+chmod +x maintain/manage.sh
 ```
 
-**Step 2B: Start in Background (Persistent)**
+**2. Use the script:**
 ```bash
-# Create logs directory
-mkdir -p logs
+# Navigate to your project directory
+cd ~/flowise-proxy-service-py-mini
+
+# Start both services in the background
+./maintain/manage.sh start
+
+# Stop both services
+./maintain/manage.sh stop
+
+# Restart both services
+./maintain/manage.sh restart
+
+# Check the running status of the services
+./maintain/manage.sh status
+
+# View the live logs for both services
+./maintain/manage.sh logs
+```
+
+### Method 2: Manual Management
+
+If you prefer not to use the script, you can run the commands manually.
+
+**1. Start Services in Background:**
+```bash
+# Navigate to your project directory
+cd ~/flowise-proxy-service-py-mini
 
 # Activate virtual environment
 source venv/bin/activate
+
+# Create logs directory
+mkdir -p logs
 
 # Start backend in background
 cd backend
@@ -221,129 +232,57 @@ cd ..
 nohup python frontend_server.py > logs/frontend.log 2>&1 &
 echo $! > frontend.pid
 
-# Check if running
-ps aux | grep uvicorn
-ps aux | grep frontend_server
-
-echo "✅ Services running in background"
-echo "🔗 Backend: http://localhost:5000"
-echo "🔗 Frontend: http://localhost:5002"
+echo "✅ Services running in background. Use 'ps aux' to verify."
 ```
 
-**To Stop Background Services Later:**
+**2. Stop Services:**
+
+**Option A: Using PID files (created by the start commands above)**
 ```bash
-# Stop using PID files
+# Navigate to your project directory
+cd ~/flowise-proxy-service-py-mini
+
+# Stop services
 kill $(cat backend.pid)
 kill $(cat frontend.pid)
 rm backend.pid frontend.pid
+```
 
-# Or find and kill processes
+**Option B: Force stop if PID files are missing**
+```bash
 pkill -f "uvicorn main:app"
 pkill -f "frontend_server.py"
 ```
 
-**To Check Status:**
+**3. Check Service Status:**
 ```bash
 # Check if ports are listening
-sudo apt install net-tools
-netstat -tuln | grep :5000
-netstat -tuln | grep :5002
+sudo apt install -y net-tools
+netstat -tuln | grep -E '5000|5002'
 
-# View logs
+# Or check running processes
+ps aux | grep -E 'uvicorn|frontend_server'
+```
+
+**4. View Logs:**
+```bash
+# Navigate to your project directory
+cd ~/flowise-proxy-service-py-mini
+
+# View backend logs
 tail -f logs/backend.log
+
+# View frontend logs
 tail -f logs/frontend.log
 ```
 
-## 🔄 **Restarting Services After Changes**
+### When to Restart Services
 
-### **If You Made Code Changes:**
-
-**Method 1: Quick Restart (Background Services)**
-```bash
-# Navigate to your project directory
-cd /flowise-proxy-service-py-mini
-
-# Stop services using PID files
-kill $(cat backend.pid) 2>/dev/null || echo "Backend not running"
-kill $(cat frontend.pid) 2>/dev/null || echo "Frontend not running"
-rm -f backend.pid frontend.pid
-
-# Restart with virtual environment
-source venv/bin/activate
-mkdir -p logs
-
-# Start backend
-cd backend
-nohup python -m uvicorn main:app --host 0.0.0.0 --port 5000 > ../logs/backend.log 2>&1 &
-echo $! > ../backend.pid
-cd ..
-
-# Start frontend
-nohup python frontend_server.py > logs/frontend.log 2>&1 &
-echo $! > frontend.pid
-
-echo "✅ Services restarted"
-```
-
-**Method 2: Force Stop All (if PID files missing)**
-```bash
-# Navigate to your project directory
-cd /flowise-proxy-service-py-mini
-
-# Kill all related processes
-pkill -f "uvicorn main:app" || echo "No uvicorn processes found"
-pkill -f "frontend_server.py" || echo "No frontend processes found"
-
-# Wait a moment
-sleep 2
-
-# Clean up any remaining PID files
-rm -f backend.pid frontend.pid
-
-# Restart with virtual environment
-source venv/bin/activate
-mkdir -p logs
-
-# Start backend
-cd backend
-nohup python -m uvicorn main:app --host 0.0.0.0 --port 5000 > ../logs/backend.log 2>&1 &
-echo $! > ../backend.pid
-cd ..
-
-# Start frontend
-nohup python frontend_server.py > logs/frontend.log 2>&1 &
-echo $! > frontend.pid
-
-echo "✅ Services restarted after force stop"
-```
-
-**Method 3: Restart Individual Services**
-```bash
-# Navigate to your project directory
-cd /flowise-proxy-service-py-mini
-
-# Backend only (if you changed .env or main.py)
-kill $(cat backend.pid) 2>/dev/null
-source venv/bin/activate
-cd backend
-nohup python -m uvicorn main:app --host 0.0.0.0 --port 5000 > ../logs/backend.log 2>&1 &
-echo $! > ../backend.pid
-cd ..
-
-# Frontend only (if you changed frontend_server.py)  
-kill $(cat frontend.pid) 2>/dev/null
-source venv/bin/activate
-nohup python frontend_server.py > logs/frontend.log 2>&1 &
-echo $! > frontend.pid
-```
-
-### **When to Restart What:**
-
-- **Changed .env file**: Restart backend only
-- **Changed main.py**: Restart backend only  
-- **Changed frontend_server.py**: Restart frontend only
-- **Changed frontend/index.html**: No restart needed (static file)
-- **Installed new packages**: Restart both services
+- **Changed `.env` file**: Restart the **backend**.
+- **Changed `backend/main.py`**: Restart the **backend**.
+- **Changed `frontend_server.py`**: Restart the **frontend**.
+- **Changed `frontend/index.html`**: No restart needed (it's a static file).
+- **Installed new Python packages**: Restart **both** services.
 
 ## 🌐 Access Points
 
