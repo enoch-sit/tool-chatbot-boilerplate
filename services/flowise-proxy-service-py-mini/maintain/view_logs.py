@@ -125,9 +125,11 @@ def main():
     """Main log viewer function"""
     print_banner()
     
-    # Change to script directory
+    # Change to project directory (one level up from maintain folder)
     script_dir = Path(__file__).parent
-    os.chdir(script_dir)
+    project_dir = script_dir.parent  # Go up one level from maintain/ to main project folder
+    os.chdir(project_dir)
+    print(f"Working in: {os.getcwd()}")
     
     # Show service status
     show_service_status()
