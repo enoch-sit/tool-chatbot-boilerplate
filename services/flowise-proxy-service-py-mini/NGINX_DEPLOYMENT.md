@@ -183,7 +183,7 @@ The `manage.sh` script in the `maintain/` directory simplifies managing your ser
 
 **1. Make the script executable (run once):**
 ```bash
-chmod +x maintain/manage.sh
+sudo chmod +x maintain/manage.sh
 ```
 
 **2. Use the script:**
