@@ -80,6 +80,18 @@
             border: 1px solid #ddd;
             border-radius: 3px;
         }
+        .status-container {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #555;
+            min-height: 20px;
+        }
+        .status-message {
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -102,6 +114,10 @@
             <input type="text" id="messageInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
             <button onclick="sendMessage()" id="sendButton">Send</button>
         </div>
+
+        <div class="status-container" id="statusContainer">
+            <!-- Status messages will be injected here -->
+        </div>
     </div>
 
     <script>
@@ -110,6 +126,7 @@
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const chatflowIdInput = document.getElementById('chatflowId');
+        const statusContainer = document.getElementById('statusContainer');
         
         function addMessage(content, isUser = false) {
             const messageDiv = document.createElement('div');
@@ -117,6 +134,11 @@
             messageDiv.textContent = content;
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            return messageDiv;
+        }
+
+        function updateStatus(message) {
+            statusContainer.innerHTML = `<div class="status-message">${message}</div>`;
         }
         
         function handleKeyPress(event) {
@@ -135,11 +157,11 @@
                 return;
             }
             
-            // Add user message
             addMessage(message, true);
             messageInput.value = '';
             sendButton.disabled = true;
             sendButton.textContent = 'Sending...';
+            statusContainer.innerHTML = ''; // Clear previous status
             
             try {
                 const response = await fetch(`${API_BASE}/chat/stream`, {
@@ -158,10 +180,8 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                // Create bot message div for streaming
-                const botMessageDiv = document.createElement('div');
-                botMessageDiv.className = 'message bot-message';
-                chatContainer.appendChild(botMessageDiv);
+                const botMessageDiv = addMessage('', false);
+                botMessageDiv.textContent = '...';
                 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
@@ -170,69 +190,79 @@
 
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        updateStatus('Stream finished.');
+                        break;
+                    }
                     
-                    // Add the new chunk to the buffer
                     buffer += decoder.decode(value, { stream: true });
                     
-                    // Process all complete SSE messages in the buffer
                     let boundary = buffer.indexOf('\n\n');
                     while (boundary !== -1) {
-                        const message = buffer.substring(0, boundary);
+                        const messageChunk = buffer.substring(0, boundary);
                         buffer = buffer.substring(boundary + 2);
                         
-                        // Skip empty messages
-                        if (!message.trim()) {
-                            boundary = buffer.indexOf('\n\n');
-                            continue;
-                        }
-
-                        // Extract the 'data:' part
-                        const lines = message.split('\n');
-                        for (const line of lines) {
-                            if (line.startsWith('data:')) {
-                                const dataContent = line.substring(5).trim();
-                                if (dataContent) {
-                                    try {
-                                        const eventData = JSON.parse(dataContent);
-                                        
-                                        // *** NEW: Handle complex event stream from Flowise ***
-                                        if (eventData.event === 'token' && typeof eventData.data === 'string') {
-                                            // This is a text token, append it to the response
-                                            botResponse += eventData.data;
-                                        } else {
-                                            // This is a non-token event (e.g., agentFlowEvent, metadata)
-                                            // We can log it for debugging but not display it
-                                            console.log('Received non-token event:', eventData);
+                        if (messageChunk.trim()) {
+                            const lines = messageChunk.split('\n');
+                            for (const line of lines) {
+                                if (line.startsWith('data:')) {
+                                    const dataContent = line.substring(5).trim();
+                                    if (dataContent === '[DONE]') {
+                                        break;
+                                    }
+                                    if (dataContent) {
+                                        try {
+                                            const eventData = JSON.parse(dataContent);
+                                            
+                                            switch (eventData.event) {
+                                                case 'agentFlowEvent':
+                                                    updateStatus(`Flow status: ${eventData.data}`);
+                                                    break;
+                                                case 'nextAgentFlow':
+                                                    if(eventData.data.status === 'INPROGRESS') {
+                                                        updateStatus(`Executing node: ${eventData.data.nodeLabel} (${eventData.data.nodeId})`);
+                                                    }
+                                                    break;
+                                                case 'token':
+                                                    botResponse += eventData.data;
+                                                    botMessageDiv.textContent = botResponse;
+                                                    break;
+                                                case 'calledTools':
+                                                    const tools = eventData.data.map(t => t.tool).join(', ');
+                                                    if(tools){
+                                                        updateStatus(`Calling tools: ${tools}`);
+                                                    }
+                                                    break;
+                                                case 'usageMetadata':
+                                                    const { input_tokens, output_tokens, total_tokens } = eventData.data;
+                                                    updateStatus(`Usage: ${total_tokens} total tokens (Input: ${input_tokens}, Output: ${output_tokens}). Stream finished.`);
+                                                    break;
+                                                case 'end':
+                                                    updateStatus('Stream finished.');
+                                                    break;
+                                                default:
+                                                    console.log('Received unhandled event:', eventData);
+                                            }
+                                        } catch (e) {
+                                            console.warn("Received non-JSON data:", dataContent);
                                         }
-                                        
-                                    } catch (e) {
-                                        // If JSON parsing fails, it might be a plain string chunk
-                                        console.warn("Received non-JSON data, treating as plain text:", dataContent);
-                                        botResponse += dataContent;
                                     }
                                 }
                             }
                         }
-                        
-                        // Update the UI with the latest complete response
-                        botMessageDiv.textContent = botResponse;
                         chatContainer.scrollTop = chatContainer.scrollHeight;
-                        
                         boundary = buffer.indexOf('\n\n');
                     }
                 }
                 
-                // Final UI update in case the stream ends without a double newline
-                if (botResponse) {
-                    botMessageDiv.textContent = botResponse;
-                } else {
+                if (!botResponse) {
                     botMessageDiv.textContent = 'Stream finished, but no displayable text was received.';
                 }
                 
             } catch (error) {
                 console.error('Error during streaming:', error);
                 addMessage(`Streaming Error: ${error.message}`, false);
+                updateStatus(`Error: ${error.message}`);
             } finally {
                 sendButton.disabled = false;
                 sendButton.textContent = 'Send';
