@@ -5,7 +5,7 @@
 POST https://aai02.eduhk.hk/openai/deployments/gpt-4o-mini/chat/completions
 ```
 
-**⚠️ IMPORTANT: Only streaming mode is enabled. Set `stream: true` in all requests.**
+**ℹ️ Note: Both streaming and non-streaming modes are supported. Set `stream: true` for streaming responses or `stream: false` (or omit) for complete responses.**
 
 ## Authentication
 - Header: `api-key: {your_api_key}`
@@ -45,8 +45,8 @@ api-key: {your_api_key}
 - `model`: String (default: "gpt-4o-mini")
 - `temperature`: Number 0-2 (default: 0.7)
 - `max_tokens`: Number (default: unlimited)
-- `stream`: Boolean (REQUIRED: must be true - streaming only)
-- `stream_options`: Object with streaming configuration
+- `stream`: Boolean (default: false) - Set to true for streaming responses, false for complete responses
+- `stream_options`: Object with streaming configuration (only used when stream: true)
 
 ## Response Formats
 
@@ -80,8 +80,32 @@ data: [DONE]
 ```
 
 ### Non-Streaming Response (stream: false)
+Content-Type: `application/json`
 
-**❌ NOT SUPPORTED: Non-streaming mode is disabled. Use streaming mode only.**
+Complete response format:
+```json
+{
+  "id": "chatcmpl-xyz123",
+  "object": "chat.completion",
+  "created": 1726041600,
+  "model": "gpt-4o-mini",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello there! How can I help you today?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 12,
+    "completion_tokens": 9,
+    "total_tokens": 21
+  }
+}
+```
 
 ## Message Roles
 - `system`: Instructions for the AI behavior
@@ -119,14 +143,20 @@ data: [DONE]
 4. Stop when receiving `data: [DONE]`
 5. Concatenate all content chunks for complete response
 
-**Note: Only streaming mode is supported. Do not attempt non-streaming requests.**
+### For Non-Streaming Requests:
+1. Set `stream: false` in request body (or omit the stream parameter)
+2. Parse response as single JSON object
+3. Extract `choices[0].message.content` for complete text content
+4. Access usage statistics from `usage` object
 
-### Example Usage Pattern:
+### Example Usage Patterns:
+
+#### Streaming Mode:
 ```python
 import requests
 import json
 
-# Streaming (ONLY supported mode)
+# Streaming mode
 response = requests.post(
     'https://aai02.eduhk.hk/openai/deployments/gpt-4o-mini/chat/completions',
     headers={'Content-Type': 'application/json', 'api-key': 'your-key'},
@@ -151,10 +181,32 @@ for line in response.iter_lines():
             continue
 ```
 
+#### Non-Streaming Mode:
+```python
+import requests
+import json
+
+# Non-streaming mode
+response = requests.post(
+    'https://aai02.eduhk.hk/openai/deployments/gpt-4o-mini/chat/completions',
+    headers={'Content-Type': 'application/json', 'api-key': 'your-key'},
+    json={
+        'messages': [{'role': 'user', 'content': 'Hello'}],
+        'stream': False  # or omit this parameter entirely
+    }
+)
+
+result = response.json()
+content = result['choices'][0]['message']['content']
+usage = result['usage']
+print(f"Response: {content}")
+print(f"Tokens used: {usage['total_tokens']}")
+```
+
 ## Rate Limits and Constraints
 - No specific rate limits documented
 - Standard HTTP timeout applies
 - Maximum context length varies by model
 
 ## Available Models
-- gpt-4o-mini (recommended)
+- gpt-4o-mini

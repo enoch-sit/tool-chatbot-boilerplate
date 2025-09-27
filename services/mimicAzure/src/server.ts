@@ -1,3 +1,6 @@
+// Load environment variables from .env file FIRST - before any other imports
+require('dotenv').config();
+
 import express = require('express');
 import bodyParser = require('body-parser');
 import http = require('http');
@@ -5,7 +8,7 @@ import { chatCompletionsHandler, healthHandler, notFoundHandler } from './shared
 import { basicLoggingMiddleware } from './middleware';
 
 const app = express();
-const port = process.env.PORT || 5555;
+const port = process.env.HTTP_PORT || process.env.PORT || 5555;
 
 // Middleware to parse JSON bodies
 app.use(bodyParser.json());
