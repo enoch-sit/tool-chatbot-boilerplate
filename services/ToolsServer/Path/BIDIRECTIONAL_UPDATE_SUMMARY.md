@@ -3,11 +3,13 @@
 ## ✅ Changes Implemented
 
 ### 1. Graph Structure Conversion
-- **Changed from**: NetworkX.Graph (undirected) 
+
+- **Changed from**: NetworkX.Graph (undirected)
 - **Changed to**: NetworkX.DiGraph (directed with bidirectional edges)
 - **Benefit**: Each edge now has directional labels (North, South, East, West)
 
 ### 2. Edge Labeling System
+
 - **W5 → W4**: North direction
 - **W4 → W5**: South direction  
 - **N1 → N2**: East direction
@@ -15,11 +17,13 @@
 - **All edges**: Properly labeled with compass directions
 
 ### 3. Connection Update: N3-E1 → N2-E1
+
 - **Previous**: N3 connected to E1
 - **Updated**: N2 connected to E1 (as requested)
 - **Layout adjustment**: E1 position moved to align with N2
 
 ### 4. Visualization Enhancements
+
 - **Edge labels**: Display both directions on each edge (e.g., "North\nSouth")
 - **Output file**: `city_map_bidirectional.png` (new filename)
 - **Title update**: Reflects bidirectional nature
@@ -47,11 +51,13 @@
 ## 🧭 Navigation Improvements
 
 ### Directional Instructions
+
 - Routes now use actual compass directions from edge labels
 - Example: "Go SOUTH from W4 to W5 on West Street"
 - More intuitive navigation with consistent directional references
 
 ### Path Examples
+
 1. **Bank → Supermarket**: Bank → N2 → E1 → Supermarket ✅
 2. **Sports Centre → Bakery**: Sports Centre → N1 → N2 → E1 → Supermarket → Bakery ✅
 3. **Police Station → Clinic**: Uses full path through N2-E1 connection ✅
@@ -59,10 +65,12 @@
 ## 📋 Updated Files
 
 ### Core System
+
 - `city_map.py`: Complete conversion to bidirectional graph with edge labels
 - `test_n2_e1_connection.py`: Verification script for N2-E1 connection
 
 ### Documentation
+
 - `LAYOUT_SPEC.md`: Updated junction diagram and connection specs
 - `README.md`: Updated layout diagrams and connection descriptions
 - `BIDIRECTIONAL_UPDATE_SUMMARY.md`: This summary document
@@ -70,6 +78,7 @@
 ## 🔧 Technical Implementation
 
 ### Graph Creation
+
 ```python
 G = nx.DiGraph()  # Directed graph
 
@@ -82,6 +91,7 @@ add_bidirectional_edge("W5", "W4", "North", "South")
 ```
 
 ### Pathfinding
+
 - Uses `G.to_undirected()` for A* pathfinding
 - Maintains directional edge labels for navigation instructions
 - Seamless transition between directed graph benefits and undirected pathfinding
@@ -89,6 +99,7 @@ add_bidirectional_edge("W5", "W4", "North", "South")
 ## ✅ Verification Results
 
 All test routes confirmed working:
+
 - ✅ N2-E1 connection functioning properly
 - ✅ Bidirectional edges with correct directional labels
 - ✅ Navigation instructions use actual compass directions

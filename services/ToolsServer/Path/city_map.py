@@ -56,15 +56,17 @@ def create_city_map():
 
     # Create directed graph with edge labels
     G = nx.DiGraph()
-    
+
     # Add all nodes
     G.add_nodes_from(node_names)
-    
+
     # Helper function to add bidirectional edges with labels
-    def add_bidirectional_edge(from_node, to_node, from_to_direction, to_from_direction):
+    def add_bidirectional_edge(
+        from_node, to_node, from_to_direction, to_from_direction
+    ):
         G.add_edge(from_node, to_node, direction=from_to_direction)
         G.add_edge(to_node, from_node, direction=to_from_direction)
-    
+
     # Building-to-street connections (bidirectional with appropriate directions)
     # West Street buildings
     add_bidirectional_edge("Post Office", "W5", "East", "West")
@@ -73,55 +75,55 @@ def create_city_map():
     add_bidirectional_edge("Hospital", "W3", "West", "East")
     add_bidirectional_edge("Church", "W3", "East", "West")
     add_bidirectional_edge("Police Station", "W1", "East", "West")
-    
+
     # North Street buildings
     add_bidirectional_edge("Sports Centre", "N1", "South", "North")
     add_bidirectional_edge("Bank", "N2", "North", "South")
     add_bidirectional_edge("Fire Station", "N3", "North", "South")
-    
+
     # East Street buildings
     add_bidirectional_edge("Supermarket", "E1", "East", "West")
     add_bidirectional_edge("Bakery", "E2", "East", "West")
     add_bidirectional_edge("Clinic", "E3", "East", "West")
-    
+
     # Street connections with proper directional labels
     # West Street: W1 (North) ↔ W2 ↔ W3 ↔ W4 ↔ W5 (South)
     add_bidirectional_edge("W1", "W2", "South", "North")
     add_bidirectional_edge("W2", "W3", "South", "North")
     add_bidirectional_edge("W3", "W4", "South", "North")
     add_bidirectional_edge("W4", "W5", "South", "North")
-    
+
     # North Street: N1 (West) ↔ N2 ↔ N3 (East)
     add_bidirectional_edge("N1", "N2", "East", "West")
     add_bidirectional_edge("N2", "N3", "East", "West")
-    
+
     # East Street: E1 (North) ↔ E2 ↔ E3 (South)
     add_bidirectional_edge("E1", "E2", "South", "North")
     add_bidirectional_edge("E2", "E3", "South", "North")
-    
+
     # Inter-street connections
     add_bidirectional_edge("W2", "N1", "East", "West")
     add_bidirectional_edge("N2", "E1", "South", "North")
-    
+
     # Building-to-building adjacencies (same location or adjacent blocks)
     # Same node connections
     add_bidirectional_edge("Post Office", "Train Station", "East", "West")
     add_bidirectional_edge("Hospital", "Church", "West", "East")
-    
+
     # West Street building chains
     add_bidirectional_edge("Post Office", "Church", "North", "South")
     add_bidirectional_edge("Church", "Police Station", "North", "South")
     add_bidirectional_edge("Train Station", "Book Shop", "North", "South")
     add_bidirectional_edge("Book Shop", "Hospital", "North", "South")
-    
+
     # North Street building chain
     add_bidirectional_edge("Sports Centre", "Bank", "East", "West")
     add_bidirectional_edge("Bank", "Fire Station", "East", "West")
-    
+
     # East Street building chain
     add_bidirectional_edge("Supermarket", "Bakery", "South", "North")
     add_bidirectional_edge("Bakery", "Clinic", "South", "North")
-    
+
     return G
 
 
@@ -201,32 +203,37 @@ def render_map(G, positions):
         G, positions, node_color=node_colors, node_size=2000, alpha=0.9
     )
     nx.draw_networkx_labels(G, positions, font_size=8, font_weight="bold")
-    
+
     # Draw edges (convert to undirected for cleaner visualization)
     undirected_G = G.to_undirected()
-    nx.draw_networkx_edges(undirected_G, positions, edge_color="gray", width=2, alpha=0.7)
-    
+    nx.draw_networkx_edges(
+        undirected_G, positions, edge_color="gray", width=2, alpha=0.7
+    )
+
     # Draw edge labels with directions
     edge_labels = {}
     processed_edges = set()
-    
+
     for edge in G.edges(data=True):
         from_node, to_node, data = edge
         # Avoid duplicate labels for bidirectional edges
         if (to_node, from_node) not in processed_edges:
-            direction1 = data.get('direction', '')
+            direction1 = data.get("direction", "")
             # Get reverse direction
             reverse_data = G.get_edge_data(to_node, from_node)
-            direction2 = reverse_data.get('direction', '') if reverse_data else ''
-            
+            direction2 = reverse_data.get("direction", "") if reverse_data else ""
+
             if direction1 and direction2:
                 edge_labels[(from_node, to_node)] = f"{direction1}\n{direction2}"
             processed_edges.add((from_node, to_node))
-    
+
     # Draw edge labels
     nx.draw_networkx_edge_labels(
-        undirected_G, positions, edge_labels, font_size=6, 
-        bbox=dict(boxstyle="round,pad=0.1", facecolor="white", alpha=0.7)
+        undirected_G,
+        positions,
+        edge_labels,
+        font_size=6,
+        bbox=dict(boxstyle="round,pad=0.1", facecolor="white", alpha=0.7),
     )
 
     # Add street labels
@@ -261,13 +268,50 @@ def render_map(G, positions):
 
 
 def find_path(G, start, end):
-    """Find shortest path between two locations using undirected version of the graph."""
+    """
+    Find shortest path between two locations preserving edge direction information.
+    Uses Dijkstra's algorithm to maintain access to edge attributes.
+    """
     try:
-        # Convert to undirected for pathfinding since we have bidirectional edges
-        undirected_G = G.to_undirected()
-        return nx.astar_path(undirected_G, start, end)
+        # Use Dijkstra's on the directed graph to preserve edge data
+        # This allows us to access directional labels during navigation
+        return nx.dijkstra_path(G, start, end)
     except nx.NetworkXNoPath:
         return None
+
+
+def find_path_with_edges(G, start, end):
+    """
+    Find shortest path with complete edge information for detailed navigation.
+
+    Returns:
+        tuple: (path_nodes, path_edges) where path_edges contains direction info
+    """
+    try:
+        # Get the path
+        path = nx.dijkstra_path(G, start, end)
+
+        # Get edge data for each step
+        path_edges = []
+        for i in range(len(path) - 1):
+            current = path[i]
+            next_node = path[i + 1]
+            edge_data = G.get_edge_data(current, next_node)
+            path_edges.append(
+                {
+                    "from": current,
+                    "to": next_node,
+                    "direction": (
+                        edge_data.get("direction", "Unknown")
+                        if edge_data
+                        else "Unknown"
+                    ),
+                }
+            )
+
+        return path, path_edges
+    except nx.NetworkXNoPath:
+        return None, None
 
 
 def generate_navigation_instructions(G, start, end, positions):
@@ -283,7 +327,7 @@ def generate_navigation_instructions(G, start, end, positions):
     Returns:
         str: Formatted navigation instructions with directional information
     """
-    path = find_path(G, start, end)
+    path, path_edges = find_path_with_edges(G, start, end)
     if not path:
         return f"No path found from {start} to {end}"
 
@@ -315,41 +359,38 @@ def generate_navigation_instructions(G, start, end, positions):
         instructions.append(f"{step}. {exit_directions[start]}")
         step += 1
 
-    # Generate path instructions using edge direction labels
-    for i in range(len(path) - 1):
-        current = path[i]
-        next_node = path[i + 1]
-        
-        # Get direction from edge data
-        edge_data = G.get_edge_data(current, next_node)
-        if edge_data and 'direction' in edge_data:
-            direction = edge_data['direction']
-            
-            # Determine street context
-            if current.startswith("W") and next_node.startswith("W"):
-                street_name = "West Street"
-            elif current.startswith("N") and next_node.startswith("N"):
-                street_name = "North Street"
-            elif current.startswith("E") and next_node.startswith("E"):
-                street_name = "East Street"
-            elif (current.startswith("W") and next_node.startswith("N")) or \
-                 (current.startswith("N") and next_node.startswith("W")):
-                street_name = "to connecting street"
-            elif (current.startswith("N") and next_node.startswith("E")) or \
-                 (current.startswith("E") and next_node.startswith("N")):
-                street_name = "to connecting street"
-            else:
-                street_name = "street"
-            
+    # Generate path instructions using edge direction labels from path_edges
+    for edge_info in path_edges:
+        current = edge_info["from"]
+        next_node = edge_info["to"]
+        direction = edge_info["direction"]
+
+        # Determine street context
+        if current.startswith("W") and next_node.startswith("W"):
+            street_name = "West Street"
+        elif current.startswith("N") and next_node.startswith("N"):
+            street_name = "North Street"
+        elif current.startswith("E") and next_node.startswith("E"):
+            street_name = "East Street"
+        elif (current.startswith("W") and next_node.startswith("N")) or (
+            current.startswith("N") and next_node.startswith("W")
+        ):
+            street_name = "to connecting street"
+        elif (current.startswith("N") and next_node.startswith("E")) or (
+            current.startswith("E") and next_node.startswith("N")
+        ):
+            street_name = "to connecting street"
+        else:
+            street_name = "street"
+
+        if direction != "Unknown":
             instructions.append(
                 f"{step}. Go {direction.upper()} from {current} to {next_node} on {street_name}"
             )
         else:
             # Fallback for building connections or missing edge data
-            instructions.append(
-                f"{step}. Move from {current} to {next_node}"
-            )
-        
+            instructions.append(f"{step}. Move from {current} to {next_node}")
+
         step += 1
 
     # Entrance directions
@@ -389,7 +430,7 @@ def analyze_map(G):
     print("=" * 60)
     print(f"Total nodes: {len(G.nodes())}")
     print(f"Total directed edges: {len(G.edges())}")
-    
+
     # Check connectivity using undirected version
     undirected_G = G.to_undirected()
     print(f"Graph is connected: {nx.is_connected(undirected_G)}")
@@ -408,16 +449,16 @@ def analyze_map(G):
         if isinstance(node, str)
         and any(node.startswith(prefix) for prefix in ["W", "N", "E"])
     ]
-    
+
     print(f"Buildings: {len(buildings)}")
     print(f"Street nodes: {len(streets)}")
-    
+
     # Sample edge directions
     print("\n📍 Sample Edge Directions:")
     sample_edges = [("W5", "W4"), ("W4", "W5"), ("N1", "N2"), ("N2", "N1")]
     for from_node, to_node in sample_edges:
         if G.has_edge(from_node, to_node):
-            direction = G.get_edge_data(from_node, to_node).get('direction', 'Unknown')
+            direction = G.get_edge_data(from_node, to_node).get("direction", "Unknown")
             print(f"  {from_node} → {to_node}: {direction}")
 
 
