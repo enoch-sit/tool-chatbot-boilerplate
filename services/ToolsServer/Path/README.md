@@ -9,7 +9,7 @@ A Python-based city map visualization and navigation system with a logical stree
 - **West Street**: W1 (North) → W2 → W3 → W4 → W5 (South)
 - **North Street**: N1 (West) → N2 → N3 (East)
 - **East Street**: E1 (North) → E2 → E3 (South)
-- **Direct Connections**: W2 ↔ N1, N3 ↔ E1
+- **Direct Connections**: W2 ↔ N1, N2 ↔ E1
 
 ### Building Locations
 
@@ -41,8 +41,8 @@ A Python-based city map visualization and navigation system with a logical stree
                     Sports Centre
                           |
                          N1 ---- N2 ---- N3
-                          |               |
-    W1 (Police Station)  |              E1 -- Supermarket
+                          |      |       |
+    W1 (Police Station)  |      E1      Fire Station
      |                   |               |
     W2 -------------------              E2 -- Bakery
      |                                   |

@@ -3,7 +3,7 @@ City Map Navigation System
 
 A comprehensive city map visualization and navigation system featuring:
 - W1-W5 logical street layout (North to South)
-- Direct street connections (W2-N1, N3-E1)
+- Direct street connections (W2-N1, N2-E1)
 - Compass-based navigation instructions
 - Building placement with entrance/exit directions
 
@@ -18,10 +18,10 @@ import matplotlib.pyplot as plt
 
 def create_city_map():
     """
-    Create the city map with logical W1-W5 layout.
+    Create the city map with logical W1-W5 layout with bidirectional edges and directional labels.
 
     Returns:
-        NetworkX.Graph: Complete city map graph with all buildings and streets
+        NetworkX.DiGraph: Complete city map graph with directional edges
     """
     # Define all nodes in the system
     node_names = [
@@ -54,76 +54,74 @@ def create_city_map():
         "E3",
     ]
 
-    # Create adjacency matrix
-    N = 23  # 12 buildings + 11 street nodes (removed Junction and N5)
-    adj = np.zeros((N, N), dtype=int)
-
-    # Building-to-street connections
-    building_connections = [
-        # West Street buildings
-        (0, 16),
-        (1, 16),  # Post Office, Train Station → W5
-        (2, 15),  # Book Shop → W4
-        (3, 14),
-        (4, 14),  # Hospital, Church → W3
-        (5, 12),  # Police Station → W1
-        # North Street buildings
-        (6, 17),
-        (7, 18),
-        (8, 19),  # Sports Centre → N1, Bank → N2, Fire Station → N3
-        # East Street buildings
-        (9, 20),
-        (10, 21),
-        (11, 22),  # Supermarket → E1, Bakery → E2, Clinic → E3
-    ]
-
-    # Street connections
-    street_connections = [
-        # West Street: W1 → W2 → W3 → W4 → W5
-        (12, 13),
-        (13, 14),
-        (14, 15),
-        (15, 16),
-        # North Street: N1 → N2 → N3
-        (17, 18),
-        (18, 19),
-        # East Street: E1 → E2 → E3
-        (20, 21),
-        (21, 22),
-        # Direct connections (no junction needed)
-        (13, 17),  # W2 ↔ N1 (West/North Street connection)
-        (19, 20),  # N3 ↔ E1 (North/East Street connection)
-    ]
-
+    # Create directed graph with edge labels
+    G = nx.DiGraph()
+    
+    # Add all nodes
+    G.add_nodes_from(node_names)
+    
+    # Helper function to add bidirectional edges with labels
+    def add_bidirectional_edge(from_node, to_node, from_to_direction, to_from_direction):
+        G.add_edge(from_node, to_node, direction=from_to_direction)
+        G.add_edge(to_node, from_node, direction=to_from_direction)
+    
+    # Building-to-street connections (bidirectional with appropriate directions)
+    # West Street buildings
+    add_bidirectional_edge("Post Office", "W5", "East", "West")
+    add_bidirectional_edge("Train Station", "W5", "West", "East")
+    add_bidirectional_edge("Book Shop", "W4", "West", "East")
+    add_bidirectional_edge("Hospital", "W3", "West", "East")
+    add_bidirectional_edge("Church", "W3", "East", "West")
+    add_bidirectional_edge("Police Station", "W1", "East", "West")
+    
+    # North Street buildings
+    add_bidirectional_edge("Sports Centre", "N1", "South", "North")
+    add_bidirectional_edge("Bank", "N2", "North", "South")
+    add_bidirectional_edge("Fire Station", "N3", "North", "South")
+    
+    # East Street buildings
+    add_bidirectional_edge("Supermarket", "E1", "East", "West")
+    add_bidirectional_edge("Bakery", "E2", "East", "West")
+    add_bidirectional_edge("Clinic", "E3", "East", "West")
+    
+    # Street connections with proper directional labels
+    # West Street: W1 (North) ↔ W2 ↔ W3 ↔ W4 ↔ W5 (South)
+    add_bidirectional_edge("W1", "W2", "South", "North")
+    add_bidirectional_edge("W2", "W3", "South", "North")
+    add_bidirectional_edge("W3", "W4", "South", "North")
+    add_bidirectional_edge("W4", "W5", "South", "North")
+    
+    # North Street: N1 (West) ↔ N2 ↔ N3 (East)
+    add_bidirectional_edge("N1", "N2", "East", "West")
+    add_bidirectional_edge("N2", "N3", "East", "West")
+    
+    # East Street: E1 (North) ↔ E2 ↔ E3 (South)
+    add_bidirectional_edge("E1", "E2", "South", "North")
+    add_bidirectional_edge("E2", "E3", "South", "North")
+    
+    # Inter-street connections
+    add_bidirectional_edge("W2", "N1", "East", "West")
+    add_bidirectional_edge("N2", "E1", "South", "North")
+    
     # Building-to-building adjacencies (same location or adjacent blocks)
-    building_adjacencies = [
-        # Same node connections
-        (0, 1),  # Post Office ↔ Train Station (both at W5)
-        (3, 4),  # Hospital ↔ Church (both at W3)
-        # West Street building chains
-        (0, 4),
-        (4, 5),  # Post Office → Church → Police Station (WEST side)
-        (1, 2),
-        (2, 3),  # Train Station → Book Shop → Hospital (EAST side)
-        # North Street building chain
-        (6, 7),
-        (7, 8),  # Sports Centre → Bank → Fire Station
-        # East Street building chain
-        (9, 10),
-        (10, 11),  # Supermarket → Bakery → Clinic
-    ]
-
-    # Apply all connections
-    all_connections = building_connections + street_connections + building_adjacencies
-    for i, j in all_connections:
-        adj[i, j] = 1
-        adj[j, i] = 1
-
-    # Create and label graph
-    G = nx.from_numpy_array(adj)
-    node_mapping = {i: node_names[i] for i in range(len(node_names))}
-    G = nx.relabel_nodes(G, node_mapping)
-
+    # Same node connections
+    add_bidirectional_edge("Post Office", "Train Station", "East", "West")
+    add_bidirectional_edge("Hospital", "Church", "West", "East")
+    
+    # West Street building chains
+    add_bidirectional_edge("Post Office", "Church", "North", "South")
+    add_bidirectional_edge("Church", "Police Station", "North", "South")
+    add_bidirectional_edge("Train Station", "Book Shop", "North", "South")
+    add_bidirectional_edge("Book Shop", "Hospital", "North", "South")
+    
+    # North Street building chain
+    add_bidirectional_edge("Sports Centre", "Bank", "East", "West")
+    add_bidirectional_edge("Bank", "Fire Station", "East", "West")
+    
+    # East Street building chain
+    add_bidirectional_edge("Supermarket", "Bakery", "South", "North")
+    add_bidirectional_edge("Bakery", "Clinic", "South", "North")
+    
     return G
 
 
@@ -159,7 +157,7 @@ def get_node_positions():
         "N1": (7, 10),
         "N2": (9, 10),
         "N3": (11, 10),
-        "E1": (11, 8),
+        "E1": (9, 8),
         "E2": (11, 6),
         "E3": (11, 4),
     }
@@ -167,16 +165,16 @@ def get_node_positions():
 
 def render_map(G, positions):
     """
-    Render the city map visualization.
+    Render the city map visualization with directional edge labels.
 
     Args:
-        G (NetworkX.Graph): City map graph
+        G (NetworkX.DiGraph): City map directed graph
         positions (dict): Node position coordinates
 
     Returns:
         dict: Position dictionary for further use
     """
-    plt.figure(figsize=(16, 12))
+    plt.figure(figsize=(20, 14))
 
     # Color coding
     building_nodes = [
@@ -198,12 +196,38 @@ def render_map(G, positions):
         "lightcoral" if node in building_nodes else "lightblue" for node in G.nodes()
     ]
 
-    # Draw graph
+    # Draw graph nodes
     nx.draw_networkx_nodes(
         G, positions, node_color=node_colors, node_size=2000, alpha=0.9
     )
     nx.draw_networkx_labels(G, positions, font_size=8, font_weight="bold")
-    nx.draw_networkx_edges(G, positions, edge_color="gray", width=2, alpha=0.7)
+    
+    # Draw edges (convert to undirected for cleaner visualization)
+    undirected_G = G.to_undirected()
+    nx.draw_networkx_edges(undirected_G, positions, edge_color="gray", width=2, alpha=0.7)
+    
+    # Draw edge labels with directions
+    edge_labels = {}
+    processed_edges = set()
+    
+    for edge in G.edges(data=True):
+        from_node, to_node, data = edge
+        # Avoid duplicate labels for bidirectional edges
+        if (to_node, from_node) not in processed_edges:
+            direction1 = data.get('direction', '')
+            # Get reverse direction
+            reverse_data = G.get_edge_data(to_node, from_node)
+            direction2 = reverse_data.get('direction', '') if reverse_data else ''
+            
+            if direction1 and direction2:
+                edge_labels[(from_node, to_node)] = f"{direction1}\n{direction2}"
+            processed_edges.add((from_node, to_node))
+    
+    # Draw edge labels
+    nx.draw_networkx_edge_labels(
+        undirected_G, positions, edge_labels, font_size=6, 
+        bbox=dict(boxstyle="round,pad=0.1", facecolor="white", alpha=0.7)
+    )
 
     # Add street labels
     street_labels = [
@@ -223,39 +247,41 @@ def render_map(G, positions):
         )
 
     plt.title(
-        "City Map - W1-W5 Logical Layout\nPolice Station-W1, Junction, Church-W3-Hospital, W4-BookShop, PostOffice-W5-TrainStation",
+        "City Map - W1-W5 Bidirectional Layout with Directional Labels\nPolice Station-W1, Church-W3-Hospital, W4-BookShop, PostOffice-W5-TrainStation",
         fontsize=14,
         fontweight="bold",
         pad=20,
     )
     plt.axis("off")
     plt.tight_layout()
-    plt.savefig("city_map.png", dpi=300, bbox_inches="tight")
+    plt.savefig("city_map_bidirectional.png", dpi=300, bbox_inches="tight")
     plt.show()
 
     return positions
 
 
 def find_path(G, start, end):
-    """Find shortest path between two locations."""
+    """Find shortest path between two locations using undirected version of the graph."""
     try:
-        return nx.astar_path(G, start, end)
+        # Convert to undirected for pathfinding since we have bidirectional edges
+        undirected_G = G.to_undirected()
+        return nx.astar_path(undirected_G, start, end)
     except nx.NetworkXNoPath:
         return None
 
 
 def generate_navigation_instructions(G, start, end, positions):
     """
-    Generate step-by-step navigation instructions.
+    Generate step-by-step navigation instructions with directional edge labels.
 
     Args:
-        G (NetworkX.Graph): City map graph
+        G (NetworkX.DiGraph): City map directed graph with edge labels
         start (str): Starting location
         end (str): Destination location
         positions (dict): Node positions
 
     Returns:
-        str: Formatted navigation instructions
+        str: Formatted navigation instructions with directional information
     """
     path = find_path(G, start, end)
     if not path:
@@ -289,35 +315,41 @@ def generate_navigation_instructions(G, start, end, positions):
         instructions.append(f"{step}. {exit_directions[start]}")
         step += 1
 
-    # Generate path instructions
+    # Generate path instructions using edge direction labels
     for i in range(len(path) - 1):
         current = path[i]
         next_node = path[i + 1]
-
-        if current.startswith("W") and next_node.startswith("W"):
-            curr_num, next_num = int(current[1:]), int(next_node[1:])
-            direction = "SOUTH" if next_num > curr_num else "NORTH"
+        
+        # Get direction from edge data
+        edge_data = G.get_edge_data(current, next_node)
+        if edge_data and 'direction' in edge_data:
+            direction = edge_data['direction']
+            
+            # Determine street context
+            if current.startswith("W") and next_node.startswith("W"):
+                street_name = "West Street"
+            elif current.startswith("N") and next_node.startswith("N"):
+                street_name = "North Street"
+            elif current.startswith("E") and next_node.startswith("E"):
+                street_name = "East Street"
+            elif (current.startswith("W") and next_node.startswith("N")) or \
+                 (current.startswith("N") and next_node.startswith("W")):
+                street_name = "to connecting street"
+            elif (current.startswith("N") and next_node.startswith("E")) or \
+                 (current.startswith("E") and next_node.startswith("N")):
+                street_name = "to connecting street"
+            else:
+                street_name = "street"
+            
             instructions.append(
-                f"{step}. Walk {direction} on West Street from {current} to {next_node}"
+                f"{step}. Go {direction.upper()} from {current} to {next_node} on {street_name}"
             )
-        elif current.startswith("N") and next_node.startswith("N"):
+        else:
+            # Fallback for building connections or missing edge data
             instructions.append(
-                f"{step}. Walk EAST on North Street from {current} to {next_node}"
+                f"{step}. Move from {current} to {next_node}"
             )
-        elif current.startswith("E") and next_node.startswith("E"):
-            curr_num, next_num = int(current[1:]), int(next_node[1:])
-            direction = "SOUTH" if next_num > curr_num else "NORTH"
-            instructions.append(
-                f"{step}. Walk {direction} on East Street from {current} to {next_node}"
-            )
-        elif current == "W2" and next_node == "Junction":
-            instructions.append(f"{step}. Proceed to Junction from West Street")
-        elif current == "Junction" and next_node == "N1":
-            instructions.append(
-                f"{step}. Turn RIGHT (EAST) from Junction to North Street"
-            )
-        # Add more junction transitions as needed
-
+        
         step += 1
 
     # Entrance directions
@@ -336,12 +368,15 @@ def generate_navigation_instructions(G, start, end, positions):
     instructions.extend(
         [
             "",
-            "✅ LAYOUT SUMMARY:",
+            "✅ BIDIRECTIONAL LAYOUT SUMMARY:",
             "• Police Station at W1 (northernmost)",
             "• W2 connects directly to N1 (West/North Streets)",
+            "• N2 connects directly to E1 (North/East Streets)",
             "• Church (WEST) and Hospital (EAST) at W3",
             "• Book Shop at W4 (EAST side)",
             "• Post Office (WEST) and Train Station (EAST) at W5",
+            "• All edges are bidirectional with compass directions",
+            "• W5→W4: North, W4→W5: South (example)",
         ]
     )
 
@@ -349,12 +384,15 @@ def generate_navigation_instructions(G, start, end, positions):
 
 
 def analyze_map(G):
-    """Analyze and display map statistics."""
-    print("🔍 CITY MAP ANALYSIS")
-    print("=" * 50)
+    """Analyze and display map statistics for directed graph with edge labels."""
+    print("🔍 CITY MAP ANALYSIS (Bidirectional with Edge Labels)")
+    print("=" * 60)
     print(f"Total nodes: {len(G.nodes())}")
-    print(f"Total edges: {len(G.edges())}")
-    print(f"Graph is connected: {nx.is_connected(G)}")
+    print(f"Total directed edges: {len(G.edges())}")
+    
+    # Check connectivity using undirected version
+    undirected_G = G.to_undirected()
+    print(f"Graph is connected: {nx.is_connected(undirected_G)}")
 
     # Categorize nodes
     buildings = [
@@ -370,11 +408,17 @@ def analyze_map(G):
         if isinstance(node, str)
         and any(node.startswith(prefix) for prefix in ["W", "N", "E"])
     ]
-    junctions = [node for node in G.nodes() if node == "Junction"]
-
+    
     print(f"Buildings: {len(buildings)}")
     print(f"Street nodes: {len(streets)}")
-    print(f"Junctions: {len(junctions)}")
+    
+    # Sample edge directions
+    print("\n📍 Sample Edge Directions:")
+    sample_edges = [("W5", "W4"), ("W4", "W5"), ("N1", "N2"), ("N2", "N1")]
+    for from_node, to_node in sample_edges:
+        if G.has_edge(from_node, to_node):
+            direction = G.get_edge_data(from_node, to_node).get('direction', 'Unknown')
+            print(f"  {from_node} → {to_node}: {direction}")
 
 
 def main():

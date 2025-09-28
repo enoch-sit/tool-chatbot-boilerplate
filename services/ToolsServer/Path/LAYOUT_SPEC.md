@@ -1,4 +1,4 @@
-# City Map Logical Layout Specification
+# City Map Logical Layout Specifica- **N2** connects directly to East Street (E1)ion
 
 ## Current Implementation: W1-W5 System
 
@@ -16,8 +16,8 @@
                   Sports Centre    Bank    Fire Station
                         |           |          |
                        N1 -------- N2 -------- N3
-                        |                       |
-    W1 (Police Station) |                      E1 -- Supermarket
+                        |           |           |
+    W1 (Police Station) |          E1          Fire Station
      |                  |                       |
     W2 ------------------                      E2 -- Bakery
      |                                          |
@@ -47,6 +47,6 @@
 
 - **North-South**: W1 ↔ W2 ↔ W3 ↔ W4 ↔ W5
 - **West-East**: W2 ↔ N1 ↔ N2 ↔ N3
-- **North-South (East)**: N3 ↔ E1 ↔ E2 ↔ E3
+- **North-South (East)**: N2 ↔ E1 ↔ E2 ↔ E3
 
 This logical layout ensures intuitive navigation with clear compass-based directions and proper building placement.
