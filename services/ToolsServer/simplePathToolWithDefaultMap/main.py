@@ -77,10 +77,10 @@ async def app_root():
     """Application root endpoint."""
     return {
         "message": "Simple Path Tool API",
-        "version": "1.0.0", 
+        "version": "1.0.0",
         "base_path": "/simpletool",
         "documentation": "/docs",
-        "health": "/simpletool/health"
+        "health": "/simpletool/health",
     }
 
 
@@ -205,5 +205,5 @@ app.include_router(router)
 
 
 if __name__ == "__main__":
-    # Run the server
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
+    # Run the server on port 8001 to avoid conflicts
+    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True, log_level="info")

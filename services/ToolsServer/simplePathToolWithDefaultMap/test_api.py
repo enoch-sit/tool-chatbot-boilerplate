@@ -13,7 +13,7 @@ API_KEY = os.getenv("API_KEY", "your-secret-api-key-change-this")
 AUTH_HEADERS = {"Authorization": f"Bearer {API_KEY}"}
 
 
-def test_api(base_url="http://localhost:8000/simpletool"):
+def test_api(base_url="http://localhost:8001/simpletool"):
     """Test all API endpoints."""
 
     print(f"Testing API at {base_url}")

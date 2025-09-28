@@ -4,7 +4,7 @@ services:
   path-tool-api:
     build: .
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - ENV=production
       - API_KEY=${API_KEY:-your-secret-api-key-change-this}
