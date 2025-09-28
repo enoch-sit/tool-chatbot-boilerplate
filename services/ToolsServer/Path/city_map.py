@@ -145,9 +145,9 @@ def get_node_positions():
         "Bank": (9, 11),
         "Fire Station": (11, 11),
         # East Street buildings
-        "Supermarket": (12, 8),
-        "Bakery": (12, 6),
-        "Clinic": (12, 4),
+        "Supermarket": (10, 8),
+        "Bakery": (10, 6),
+        "Clinic": (10, 4),
         # Street nodes
         "W1": (3, 12),
         "W2": (3, 10),
@@ -158,8 +158,8 @@ def get_node_positions():
         "N2": (9, 10),
         "N3": (11, 10),
         "E1": (9, 8),
-        "E2": (11, 6),
-        "E3": (11, 4),
+        "E2": (9, 6),
+        "E3": (9, 4),
     }
 
 
