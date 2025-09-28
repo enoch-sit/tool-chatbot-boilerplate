@@ -1,0 +1,22 @@
+# City Map Navigation System - Requirements
+
+## Python Dependencies
+```
+networkx>=3.0
+numpy>=1.21.0
+matplotlib>=3.5.0
+```
+
+## Installation
+```bash
+pip install networkx numpy matplotlib
+```
+
+## Usage
+```bash
+python city_map.py
+```
+
+## Output Files
+- `city_map.png` - Visual map representation
+- Console output with navigation instructions and analysis
