@@ -6,97 +6,119 @@ import matplotlib.pyplot as plt
 def create_directed_map():
     """Create semantic map with buildings, streets, and intersections"""
 
-    # Node names as per the updated guide
+    # Node names based on detailed navigation guide
     node_names = [
-        "Police Station (West St)",  # 0
-        "Church (West St)",  # 1
-        "Post Office (West St)",  # 2
-        "Hospital (West St)",  # 3
-        "Book Shop (West St)",  # 4
-        "Train Station (West St)",  # 5
-        "Sports Centre (North St)",  # 6
-        "Bank (North St)",  # 7
-        "Fire Station (North St)",  # 8
-        "Supermarket (East St)",  # 9
-        "Bakery (East St)",  # 10
-        "Clinic (East St)",  # 11
-        "West Street",  # 12
-        "North Street",  # 13
-        "East Street",  # 14
-        "West/North Junction",  # 15
-        "North/East Junction",  # 16
+        # West Street Buildings (Left side - west side when walking north)
+        "Post Office",  # 0 - South end, left side
+        "Church",  # 1 - Middle, left side
+        "Police Station",  # 2 - North end, left side
+        # West Street Buildings (Right side - east side when walking north)
+        "Train Station",  # 3 - South end, right side
+        "Book Shop",  # 4 - Middle, right side
+        "Hospital",  # 5 - North end, right side
+        # North Street Buildings (all on left/south side when walking east)
+        "Sports Centre",  # 6 - West end
+        "Bank",  # 7 - Middle
+        "Fire Station",  # 8 - East end
+        # East Street Buildings (all on left/west side when walking south)
+        "Supermarket",  # 9 - North end
+        "Bakery",  # 10 - Middle
+        "Clinic",  # 11 - South end
+        # Street Nodes
+        "West Street Node",  # 12 - Main West Street
+        "North Street Node",  # 13 - Main North Street
+        "East Street Node",  # 14 - Main East Street
+        # Junctions
+        "West/North Junction",  # 15 - Connection between West St and North St
+        "North/East Junction",  # 16 - Connection between North St and East St
     ]
 
-    # Create adjacency matrix for 17 nodes
-    N = 17  # 12 buildings + 3 streets + 2 intersections
+    # Create adjacency matrix for 28 nodes
+    N = 28  # 12 buildings + 16 street nodes
     adj = np.zeros((N, N), dtype=int)
 
-    # Buildings <-> Streets (bidirectional)
-    # West Street Buildings
+    # Buildings connect to their respective street nodes
     building_street_pairs = [
-        # (building_idx, street_idx)
-        (0, 12),
-        (1, 12),
-        (2, 12),
-        (3, 12),
-        (4, 12),
-        (5, 12),  # West Street buildings
-        (6, 13),
-        (7, 13),
-        (8, 13),  # North Street buildings
-        (9, 14),
-        (10, 14),
-        (11, 14),  # East Street buildings
+        # West Street buildings (all connect to West Street Node)
+        (0, 12),  # Post Office -> West Street
+        (1, 12),  # Church -> West Street
+        (2, 12),  # Police Station -> West Street
+        (3, 12),  # Train Station -> West Street
+        (4, 12),  # Book Shop -> West Street
+        (5, 12),  # Hospital -> West Street
+        # North Street buildings (all connect to North Street Node)
+        (6, 13),  # Sports Centre -> North Street
+        (7, 13),  # Bank -> North Street
+        (8, 13),  # Fire Station -> North Street
+        # East Street buildings (all connect to East Street Node)
+        (9, 14),  # Supermarket -> East Street
+        (10, 14),  # Bakery -> East Street
+        (11, 14),  # Clinic -> East Street
     ]
 
     for building, street in building_street_pairs:
         adj[building, street] = 1  # Building → Street
         adj[street, building] = 1  # Street → Building
 
-    # Streets <-> Intersections (bidirectional)
-    street_intersection_pairs = [
-        (12, 15),  # West Street ↔ West/North Junction
-        (13, 15),  # North Street ↔ West/North Junction
-        (13, 16),  # North Street ↔ North/East Junction
-        (14, 16),  # East Street ↔ North/East Junction
+    # Street node connections (compass relationships)
+    # West Street (South to North): W7 -> W6 -> W5 -> W4 -> W3 -> W2 -> W1
+    west_street_connections = [
+        (12, 13),
+        (13, 14),
+        (14, 15),
+        (15, 16),
+        (16, 17),
+        (17, 18),
     ]
 
-    for street, intersection in street_intersection_pairs:
-        adj[street, intersection] = 1  # Street → Intersection
-        adj[intersection, street] = 1  # Intersection → Street
+    # North Street (West to East): N1 -> N2 -> N3 -> N4 -> N5
+    north_street_connections = [(19, 20), (20, 21), (21, 22), (22, 23)]
 
-    # Intersections <-> Intersections (via North Street)
-    adj[15, 16] = 1  # West/North → North/East via North Street
-    adj[16, 15] = 1  # North/East → West/North via North Street
+    # East Street (North to South): E1 -> E2 -> E3 -> E4
+    east_street_connections = [(24, 25), (25, 26), (26, 27)]
 
-    # Within-street adjacency for buildings (walkable connections)
-    # West Street adjacency (north-south)
+    # Junction connections
+    junction_connections = [
+        (18, 19),  # W1 (West/North intersection) -> N1
+        (23, 24),  # N5 (North/East junction) -> E1
+    ]
+
+    # Apply all street connections (bidirectional)
+    all_street_connections = (
+        west_street_connections
+        + north_street_connections
+        + east_street_connections
+        + junction_connections
+    )
+
+    for node1, node2 in all_street_connections:
+        adj[node1, node2] = 1  # Forward connection
+        adj[node2, node1] = (
+            1  # Backward connection    # Building adjacencies based on navigation guide (neighbors)
+        )
+    # West Street - Left side (when walking north)
     adj[0, 1] = 1
-    adj[1, 0] = 1  # Police Station ↔ Church
+    adj[1, 0] = 1  # Post Office ↔ Church
     adj[1, 2] = 1
-    adj[2, 1] = 1  # Church ↔ Post Office
-    adj[3, 4] = 1
-    adj[4, 3] = 1  # Hospital ↔ Book Shop
-    adj[4, 5] = 1
-    adj[5, 4] = 1  # Book Shop ↔ Train Station
+    adj[2, 1] = 1  # Church ↔ Police Station
 
-    # North Street adjacency (west-east)
+    # West Street - Right side (when walking north)
+    adj[3, 4] = 1
+    adj[4, 3] = 1  # Train Station ↔ Book Shop
+    adj[4, 5] = 1
+    adj[5, 4] = 1  # Book Shop ↔ Hospital
+
+    # North Street (when walking east - all on left/south side)
     adj[6, 7] = 1
     adj[7, 6] = 1  # Sports Centre ↔ Bank
     adj[7, 8] = 1
     adj[8, 7] = 1  # Bank ↔ Fire Station
 
-    # East Street adjacency (north-south)
+    # East Street (when walking south - all on left/west side)
     adj[9, 10] = 1
     adj[10, 9] = 1  # Supermarket ↔ Bakery
     adj[10, 11] = 1
     adj[11, 10] = 1  # Bakery ↔ Clinic
-
-    # Junction connections to buildings at street ends
-    adj[0, 15] = 1
-    adj[15, 0] = 1  # Police Station ↔ West/North Junction
-    adj[9, 16] = 1
-    adj[16, 9] = 1  # Supermarket ↔ North/East Junction
 
     # Build graph from adjacency matrix
     G = nx.from_numpy_array(adj, create_using=nx.Graph())
@@ -110,31 +132,31 @@ def create_directed_map():
         G[u][v]["type"] = f"connection_{u}_to_{v}"
         G[u][v]["weight"] = 1  # Equal weight for all connections
 
-    # Define positions for T-layout visualization with streets and intersections
+    # T-shaped layout positions (rotated 90° clockwise as described)
     pos = {
-        # West Street buildings (south to north on left side)
-        "Post Office (West St)": (0, 0),
-        "Church (West St)": (0, 1),
-        "Police Station (West St)": (0, 2.5),
-        # West Street buildings (south to north on right side)
-        "Train Station (West St)": (1, 0),
-        "Book Shop (West St)": (1, 1),
-        "Hospital (West St)": (1, 2),
-        # North Street buildings (west to east)
-        "Sports Centre (North St)": (1.5, 3.5),
-        "Bank (North St)": (2.5, 3.5),
-        "Fire Station (North St)": (3.5, 3.5),
-        # East Street buildings (north to south)
-        "Supermarket (East St)": (4.5, 2.5),
-        "Bakery (East St)": (4.5, 1),
-        "Clinic (East St)": (4.5, 0),
-        # Street segments (virtual nodes)
-        "West Street": (0.5, 1.5),
-        "North Street": (2.5, 3),
-        "East Street": (4.5, 1.5),
-        # Intersections
-        "West/North Junction": (1.5, 2.8),
-        "North/East Junction": (3.5, 2.8),
+        # West Street - Left side (west side when walking north)
+        "Post Office": (2, 0),  # South end
+        "Church": (2, 2),  # Middle
+        "Police Station": (2, 4),  # North end
+        # West Street - Right side (east side when walking north)
+        "Train Station": (4, 0),  # South end
+        "Book Shop": (4, 2),  # Middle
+        "Hospital": (4, 4),  # North end
+        # North Street (horizontal bar - all on south side when walking east)
+        "Sports Centre": (0, 6),  # West end
+        "Bank": (3, 6),  # Middle
+        "Fire Station": (6, 6),  # East end
+        # East Street (all on west side when walking south)
+        "Supermarket": (8, 4),  # North end
+        "Bakery": (8, 2),  # Middle
+        "Clinic": (8, 0),  # South end
+        # Street nodes (central to their streets)
+        "West Street Node": (3, 2),  # Center of West Street
+        "North Street Node": (3, 6),  # Center of North Street
+        "East Street Node": (8, 2),  # Center of East Street
+        # Junctions (where streets meet to form T-shape)
+        "West/North Junction": (3, 5),  # Where West St meets North St
+        "North/East Junction": (7, 6),  # Where North St meets East St
     }
 
     return G, pos
@@ -244,7 +266,7 @@ def render_map(G, pos, save_path=None):
 
 
 def find_shortest_path(G, start, end):
-    """Find and display the shortest path between two buildings"""
+    """Find and display the shortest path between two buildings with navigation instructions"""
 
     if nx.has_path(G, start, end):
         path = nx.shortest_path(G, source=start, target=end)
@@ -253,12 +275,84 @@ def find_shortest_path(G, start, end):
         print(f"\nShortest path from '{start}' to '{end}':")
         print(f"Route: {' → '.join(path)}")
         print(f"Number of steps: {path_length}")
+
+        # Provide detailed navigation instructions
+        nav_instructions = provide_navigation_instructions(start, end, path)
+        print(nav_instructions)
+
         return path
     else:
         print(
             f"\nNo valid path from '{start}' to '{end}' due to directional constraints."
         )
         return None
+
+
+def provide_navigation_instructions(start, end, path):
+    """Provide detailed navigation instructions based on the map layout"""
+    if not path:
+        return "No route available."
+
+    instructions = []
+    instructions.append(f"\n🧭 NAVIGATION FROM {start.upper()} TO {end.upper()}:")
+    instructions.append("=" * 60)
+
+    # Building exit instructions
+    if start in ["Post Office", "Church", "Police Station"]:
+        instructions.append(f"1. Exit {start} heading EAST to West Street")
+    elif start in ["Train Station", "Book Shop", "Hospital"]:
+        instructions.append(f"1. Exit {start} heading WEST to West Street")
+    elif start in ["Sports Centre", "Bank", "Fire Station"]:
+        instructions.append(f"1. Exit {start} heading SOUTH to North Street")
+    elif start in ["Supermarket", "Bakery", "Clinic"]:
+        instructions.append(f"1. Exit {start} heading WEST to East Street")
+
+    # Provide step-by-step directions based on path
+    step = 2
+    for i in range(len(path) - 1):
+        current = path[i]
+        next_node = path[i + 1]
+
+        if "Junction" in current and "Junction" in next_node:
+            instructions.append(
+                f"{step}. Walk EAST along North Street from West/North Junction to North/East Junction"
+            )
+            step += 1
+        elif current == "West Street Node" and next_node == "West/North Junction":
+            instructions.append(
+                f"{step}. Walk NORTH on West Street to the junction with North Street"
+            )
+            step += 1
+        elif current == "North Street Node" and next_node == "West/North Junction":
+            instructions.append(
+                f"{step}. Walk WEST on North Street to the junction with West Street"
+            )
+            step += 1
+        elif current == "North Street Node" and next_node == "North/East Junction":
+            instructions.append(
+                f"{step}. Walk EAST on North Street to the junction with East Street"
+            )
+            step += 1
+
+    # Building entrance instructions
+    if end in ["Post Office", "Church", "Police Station"]:
+        instructions.append(
+            f"{step}. Enter {end} from West Street (entrance faces EAST)"
+        )
+    elif end in ["Train Station", "Book Shop", "Hospital"]:
+        instructions.append(
+            f"{step}. Enter {end} from West Street (entrance faces WEST)"
+        )
+    elif end in ["Sports Centre", "Bank", "Fire Station"]:
+        instructions.append(
+            f"{step}. Enter {end} from North Street (entrance faces SOUTH)"
+        )
+    elif end in ["Supermarket", "Bakery", "Clinic"]:
+        instructions.append(
+            f"{step}. Enter {end} from East Street (entrance faces WEST)"
+        )
+
+    return "\n".join(instructions)
 
 
 def analyze_graph(G):
@@ -309,13 +403,15 @@ def main():
     print("EXAMPLE ROUTE PLANNING:")
     print("=" * 50)
 
-    # Test various paths with new node names
+    # Test various paths including all buildings from the navigation guide
     test_routes = [
-        ("Post Office (West St)", "Clinic (East St)"),
-        ("Train Station (West St)", "Fire Station (North St)"),
-        ("Hospital (West St)", "Bakery (East St)"),
-        ("Sports Centre (North St)", "Book Shop (West St)"),
-        ("West Street", "East Street"),  # Street to street routing
+        ("Post Office", "Clinic"),  # West to East Street
+        ("Train Station", "Fire Station"),  # West to North Street
+        ("Hospital", "Supermarket"),  # West to East Street
+        ("Sports Centre", "Bakery"),  # North to East Street
+        ("Police Station", "Bank"),  # West to North Street
+        ("Church", "Sports Centre"),  # West to North Street
+        ("West Street Node", "East Street Node"),  # Street to street
         ("West/North Junction", "North/East Junction"),  # Junction to junction
     ]
 
