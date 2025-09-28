@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  path-tool-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=production
+      - API_KEY=${API_KEY:-your-secret-api-key-change-this}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add nginx reverse proxy
+  # nginx:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf
+  #   depends_on:
+  #     - path-tool-api
+  #   restart: unless-stopped
