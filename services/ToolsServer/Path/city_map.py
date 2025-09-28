@@ -38,66 +38,42 @@ def create_city_map():
         "Supermarket",
         "Bakery",
         "Clinic",
-        # Junction (12)
-        "Junction",
-        # West Street (13-17): W1 (North) → W2 → W3 → W4 → W5 (South)
-        "W1",
-        "W2",
-        "W3",
-        "W4",
-        "W5",
-        # North Street (18-21): N1 (West) → N2 → N3 → N5 (East)
-        "N1",
-        "N2",
-        "N3",
-        "N5",
-        # East Street (22-24): E1 (North) → E2 → E3 (South)
-        "E1",
-        "E2",
-        "E3",
+        # West Street (12-16): W1 (North) → W2 → W3 → W4 → W5 (South)
+        "W1", "W2", "W3", "W4", "W5",
+        # North Street (17-19): N1 (West) → N2 → N3 (East)
+        "N1", "N2", "N3",
+        # East Street (20-22): E1 (North) → E2 → E3 (South)
+        "E1", "E2", "E3",
     ]
 
     # Create adjacency matrix
-    N = 25  # 12 buildings + 1 junction + 12 street nodes (removed N4)
+    N = 23  # 12 buildings + 11 street nodes (removed Junction and N5)
     adj = np.zeros((N, N), dtype=int)
 
     # Building-to-street connections
     building_connections = [
         # West Street buildings
-        (0, 17),
-        (1, 17),  # Post Office, Train Station → W5
-        (2, 16),  # Book Shop → W4
-        (3, 15),
-        (4, 15),  # Hospital, Church → W3
-        (5, 13),  # Police Station → W1
+        (0, 16), (1, 16),  # Post Office, Train Station → W5
+        (2, 15),           # Book Shop → W4
+        (3, 14), (4, 14),  # Hospital, Church → W3
+        (5, 12),           # Police Station → W1
         # North Street buildings
-        (6, 18),
-        (7, 19),
-        (8, 20),  # Sports Centre → N1, Bank → N2, Fire Station → N3
+        (6, 17), (7, 18), (8, 19),  # Sports Centre → N1, Bank → N2, Fire Station → N3
         # East Street buildings
-        (9, 22),
-        (10, 23),
-        (11, 24),  # Supermarket → E1, Bakery → E2, Clinic → E3
+        (9, 20), (10, 21), (11, 22),  # Supermarket → E1, Bakery → E2, Clinic → E3
     ]
 
     # Street connections
     street_connections = [
         # West Street: W1 → W2 → W3 → W4 → W5
-        (13, 14),
-        (14, 15),
-        (15, 16),
-        (16, 17),
-        # North Street: N1 → N2 → N3 → N5 (removed N4)
-        (18, 19),
-        (19, 20),
-        (20, 21),
+        (12, 13), (13, 14), (14, 15), (15, 16),
+        # North Street: N1 → N2 → N3
+        (17, 18), (18, 19),
         # East Street: E1 → E2 → E3
-        (22, 23),
-        (23, 24),
-        # Junction connections
-        (12, 14),  # Junction ↔ W2
-        (12, 18),  # Junction ↔ N1
-        (19, 22),  # N2 ↔ E1 (North Street/East Street junction)
+        (20, 21), (21, 22),
+        # Direct connections (no junction needed)
+        (13, 17),  # W2 ↔ N1 (West/North Street connection)
+        (19, 20),  # N3 ↔ E1 (North/East Street connection)
     ]
 
     # Building-to-building adjacencies (same location or adjacent blocks)
@@ -152,11 +128,9 @@ def get_node_positions():
         "Bank": (9, 11),
         "Fire Station": (11, 11),
         # East Street buildings
-        "Supermarket": (10, 8),
-        "Bakery": (10, 6),
-        "Clinic": (10, 4),
-        # Junction
-        "Junction": (5, 10),
+        "Supermarket": (12, 8),
+        "Bakery": (12, 6),
+        "Clinic": (12, 4),
         # Street nodes
         "W1": (3, 12),
         "W2": (3, 10),
@@ -166,10 +140,9 @@ def get_node_positions():
         "N1": (7, 10),
         "N2": (9, 10),
         "N3": (11, 10),
-        "N5": (13, 10),
-        "E1": (9, 8),
-        "E2": (9, 6),
-        "E3": (9, 4),
+        "E1": (11, 8),
+        "E2": (11, 6),
+        "E3": (11, 4),
     }
 
 
@@ -346,7 +319,7 @@ def generate_navigation_instructions(G, start, end, positions):
             "",
             "✅ LAYOUT SUMMARY:",
             "• Police Station at W1 (northernmost)",
-            "• Junction connects W2 ↔ N1",
+            "• W2 connects directly to N1 (West/North Streets)",
             "• Church (WEST) and Hospital (EAST) at W3",
             "• Book Shop at W4 (EAST side)",
             "• Post Office (WEST) and Train Station (EAST) at W5",

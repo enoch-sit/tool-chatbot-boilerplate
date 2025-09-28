@@ -15,13 +15,15 @@
 ```
                   Sports Centre    Bank    Fire Station
                         |           |          |
-    W2 ---- Junction ---- N1 ---- N2 ---- N3 ---- N5
-     |                            |                
-    W1 (Police Station)          E1
-     |                            |
-    W3 (Church ↔ Hospital)       E2
-     |                            |
-    W4 (Book Shop)               E3
+                       N1 -------- N2 -------- N3
+                        |                       |
+    W1 (Police Station) |                      E1 -- Supermarket
+     |                  |                       |
+    W2 ------------------                      E2 -- Bakery
+     |                                          |
+    W3 (Church ↔ Hospital)                     E3 -- Clinic
+     |
+    W4 (Book Shop)
      |
     W5 (Post Office ↔ Train Station)
 ```
@@ -29,9 +31,9 @@
 ### Key Relationships
 
 1. **Police Station** is at the **northernmost** point (W1)
-2. **W2** serves as the junction connection to North Street
-3. **Junction node** acts as central hub connecting W2 ↔ N1
-4. **Sports Centre** connects vertically above N1
+2. **W2** connects directly to North Street (N1)
+3. **Sports Centre** connects vertically above N1
+4. **N3** connects directly to East Street (E1)
 5. All compass directions follow standard orientation (N/S/E/W)
 
 ### Building Placement Logic
@@ -44,7 +46,7 @@
 ### Navigation Flow
 
 - **North-South**: W1 ↔ W2 ↔ W3 ↔ W4 ↔ W5
-- **West-East**: W2 ↔ Junction ↔ N1 ↔ N2 ↔ N3 ↔ N5
-- **North-South (East)**: N2 ↔ E1 ↔ E2 ↔ E3
+- **West-East**: W2 ↔ N1 ↔ N2 ↔ N3
+- **North-South (East)**: N3 ↔ E1 ↔ E2 ↔ E3
 
 This logical layout ensures intuitive navigation with clear compass-based directions and proper building placement.
