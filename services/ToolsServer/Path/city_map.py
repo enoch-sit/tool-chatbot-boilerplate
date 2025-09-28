@@ -3,7 +3,7 @@ City Map Navigation System
 
 A comprehensive city map visualization and navigation system featuring:
 - W1-W5 logical street layout (North to South)
-- Junction-based street connections
+- Direct street connections (W2-N1, N3-E1)
 - Compass-based navigation instructions
 - Building placement with entrance/exit directions
 
@@ -39,11 +39,19 @@ def create_city_map():
         "Bakery",
         "Clinic",
         # West Street (12-16): W1 (North) → W2 → W3 → W4 → W5 (South)
-        "W1", "W2", "W3", "W4", "W5",
+        "W1",
+        "W2",
+        "W3",
+        "W4",
+        "W5",
         # North Street (17-19): N1 (West) → N2 → N3 (East)
-        "N1", "N2", "N3",
+        "N1",
+        "N2",
+        "N3",
         # East Street (20-22): E1 (North) → E2 → E3 (South)
-        "E1", "E2", "E3",
+        "E1",
+        "E2",
+        "E3",
     ]
 
     # Create adjacency matrix
@@ -53,24 +61,35 @@ def create_city_map():
     # Building-to-street connections
     building_connections = [
         # West Street buildings
-        (0, 16), (1, 16),  # Post Office, Train Station → W5
-        (2, 15),           # Book Shop → W4
-        (3, 14), (4, 14),  # Hospital, Church → W3
-        (5, 12),           # Police Station → W1
+        (0, 16),
+        (1, 16),  # Post Office, Train Station → W5
+        (2, 15),  # Book Shop → W4
+        (3, 14),
+        (4, 14),  # Hospital, Church → W3
+        (5, 12),  # Police Station → W1
         # North Street buildings
-        (6, 17), (7, 18), (8, 19),  # Sports Centre → N1, Bank → N2, Fire Station → N3
+        (6, 17),
+        (7, 18),
+        (8, 19),  # Sports Centre → N1, Bank → N2, Fire Station → N3
         # East Street buildings
-        (9, 20), (10, 21), (11, 22),  # Supermarket → E1, Bakery → E2, Clinic → E3
+        (9, 20),
+        (10, 21),
+        (11, 22),  # Supermarket → E1, Bakery → E2, Clinic → E3
     ]
 
     # Street connections
     street_connections = [
         # West Street: W1 → W2 → W3 → W4 → W5
-        (12, 13), (13, 14), (14, 15), (15, 16),
+        (12, 13),
+        (13, 14),
+        (14, 15),
+        (15, 16),
         # North Street: N1 → N2 → N3
-        (17, 18), (18, 19),
+        (17, 18),
+        (18, 19),
         # East Street: E1 → E2 → E3
-        (20, 21), (21, 22),
+        (20, 21),
+        (21, 22),
         # Direct connections (no junction needed)
         (13, 17),  # W2 ↔ N1 (West/North Street connection)
         (19, 20),  # N3 ↔ E1 (North/East Street connection)

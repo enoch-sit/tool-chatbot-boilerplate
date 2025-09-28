@@ -7,16 +7,16 @@ A Python-based city map visualization and navigation system with a logical stree
 ### Street Structure
 
 - **West Street**: W1 (North) → W2 → W3 → W4 → W5 (South)
-- **North Street**: N1 (West) → N2 → N3 → N4 → N5 (East)
+- **North Street**: N1 (West) → N2 → N3 (East)
 - **East Street**: E1 (North) → E2 → E3 (South)
-- **Junction**: Central hub connecting W2 ↔ Junction ↔ N1
+- **Direct Connections**: W2 ↔ N1, N3 ↔ E1
 
 ### Building Locations
 
 #### West Street Buildings
 
 - **W1**: Police Station (WEST side) - *Northernmost*
-- **W2**: Junction connection point
+- **W2**: Direct connection to North Street
 - **W3**: Church (WEST side) ↔ Hospital (EAST side)
 - **W4**: Book Shop (EAST side)
 - **W5**: Post Office (WEST side) ↔ Train Station (EAST side) - *Southernmost*
@@ -35,18 +35,20 @@ A Python-based city map visualization and navigation system with a logical stree
 
 ## 🎯 Key Features
 
-### Junction Design
+### Simplified Design
 
 ```
                     Sports Centre
                           |
-    W2 ---- Junction ---- N1 ---- N2 ---- N3 ---- N4 ---- N5
-     |                                                      |
-    W1 (Police Station)                                    E1
-     |                                                      |
-    W3 (Church ↔ Hospital)                                E2
-     |                                                      |
-    W4 (Book Shop)                                        E3
+                         N1 ---- N2 ---- N3
+                          |               |
+    W1 (Police Station)  |              E1 -- Supermarket
+     |                   |               |
+    W2 -------------------              E2 -- Bakery
+     |                                   |
+    W3 (Church ↔ Hospital)             E3 -- Clinic
+     |
+    W4 (Book Shop)
      |
     W5 (Post Office ↔ Train Station)
 ```
