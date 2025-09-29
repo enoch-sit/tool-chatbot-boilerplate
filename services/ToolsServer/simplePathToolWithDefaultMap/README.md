@@ -117,14 +117,17 @@ docker run -p 8000:8000 simple-path-tool
 ```json
 {
   "success": true,
-  "path": ["Police Station", "4th_St_Main_St", "Main_St_2nd_St", "Bakery"],
+  "path": ["Police Station", "W1", "W2", "N1", "N2", "E1", "Supermarket"],
   "edges": [
-    {"from": "Police Station", "to": "4th_St_Main_St", "direction": "south", "turn": "walk straight"},
-    {"from": "4th_St_Main_St", "to": "Main_St_2nd_St", "direction": "east", "turn": "turn right"},
-    {"from": "Main_St_2nd_St", "to": "Bakery", "direction": "north", "turn": "turn left"}
+    {"from": "Police Station", "to": "W1", "direction": "East", "turn": "start"},
+    {"from": "W1", "to": "W2", "direction": "South", "turn": "right"},
+    {"from": "W2", "to": "N1", "direction": "East", "turn": "left"},
+    {"from": "N1", "to": "N2", "direction": "East", "turn": "straight"},
+    {"from": "N2", "to": "E1", "direction": "South", "turn": "right"},
+    {"from": "E1", "to": "Supermarket", "direction": "East", "turn": "left"}
   ],
-  "total_steps": 3,
-  "message": "Path found: 4 nodes, 3 steps"
+  "total_steps": 6,
+  "message": "Path found: 7 nodes, 6 steps"
 }
 ```
 
@@ -132,10 +135,10 @@ docker run -p 8000:8000 simple-path-tool
 
 ```json
 {
-  "buildings": ["Police Station", "Fire Station", "Hospital", "School", "Library", "City Hall", "Post Office", "Bank", "Bakery", "Grocery Store"],
-  "street_nodes": ["1st_St_Main_St", "2nd_St_Main_St", ...],
-  "all_locations": ["Police Station", "Fire Station", ...],
-  "total_count": 46
+  "buildings": ["Post Office", "Train Station", "Book Shop", "Hospital", "Church", "Police Station", "Sports Centre", "Bank", "Fire Station", "Supermarket", "Bakery", "Clinic"],
+  "street_nodes": ["W1", "W2", "W3", "W4", "W5", "N1", "N2", "N3", "E1", "E2", "E3"],
+  "all_locations": ["Post Office", "Train Station", "Book Shop", "Hospital", "Church", "Police Station", "Sports Centre", "Bank", "Fire Station", "Supermarket", "Bakery", "Clinic", "W1", "W2", "W3", "W4", "W5", "N1", "N2", "N3", "E1", "E2", "E3"],
+  "total_count": 23
 }
 ```
 
@@ -143,23 +146,24 @@ docker run -p 8000:8000 simple-path-tool
 
 ### Buildings
 
-- Police Station
-- Fire Station  
-- Hospital
-- School
-- Library
-- City Hall
 - Post Office
+- Train Station
+- Book Shop
+- Hospital
+- Church
+- Police Station
+- Sports Centre
 - Bank
+- Fire Station
+- Supermarket
 - Bakery
-- Grocery Store
+- Clinic
 
 ### Streets
 
-- Main Street (1st to 5th)
-- Oak Avenue (1st to 5th)
-- Pine Street (1st to 5th)
-- Elm Drive (1st to 5th)
+- West Street (nodes W1-W5)
+- North Street (nodes N1-N3)
+- East Street (nodes E1-E3)
 
 ## Turn Instructions
 
@@ -222,6 +226,194 @@ else:
 # Test public endpoints (no auth needed)
 locations = requests.get("http://localhost:8000/simpletool/locations").json()
 print(f"Available locations: {len(locations['all_locations'])}")
+```
+
+## Integration with Flowise
+
+### JavaScript Function for Flowise Custom Tool
+
+You can integrate this Path Tool API into Flowise using a custom JavaScript function:
+
+```javascript
+/*
+* Path Tool API Integration for Flowise
+* You can use properties specified in Input Schema as variables. Ex: Property = startLocation, Variable = $startLocation
+* You can get default flow config: $flow.sessionId, $flow.chatId, $flow.chatflowId, $flow.input, $flow.state
+* Must return a string value at the end of function
+*/
+
+const fetch = require('node-fetch');
+
+// Configuration - update these values for your deployment
+const API_BASE_URL = 'http://localhost:8000/simpletool';  // Change to your server URL
+const API_KEY = 'your-secret-api-key-change-this';        // Change to your actual API key
+
+// Extract start and end locations from input variables
+const startLocation = $startLocation || 'Police Station';  // Default fallback
+const endLocation = $endLocation || 'Bakery';              // Default fallback
+
+const url = `${API_BASE_URL}/path`;
+const options = {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+    },
+    body: JSON.stringify({
+        start: startLocation,
+        end: endLocation
+    })
+};
+
+try {
+    const response = await fetch(url, options);
+    
+    if (!response.ok) {
+        if (response.status === 401) {
+            return 'Error: Invalid API key. Please check your authentication.';
+        } else if (response.status === 404) {
+            return `Error: No path found from ${startLocation} to ${endLocation}.`;
+        } else {
+            return `Error: API request failed with status ${response.status}`;
+        }
+    }
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+        return data.message || 'No path found between the specified locations.';
+    }
+    
+    // Format the response as a readable string with turn-by-turn directions
+    let result = `🗺️ Path from ${startLocation} to ${endLocation}:\n\n`;
+    result += `Route: ${data.path.join(' → ')}\n\n`;
+    result += `Turn-by-turn directions (${data.total_steps} steps):\n`;
+    
+    data.edges.forEach((edge, index) => {
+        const stepNum = index + 1;
+        const from = edge.from;
+        const to = edge.to;
+        const direction = edge.direction.toLowerCase();
+        const turn = edge.turn;
+        
+        // Create meaningful, complete sentences
+        let instruction = '';
+        
+        if (turn === 'start') {
+            instruction = `Begin your journey by walking ${direction} from ${from} to ${to}.`;
+        } else if (turn === 'straight') {
+            instruction = `Continue walking straight ${direction} from ${from} to ${to}.`;
+        } else if (turn === 'left') {
+            instruction = `Turn left and walk ${direction} from ${from} to ${to}.`;
+        } else if (turn === 'right') {
+            instruction = `Turn right and walk ${direction} from ${from} to ${to}.`;
+        } else if (turn === 'around') {
+            instruction = `Turn around and walk ${direction} from ${from} to ${to}.`;
+        } else {
+            instruction = `From ${from}, ${turn} and walk ${direction} to ${to}.`;
+        }
+        
+        result += `${stepNum}. ${instruction}\n`;
+    });
+    
+    return result;
+    
+} catch (error) {
+    console.error('Path Tool API Error:', error);
+    return `Error calling Path Tool API: ${error.message}`;
+}
+```
+
+### Example Output
+
+When a user asks for directions from "Police Station" to "Bakery", the JavaScript function will return:
+
+```text
+🗺️ Path from Police Station to Bakery:
+
+Route: Police Station → W1 → W2 → N1 → N2 → E1 → Supermarket → Bakery
+
+Turn-by-turn directions (7 steps):
+1. Begin your journey by walking east from Police Station to W1.
+2. Turn right and walk south from W1 to W2.
+3. Turn left and walk east from W2 to N1.
+4. Continue walking straight east from N1 to N2.
+5. Turn right and walk south from N2 to E1.
+6. Turn right and walk west from E1 to Supermarket.
+7. Turn left and walk south from Supermarket to Bakery.
+```
+
+### Flowise Setup Instructions
+
+1. **Create Custom Tool in Flowise**:
+   - Add a new Custom Tool node
+   - Set the tool name: `Path Finder`
+   - Set description: `Find shortest path between two locations with turn-by-turn directions`
+
+2. **Configure Input Schema**:
+
+   ```json
+   {
+     "type": "object",
+     "properties": {
+       "startLocation": {
+         "type": "string",
+         "description": "Starting location name"
+       },
+       "endLocation": {
+         "type": "string", 
+         "description": "Destination location name"
+       }
+     },
+     "required": ["startLocation", "endLocation"]
+   }
+   ```
+
+3. **Update Configuration**:
+   - Change `API_BASE_URL` to your actual server URL
+   - Change `API_KEY` to your actual API key from environment variables
+
+4. **Available Locations**:
+   - **Buildings**: Post Office, Train Station, Book Shop, Hospital, Church, Police Station, Sports Centre, Bank, Fire Station, Supermarket, Bakery, Clinic
+   - **Street Nodes**: W1, W2, W3, W4, W5, N1, N2, N3, E1, E2, E3
+
+### Alternative GET Version
+
+For simpler implementations, you can use the GET endpoint:
+
+```javascript
+const fetch = require('node-fetch');
+
+const API_BASE_URL = 'http://localhost:8000/simpletool';
+const API_KEY = 'your-secret-api-key-change-this';
+
+const startLocation = $startLocation || 'Police Station';
+const endLocation = $endLocation || 'Bakery';
+
+const encodedStart = encodeURIComponent(startLocation);
+const encodedEnd = encodeURIComponent(endLocation);
+
+const url = `${API_BASE_URL}/path/${encodedStart}/${encodedEnd}`;
+const options = {
+    method: 'GET',
+    headers: {
+        'Authorization': `Bearer ${API_KEY}`
+    }
+};
+
+try {
+    const response = await fetch(url, options);
+    const data = await response.json();
+    
+    if (!data.success) {
+        return data.message || 'No path found.';
+    }
+    
+    return `Path: ${data.path.join(' → ')} (${data.total_steps} steps)`;
+    
+} catch (error) {
+    return `Error: ${error.message}`;
+}
 ```
 
 ## Development

@@ -81,16 +81,16 @@ def create_city_map():
     add_bidirectional_edge("N2", "E1", "South", "North")
 
     # Building adjacencies
-    add_bidirectional_edge("Post Office", "Train Station", "East", "West")
-    add_bidirectional_edge("Hospital", "Church", "West", "East")
-    add_bidirectional_edge("Post Office", "Church", "North", "South")
-    add_bidirectional_edge("Church", "Police Station", "North", "South")
-    add_bidirectional_edge("Train Station", "Book Shop", "North", "South")
-    add_bidirectional_edge("Book Shop", "Hospital", "North", "South")
-    add_bidirectional_edge("Sports Centre", "Bank", "East", "West")
-    add_bidirectional_edge("Bank", "Fire Station", "East", "West")
-    add_bidirectional_edge("Supermarket", "Bakery", "South", "North")
-    add_bidirectional_edge("Bakery", "Clinic", "South", "North")
+    #add_bidirectional_edge("Post Office", "Train Station", "East", "West")
+    #add_bidirectional_edge("Hospital", "Church", "West", "East")
+    #add_bidirectional_edge("Post Office", "Church", "North", "South")
+    #add_bidirectional_edge("Church", "Police Station", "North", "South")
+    #add_bidirectional_edge("Train Station", "Book Shop", "North", "South")
+    #add_bidirectional_edge("Book Shop", "Hospital", "North", "South")
+    #add_bidirectional_edge("Sports Centre", "Bank", "East", "West")
+    #add_bidirectional_edge("Bank", "Fire Station", "East", "West")
+    #add_bidirectional_edge("Supermarket", "Bakery", "South", "North")
+    #add_bidirectional_edge("Bakery", "Clinic", "South", "North")
 
     return G
 
