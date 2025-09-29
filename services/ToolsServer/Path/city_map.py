@@ -78,8 +78,8 @@ def create_city_map():
 
     # North Street buildings
     add_bidirectional_edge("Sports Centre", "N1", "South", "North")
-    add_bidirectional_edge("Bank", "N2", "North", "South")
-    add_bidirectional_edge("Fire Station", "N3", "North", "South")
+    add_bidirectional_edge("Bank", "N2", "South", "North")
+    add_bidirectional_edge("Fire Station", "N3", "South", "North")
 
     # East Street buildings
     add_bidirectional_edge("Supermarket", "E1", "East", "West")
